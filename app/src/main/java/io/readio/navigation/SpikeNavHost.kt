@@ -1,11 +1,13 @@
 package io.readio.navigation
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import io.readio.feature.epub.EpubSpikeScreen
 import io.readio.feature.home.SpikeHomeScreen
+import io.readio.feature.pdf.PdfSpikeScreen
+import io.readio.feature.txt.TxtSpikeScreen
 
 @Composable
 fun SpikeNavHost() {
@@ -14,8 +16,8 @@ fun SpikeNavHost() {
         composable(SpikeDestination.Home.route) {
             SpikeHomeScreen(onOpen = navController::navigate)
         }
-        composable(SpikeDestination.Epub.route) { Text("EPUB Spike TODO") }
-        composable(SpikeDestination.Txt.route) { Text("TXT Spike TODO") }
-        composable(SpikeDestination.Pdf.route) { Text("PDF Spike TODO") }
+        composable(SpikeDestination.Epub.route) { EpubSpikeScreen() }
+        composable(SpikeDestination.Txt.route) { TxtSpikeScreen() }
+        composable(SpikeDestination.Pdf.route) { PdfSpikeScreen() }
     }
 }
