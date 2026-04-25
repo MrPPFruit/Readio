@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { isOPDSCatalog, getPublication, getFeed, getOpenSearch } from 'foliate-js/opds.js';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { readioFeatures } from '@/config/features';
 import { useEnv } from '@/context/EnvContext';
 import { useAuth } from '@/context/AuthContext';
 import { isWebAppPlatform } from '@/services/environment';
@@ -62,7 +63,7 @@ interface HistoryEntry {
   selectedPublication: { groupIndex: number; itemIndex: number } | null;
 }
 
-export default function BrowserPage() {
+const BrowserPageContent = () => {
   const _ = useTranslation();
   const router = useRouter();
   const { appService } = useEnv();
@@ -690,4 +691,18 @@ export default function BrowserPage() {
       <Toast />
     </div>
   );
+};
+
+export default function BrowserPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!readioFeatures.opds) {
+      router.replace('/library');
+    }
+  }, [router]);
+
+  if (!readioFeatures.opds) return null;
+
+  return <BrowserPageContent />;
 }

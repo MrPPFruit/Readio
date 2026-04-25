@@ -1,12 +1,24 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { readioFeatures } from '@/config/features';
 import { UpdaterContent } from '@/components/UpdaterWindow';
 import { useTheme } from '@/hooks/useTheme';
 import Spinner from '@/components/Spinner';
 
 const UpdaterPage = () => {
+  const router = useRouter();
+
   useTheme();
+
+  useEffect(() => {
+    if (!readioFeatures.updater) {
+      router.replace('/library');
+    }
+  }, [router]);
+
+  if (!readioFeatures.updater) return null;
 
   return (
     <Suspense

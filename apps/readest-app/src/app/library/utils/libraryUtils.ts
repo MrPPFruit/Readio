@@ -59,6 +59,16 @@ export const getGroupDisplayName = (
   return group?.displayName || group?.name;
 };
 
+export const getContinueReadingBook = (books: Book[]) => {
+  return books
+    .filter((book) => {
+      if (book.deletedAt || book.readingStatus === 'finished' || !book.progress) return false;
+      const [current, total] = book.progress;
+      return current > 0 && total > 0 && current < total;
+    })
+    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+};
+
 export const createBookFilter = (queryTerm: string | null) => (item: Book) => {
   if (!queryTerm) return true;
   if (item.deletedAt) return false;

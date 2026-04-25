@@ -1,18 +1,22 @@
 'use client';
 
 import React, { createContext, useContext, useMemo } from 'react';
+import { readioFeatures } from '@/config/features';
 import { SyncClient } from '@/libs/sync';
 
-const syncClient = new SyncClient();
+const createSyncClient = () => {
+  if (!readioFeatures.cloudSync) return null;
+  return new SyncClient();
+};
 
 interface SyncContextType {
-  syncClient: SyncClient;
+  syncClient: SyncClient | null;
 }
 
-const SyncContext = createContext<SyncContextType>({ syncClient });
+const SyncContext = createContext<SyncContextType>({ syncClient: null });
 
 export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const value = useMemo(() => ({ syncClient }), []);
+  const value = useMemo(() => ({ syncClient: createSyncClient() }), []);
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;
 };
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
+import { readioFeatures } from '@/config/features';
 import { validateUserAndToken } from '@/utils/access';
 import { getGoogleIAPVerifier, VerifyPurchaseParams } from '@/libs/payment/iap/google/verifier';
 import { processPurchaseData, VerifiedPurchase } from '@/libs/payment/iap/google/server';
@@ -13,6 +14,10 @@ const iapVerificationSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (!readioFeatures.commerce) {
+    return NextResponse.json({ error: 'Feature disabled' }, { status: 404 });
+  }
+
   const body = await request.json();
   let validatedInput;
   try {

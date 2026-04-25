@@ -1,10 +1,10 @@
 {
-  "name": "Readest",
-  "short_name": "Readest",
+  "name": "Readio",
+  "short_name": "Readio",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "description": "Readest is an open-source eBook reader supporting EPUB, PDF, and sync across devices.",
+  "description": "Readio is an open-source eBook reader based on Readest, supporting EPUB and PDF.",
   "icons": [
     {
       "src": "/icon.png",

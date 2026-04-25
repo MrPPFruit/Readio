@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { readioFeatures } from '@/config/features';
 import { useEnv } from '@/context/EnvContext';
 import { useSpatialNavigation } from '@/app/reader/hooks/useSpatialNavigation';
 import { useReaderStore } from '@/store/readerStore';
@@ -91,7 +92,7 @@ const FooterBar: React.FC<FooterBarProps> = ({
   }, [view]);
 
   const handleSpeakText = useCallback(async () => {
-    if (!view || !progress || !viewState) return;
+    if (!readioFeatures.tts || !view || !progress || !viewState) return;
 
     const eventType = viewState.ttsEnabled ? 'tts-stop' : 'tts-speak';
     eventDispatcher.dispatch(eventType, { bookKey });
@@ -102,6 +103,7 @@ const FooterBar: React.FC<FooterBarProps> = ({
       setUserSelectedTab((prevTab) => (prevTab === tab ? '' : tab));
 
       if (tab === 'tts') {
+        if (!readioFeatures.tts) return;
         if (viewState?.ttsEnabled) {
           setHoveredBookKey('');
         }
@@ -210,6 +212,7 @@ const FooterBar: React.FC<FooterBarProps> = ({
     forceMobileLayout,
     onSetActionTab: handleSetActionTab,
     onSpeakText: handleSpeakText,
+    ttsEnabled: readioFeatures.tts,
   };
 
   const needHorizontalScroll =
@@ -268,8 +271,8 @@ const FooterBar: React.FC<FooterBarProps> = ({
         <div className='bg-base-100 pointer-events-none absolute bottom-0 left-0 hidden h-3 w-full sm:block' />
       )}
 
-      <TTSControl bookKey={bookKey} gridInsets={gridInsets} />
-      <RSVPControl bookKey={bookKey} gridInsets={gridInsets} />
+      {readioFeatures.tts && <TTSControl bookKey={bookKey} gridInsets={gridInsets} />}
+      {readioFeatures.speedReading && <RSVPControl bookKey={bookKey} gridInsets={gridInsets} />}
     </>
   );
 };

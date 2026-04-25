@@ -28,3 +28,10 @@ export const getImportErrorMessage = (errorMsg: string): string => {
   const match = IMPORT_ERROR_MAP.find(([str]) => errorMsg.includes(str));
   return match ? match[1] : errorMsg;
 };
+
+export const getReaderOpenErrorMessage = (error: unknown): string => {
+  if (error instanceof BookFileNotFoundError) {
+    return _('The local book file is missing. Import this book again to continue reading.');
+  }
+  return _('Unable to open book');
+};

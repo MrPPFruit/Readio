@@ -23,6 +23,7 @@ import { eventDispatcher } from '@/utils/event';
 import { navigateToLibrary } from '@/utils/nav';
 import { clearDiscordPresence } from '@/utils/discord';
 import { BOOK_IDS_SEPARATOR } from '@/services/constants';
+import { getReaderOpenErrorMessage } from '@/services/errors';
 import { BookDetailModal } from '@/components/metadata';
 
 import useBooksManager from '../hooks/useBooksManager';
@@ -73,9 +74,9 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
           console.log('Error initializing book', key, error);
           setErrorLoading(true);
           eventDispatcher.dispatch('toast', {
-            message: _('Unable to open book'),
+            message: _(getReaderOpenErrorMessage(error)),
             callback: () => navigateBackToLibrary(),
-            timeout: 2000,
+            timeout: 5000,
             type: 'error',
           });
         });

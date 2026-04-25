@@ -1,9 +1,14 @@
 import Stripe from 'stripe';
 import { NextResponse } from 'next/server';
 import { getStripe } from '@/libs/payment/stripe/server';
+import { readioFeatures } from '@/config/features';
 import { StripeProductMetadata } from '@/types/payment';
 
 export async function GET() {
+  if (!readioFeatures.commerce) {
+    return NextResponse.json({ error: 'Feature disabled' }, { status: 404 });
+  }
+
   try {
     const stripe = getStripe();
     const prices = await stripe.prices.list({

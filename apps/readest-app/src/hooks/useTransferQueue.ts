@@ -5,6 +5,7 @@ import { useLibraryStore } from '@/store/libraryStore';
 import { useTransferStore, TransferType } from '@/store/transferStore';
 import { transferManager } from '@/services/transferManager';
 import { Book } from '@/types/book';
+import { readioFeatures } from '@/config/features';
 
 export function useTransferQueue(libraryLoaded = true, delayInit = 0) {
   const { envConfig, appService } = useEnv();
@@ -15,6 +16,8 @@ export function useTransferQueue(libraryLoaded = true, delayInit = 0) {
   const setIsTransferQueueOpen = useTransferStore((state) => state.setIsTransferQueueOpen);
 
   useEffect(() => {
+    if (!readioFeatures.cloudSync) return;
+
     const initManager = async () => {
       if (appService && envConfig) {
         const getLibrary = () => useLibraryStore.getState().library;

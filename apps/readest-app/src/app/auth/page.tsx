@@ -9,6 +9,7 @@ import { FcGoogle } from 'react-icons/fc';
 import { FaApple, FaGithub, FaDiscord } from 'react-icons/fa';
 import { IoArrowBack } from 'react-icons/io5';
 
+import { readioFeatures } from '@/config/features';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/utils/supabase';
 import { useEnv } from '@/context/EnvContext';
@@ -61,7 +62,7 @@ const ProviderLogin: React.FC<ProviderLoginProp> = ({ provider, handleSignIn, Ic
   );
 };
 
-export default function AuthPage() {
+const AuthPageContent = () => {
   const _ = useTranslation();
   const router = useRouter();
   const { login } = useAuth();
@@ -450,4 +451,18 @@ export default function AuthPage() {
       />
     </div>
   );
+};
+
+export default function AuthPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!readioFeatures.auth) {
+      router.replace('/library');
+    }
+  }, [router]);
+
+  if (!readioFeatures.auth) return null;
+
+  return <AuthPageContent />;
 }

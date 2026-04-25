@@ -26,6 +26,7 @@ import { getOSPlatform, isCJKEnv } from '@/utils/misc';
 import { getSysFontsList } from '@/utils/bridge';
 import { isCJKStr } from '@/utils/lang';
 import { isTauriAppPlatform } from '@/services/environment';
+import { readioFeatures } from '@/config/features';
 import { useResetViewSettings } from '@/hooks/useResetSettings';
 import { saveViewSettings } from '@/helpers/settings';
 import { SettingsPanelPanelProp } from './SettingsDialog';
@@ -145,6 +146,7 @@ const FontPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
   const [CJKFonts, setCJKFonts] = useState<string[]>(() => {
     return genCJKFontsList([...customFonts, ...sysFonts]);
   });
+  const showAdvancedFontFace = readioFeatures.advancedSettings;
 
   const resetToDefaults = useResetViewSettings();
 
@@ -368,59 +370,61 @@ const FontPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset 
         </div>
       </div>
 
-      <div className='w-full'>
-        <div className='mb-2 flex items-center justify-between'>
-          <h2 className='font-medium'>{_('Font Face')}</h2>
-          <button
-            onClick={handleManageCustomFonts}
-            className='btn btn-ghost btn-xs gap-1 hover:bg-transparent'
-            title={_('Manage Custom Fonts')}
-          >
-            <MdSettings size={iconSize18} />
-          </button>
-        </div>
-        <div className='card border-base-200 border shadow'>
-          <div className='divide-base-200 divide-y'>
-            <FontFace
-              className='config-item-top'
-              family='serif'
-              label={_('Serif Font')}
-              options={[
-                ...customFonts,
-                ...SERIF_FONTS.filter(filterNonFreeFonts),
-                ...CJK_SERIF_FONTS,
-              ]}
-              moreOptions={sysFonts}
-              selected={serifFont}
-              onSelect={setSerifFont}
-              data-setting-id='settings.font.serifFont'
-            />
-            <FontFace
-              family='sans-serif'
-              label={_('Sans-Serif Font')}
-              options={[
-                ...customFonts,
-                ...SANS_SERIF_FONTS.filter(filterNonFreeFonts),
-                ...CJK_SANS_SERIF_FONTS,
-              ]}
-              moreOptions={sysFonts}
-              selected={sansSerifFont}
-              onSelect={setSansSerifFont}
-              data-setting-id='settings.font.sansSerifFont'
-            />
-            <FontFace
-              className='config-item-bottom'
-              family='monospace'
-              label={_('Monospace Font')}
-              options={[...customFonts, ...MONOSPACE_FONTS]}
-              moreOptions={sysFonts}
-              selected={monospaceFont}
-              onSelect={setMonospaceFont}
-              data-setting-id='settings.font.monospaceFont'
-            />
+      {showAdvancedFontFace && (
+        <div className='w-full'>
+          <div className='mb-2 flex items-center justify-between'>
+            <h2 className='font-medium'>{_('Font Face')}</h2>
+            <button
+              onClick={handleManageCustomFonts}
+              className='btn btn-ghost btn-xs gap-1 hover:bg-transparent'
+              title={_('Manage Custom Fonts')}
+            >
+              <MdSettings size={iconSize18} />
+            </button>
+          </div>
+          <div className='card border-base-200 border shadow'>
+            <div className='divide-base-200 divide-y'>
+              <FontFace
+                className='config-item-top'
+                family='serif'
+                label={_('Serif Font')}
+                options={[
+                  ...customFonts,
+                  ...SERIF_FONTS.filter(filterNonFreeFonts),
+                  ...CJK_SERIF_FONTS,
+                ]}
+                moreOptions={sysFonts}
+                selected={serifFont}
+                onSelect={setSerifFont}
+                data-setting-id='settings.font.serifFont'
+              />
+              <FontFace
+                family='sans-serif'
+                label={_('Sans-Serif Font')}
+                options={[
+                  ...customFonts,
+                  ...SANS_SERIF_FONTS.filter(filterNonFreeFonts),
+                  ...CJK_SANS_SERIF_FONTS,
+                ]}
+                moreOptions={sysFonts}
+                selected={sansSerifFont}
+                onSelect={setSansSerifFont}
+                data-setting-id='settings.font.sansSerifFont'
+              />
+              <FontFace
+                className='config-item-bottom'
+                family='monospace'
+                label={_('Monospace Font')}
+                options={[...customFonts, ...MONOSPACE_FONTS]}
+                moreOptions={sysFonts}
+                selected={monospaceFont}
+                onSelect={setMonospaceFont}
+                data-setting-id='settings.font.monospaceFont'
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -7,6 +7,7 @@ import { TbSunMoon } from 'react-icons/tb';
 import { MdCloudSync, MdSync, MdSyncProblem } from 'react-icons/md';
 
 import { invoke, PermissionState } from '@tauri-apps/api/core';
+import { readioFeatures } from '@/config/features';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
 import { setBackupDialogVisible } from '@/app/library/components/BackupWindow';
@@ -70,7 +71,9 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
   const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const [refreshMetadataProgress, setRefreshMetadataProgress] = useState('');
   const { isSyncing, setLibrary } = useLibraryStore();
-  const { stats, hasActiveTransfers, setIsTransferQueueOpen } = useTransferQueue();
+  const { stats, hasActiveTransfers, setIsTransferQueueOpen } = useTransferQueue(
+    readioFeatures.cloudSync,
+  );
 
   const openTransferQueue = () => {
     setIsTransferQueueOpen(true);
@@ -290,73 +293,82 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
       )}
       onCancel={() => setIsDropdownOpen?.(false)}
     >
-      {user ? (
-        <MenuItem
-          label={
-            userDisplayName
-              ? _('Logged in as {{userDisplayName}}', { userDisplayName })
-              : _('Logged in')
-          }
-          labelClass='!max-w-40'
-          aria-label={_('View account details and quota')}
-          Icon={
-            avatarUrl ? (
-              <UserAvatar url={avatarUrl} size={iconSize} DefaultIcon={PiUserCircleCheck} />
-            ) : (
-              PiUserCircleCheck
-            )
-          }
-        >
-          <ul className='ms-0 flex flex-col ps-0 before:hidden'>
-            <MenuItem
-              label={_('Cloud File Transfers')}
-              Icon={MdCloudSync}
-              description={
-                hasActiveTransfers
-                  ? _('{{activeCount}} active, {{pendingCount}} pending', {
-                      activeCount: stats.active,
-                      pendingCount: stats.pending,
-                    })
-                  : stats.failed > 0
-                    ? _('{{failedCount}} failed', { failedCount: stats.failed })
-                    : ''
-              }
-              onClick={openTransferQueue}
-            />
-            <MenuItem
-              label={
-                settings.lastSyncedAtBooks
-                  ? _('Synced at {{time}}', {
-                      time: formatLocaleDateTime(settings.lastSyncedAtBooks),
-                    })
-                  : _('Never synced')
-              }
-              Icon={user ? MdSync : MdSyncProblem}
-              labelClass='ps-2 pe-1 !mx-0'
-              iconClassName={user && isSyncing ? 'animate-reverse-spin' : ''}
-              onClick={handleSyncLibrary}
-            />
-            <button
-              onClick={handleUserProfile}
-              className='hover:bg-base-300 w-full rounded-md'
-              style={{
-                paddingInlineStart: `${iconSize}px`,
-              }}
-            >
-              <Quota quotas={quotas} labelClassName='h-10 pl-3 pr-2' />
-            </button>
-            <MenuItem label={_('Account')} onClick={handleUserProfile} />
-          </ul>
-        </MenuItem>
-      ) : (
-        <MenuItem label={_('Sign In')} Icon={PiUserCircle} onClick={handleUserLogin}></MenuItem>
-      )}
+      {readioFeatures.auth &&
+        (user ? (
+          <MenuItem
+            label={
+              userDisplayName
+                ? _('Logged in as {{userDisplayName}}', { userDisplayName })
+                : _('Logged in')
+            }
+            labelClass='!max-w-40'
+            aria-label={_('View account details and quota')}
+            Icon={
+              avatarUrl ? (
+                <UserAvatar url={avatarUrl} size={iconSize} DefaultIcon={PiUserCircleCheck} />
+              ) : (
+                PiUserCircleCheck
+              )
+            }
+          >
+            <ul className='ms-0 flex flex-col ps-0 before:hidden'>
+              {readioFeatures.cloudSync && (
+                <>
+                  <MenuItem
+                    label={_('Cloud File Transfers')}
+                    Icon={MdCloudSync}
+                    description={
+                      hasActiveTransfers
+                        ? _('{{activeCount}} active, {{pendingCount}} pending', {
+                            activeCount: stats.active,
+                            pendingCount: stats.pending,
+                          })
+                        : stats.failed > 0
+                          ? _('{{failedCount}} failed', { failedCount: stats.failed })
+                          : ''
+                    }
+                    onClick={openTransferQueue}
+                  />
+                  <MenuItem
+                    label={
+                      settings.lastSyncedAtBooks
+                        ? _('Synced at {{time}}', {
+                            time: formatLocaleDateTime(settings.lastSyncedAtBooks),
+                          })
+                        : _('Never synced')
+                    }
+                    Icon={user ? MdSync : MdSyncProblem}
+                    labelClass='ps-2 pe-1 !mx-0'
+                    iconClassName={user && isSyncing ? 'animate-reverse-spin' : ''}
+                    onClick={handleSyncLibrary}
+                  />
+                </>
+              )}
+              {readioFeatures.commerce && (
+                <button
+                  onClick={handleUserProfile}
+                  className='hover:bg-base-300 w-full rounded-md'
+                  style={{
+                    paddingInlineStart: `${iconSize}px`,
+                  }}
+                >
+                  <Quota quotas={quotas} labelClassName='h-10 pl-3 pr-2' />
+                </button>
+              )}
+              <MenuItem label={_('Account')} onClick={handleUserProfile} />
+            </ul>
+          </MenuItem>
+        ) : (
+          <MenuItem label={_('Sign In')} Icon={PiUserCircle} onClick={handleUserLogin}></MenuItem>
+        ))}
 
-      <MenuItem
-        label={_('Auto Upload Books to Cloud')}
-        toggled={isAutoUpload}
-        onClick={toggleAutoUploadBooks}
-      />
+      {readioFeatures.cloudSync && (
+        <MenuItem
+          label={_('Auto Upload Books to Cloud')}
+          toggled={isAutoUpload}
+          onClick={toggleAutoUploadBooks}
+        />
+      )}
 
       {isTauriAppPlatform() && !appService?.isMobile && (
         <MenuItem
@@ -372,7 +384,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
           onClick={toggleOpenLastBooks}
         />
       )}
-      {appService?.hasUpdater && (
+      {readioFeatures.updater && appService?.hasUpdater && (
         <MenuItem
           label={_('Check Updates on Start')}
           toggled={isAutoCheckUpdates}
@@ -403,7 +415,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
         toggled={isScreenWakeLock}
         onClick={toggleScreenWakeLock}
       />
-      {appService?.isAndroidApp && (
+      {readioFeatures.tts && appService?.isAndroidApp && (
         <MenuItem
           label={_(_('Background Read Aloud'))}
           toggled={alwaysInForeground}
@@ -417,42 +429,48 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
         onClick={cycleThemeMode}
       />
       <MenuItem label={_('Settings')} Icon={PiGear} onClick={openSettingsDialog} />
-      <hr aria-hidden='true' className='border-base-200 my-1' />
-      <MenuItem label={_('Advanced Settings')}>
-        <ul className='ms-0 flex flex-col ps-0 before:hidden'>
-          {appService?.canCustomizeRootDir && (
-            <MenuItem label={_('Change Data Location')} onClick={handleSetRootDir} />
-          )}
-          <MenuItem label={_('Backup & Restore')} onClick={handleBackupRestore} />
-          <MenuItem
-            label={_('Refresh Metadata')}
-            description={refreshMetadataProgress}
-            onClick={handleRefreshMetadata}
-            disabled={isRefreshingMetadata}
-          />
-          {appService?.isAndroidApp && appService?.distChannel !== 'playstore' && (
-            <MenuItem
-              label={_('Save Book Cover')}
-              tooltip={_('Auto-save last book cover')}
-              description={savedBookCoverForLockScreen ? savedBookCoverDescription : ''}
-              toggled={!!savedBookCoverForLockScreen}
-              onClick={handleSetSavedBookCoverForLockScreen}
-            />
-          )}
-        </ul>
-      </MenuItem>
-      <hr aria-hidden='true' className='border-base-200 my-1' />
-      {user && userProfilePlan === 'free' && (
-        <MenuItem label={_('Upgrade to Readest Premium')} onClick={handleUpgrade} />
+      {readioFeatures.advancedSettings && (
+        <>
+          <hr aria-hidden='true' className='border-base-200 my-1' />
+          <MenuItem label={_('Advanced Settings')}>
+            <ul className='ms-0 flex flex-col ps-0 before:hidden'>
+              {appService?.canCustomizeRootDir && (
+                <MenuItem label={_('Change Data Location')} onClick={handleSetRootDir} />
+              )}
+              <MenuItem label={_('Backup & Restore')} onClick={handleBackupRestore} />
+              <MenuItem
+                label={_('Refresh Metadata')}
+                description={refreshMetadataProgress}
+                onClick={handleRefreshMetadata}
+                disabled={isRefreshingMetadata}
+              />
+              {appService?.isAndroidApp && appService?.distChannel !== 'playstore' && (
+                <MenuItem
+                  label={_('Save Book Cover')}
+                  tooltip={_('Auto-save last book cover')}
+                  description={savedBookCoverForLockScreen ? savedBookCoverDescription : ''}
+                  toggled={!!savedBookCoverForLockScreen}
+                  onClick={handleSetSavedBookCoverForLockScreen}
+                />
+              )}
+            </ul>
+          </MenuItem>
+        </>
       )}
-      {isWebAppPlatform() && <MenuItem label={_('Download Readest')} onClick={downloadReadest} />}
-      <MenuItem label={_('About Readest')} onClick={showAboutReadest} />
-      <MenuItem
-        label={_('Help improve Readest')}
-        description={isTelemetryEnabled ? _('Sharing anonymized statistics') : ''}
-        toggled={isTelemetryEnabled}
-        onClick={toggleTelemetry}
-      />
+      <hr aria-hidden='true' className='border-base-200 my-1' />
+      {readioFeatures.commerce && user && userProfilePlan === 'free' && (
+        <MenuItem label={_('Upgrade to Readio Premium')} onClick={handleUpgrade} />
+      )}
+      {isWebAppPlatform() && <MenuItem label={_('Download Readio')} onClick={downloadReadest} />}
+      <MenuItem label={_('About Readio')} onClick={showAboutReadest} />
+      {readioFeatures.telemetry && (
+        <MenuItem
+          label={_('Help improve Readio')}
+          description={isTelemetryEnabled ? _('Sharing anonymized statistics') : ''}
+          toggled={isTelemetryEnabled}
+          onClick={toggleTelemetry}
+        />
+      )}
     </Menu>
   );
 };

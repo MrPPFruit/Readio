@@ -10,6 +10,7 @@ import {
   useEffect,
 } from 'react';
 import { User } from '@supabase/supabase-js';
+import { readioFeatures } from '@/config/features';
 import { supabase } from '@/utils/supabase';
 import posthog from 'posthog-js';
 
@@ -39,6 +40,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   });
 
   useEffect(() => {
+    if (!readioFeatures.auth) return;
+
     const syncSession = (
       session: { access_token: string; refresh_token: string; user: User } | null,
     ) => {

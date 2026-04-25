@@ -1,8 +1,13 @@
+import { readioFeatures } from '@/config/features';
 import { validateUserAndToken } from '@/utils/access';
 import { streamText, createGateway } from 'ai';
 import type { ModelMessage } from 'ai';
 
 export async function POST(req: Request): Promise<Response> {
+  if (!readioFeatures.ai) {
+    return Response.json({ error: 'Feature disabled' }, { status: 404 });
+  }
+
   try {
     const { user, token } = await validateUserAndToken(req.headers.get('authorization'));
     if (!user || !token) {

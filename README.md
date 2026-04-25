@@ -5,6 +5,8 @@
   <h1>Readest</h1>
   <br>
 
+Readio is a Readio client restart based on [Readest][link-website]. This repository retains Readest's AGPL-3.0 license and attribution while we simplify the app toward a local-first Android reading MVP.
+
 [Readest][link-website] is an open-source ebook reader designed for immersive and deep reading experiences. Built as a modern rewrite of [Foliate](https://github.com/johnfactotum/foliate), it leverages [Next.js 16](https://github.com/vercel/next.js) and [Tauri v2](https://github.com/tauri-apps/tauri) to deliver a smooth, cross-platform experience across macOS, Windows, Linux, Android, iOS, and the Web.
 
 [![Website][badge-website]][link-website]

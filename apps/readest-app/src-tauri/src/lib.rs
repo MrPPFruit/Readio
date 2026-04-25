@@ -393,7 +393,7 @@ pub fn run() {
                     .decorations(false)
                     .visible(false)
                     .shadow(true)
-                    .title("Readest");
+                    .title("Readio");
 
                 #[cfg(target_os = "windows")]
                 {

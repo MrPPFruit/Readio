@@ -1,6 +1,21 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
 
+const storage = vi.hoisted(() => {
+  const values = new Map<string, string>();
+  return {
+    clear: vi.fn(() => values.clear()),
+    getItem: vi.fn((key: string) => values.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+    removeItem: vi.fn((key: string) => values.delete(key)),
+  };
+});
+
+Object.defineProperty(window, 'localStorage', {
+  value: storage,
+  configurable: true,
+});
+
 vi.mock('@/utils/supabase', () => ({
   supabase: {
     auth: {
@@ -18,11 +33,14 @@ vi.mock('posthog-js', () => ({
 }));
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { supabase } from '@/utils/supabase';
+import posthog from 'posthog-js';
 
 describe('AuthContext memoization', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     if (typeof window !== 'undefined') {
-      window.localStorage.clear();
+      localStorage.clear();
     }
   });
 
@@ -98,5 +116,17 @@ describe('AuthContext memoization', () => {
     expect(last.login).toBe(prev.login);
     expect(last.logout).toBe(prev.logout);
     expect(last.refresh).toBe(prev.refresh);
+  });
+
+  test('does not initialize Supabase or PostHog when auth is disabled', () => {
+    render(
+      <AuthProvider>
+        <div>local library</div>
+      </AuthProvider>,
+    );
+
+    expect(supabase.auth.onAuthStateChange).not.toHaveBeenCalled();
+    expect(supabase.auth.refreshSession).not.toHaveBeenCalled();
+    expect(posthog.identify).not.toHaveBeenCalled();
   });
 });

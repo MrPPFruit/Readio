@@ -20,6 +20,7 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
   navigationHandlers,
   forceMobileLayout,
   onSpeakText,
+  ttsEnabled,
 }) => {
   const _ = useTranslation();
   const { hoveredBookKey, getView, getViewState, getProgress, getViewSettings } = useReaderStore();
@@ -128,11 +129,13 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
         value={progressValue}
         onChange={(e) => handleProgressChange(parseInt(e.target.value, 10))}
       />
-      <Button
-        icon={<FaHeadphones className={viewState?.ttsEnabled ? 'text-blue-500' : ''} />}
-        onClick={onSpeakText!}
-        label={_('Speak')}
-      />
+      {ttsEnabled && (
+        <Button
+          icon={<FaHeadphones className={viewState?.ttsEnabled ? 'text-blue-500' : ''} />}
+          onClick={onSpeakText!}
+          label={_('Speak')}
+        />
+      )}
       {!viewSettings?.showPaginationButtons && (
         <Button
           icon={getNavigationIcon(viewSettings?.rtl, <RiArrowRightSLine />, <RiArrowLeftSLine />)}

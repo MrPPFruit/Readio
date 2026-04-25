@@ -5,6 +5,7 @@ import {
   getBookSortValue,
   compareSortValues,
   createBookSorter,
+  getContinueReadingBook,
 } from '@/app/library/utils/libraryUtils';
 import { Book } from '@/types/book';
 import { LibrarySortByType } from '@/types/settings';
@@ -115,6 +116,40 @@ describe('createBookFilter', () => {
     const bookNoMatch = createMockBook({ title: 'The Moby Dick' });
     expect(filter(bookMatch)).toBeTruthy();
     expect(filter(bookNoMatch)).toBeFalsy();
+  });
+});
+
+describe('getContinueReadingBook', () => {
+  it('selects the newest unfinished book with progress', () => {
+    const result = getContinueReadingBook([
+      createMockBook({ title: 'Unread newer book', updatedAt: 3000 }),
+      createMockBook({
+        title: 'Finished book',
+        progress: [100, 100],
+        readingStatus: 'finished',
+        updatedAt: 4000,
+      }),
+      createMockBook({
+        title: 'Older reading book',
+        progress: [12, 100],
+        readingStatus: 'reading',
+        updatedAt: 1000,
+      }),
+      createMockBook({
+        title: 'Newest reading book',
+        progress: [18, 100],
+        readingStatus: 'reading',
+        updatedAt: 2000,
+      }),
+      createMockBook({
+        title: 'Deleted reading book',
+        progress: [50, 100],
+        updatedAt: 5000,
+        deletedAt: 1,
+      }),
+    ]);
+
+    expect(result?.title).toBe('Newest reading book');
   });
 });
 

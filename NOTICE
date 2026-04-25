@@ -1,0 +1,12 @@
+Readio Client
+
+This client is based on Readest.
+
+Readest copyright and license notices are retained from the upstream project:
+- Upstream project: Readest
+- Upstream source: https://github.com/readest/readest
+- License: GNU Affero General Public License v3.0
+
+Readio modifications to the Readest client are derivative work of Readest and must be distributed under the GNU Affero General Public License v3.0 when the client is conveyed or made available over a network.
+
+Third-party dependency notices and licenses remain governed by their respective upstream packages and license files.

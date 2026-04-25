@@ -1,8 +1,15 @@
 import { READEST_OPDS_USER_AGENT } from '@/services/constants';
 import { NextRequest, NextResponse } from 'next/server';
 import { deserializeOPDSCustomHeaders } from '@/app/opds/utils/customHeaders';
+import { readioFeatures } from '@/config/features';
+
+const disabledResponse = () => NextResponse.json({ error: 'Feature disabled' }, { status: 404 });
 
 async function handleRequest(request: NextRequest, method: 'GET' | 'HEAD') {
+  if (!readioFeatures.opds) {
+    return disabledResponse();
+  }
+
   // Cloudflare Workers incorrectly decodes %26 to & in the url parameter value,
   // causing query parameters within the proxied URL (like &start_index=26) to be
   // treated as separate top-level parameters instead of part of the url value.
@@ -206,6 +213,10 @@ export async function HEAD(request: NextRequest) {
 }
 
 export async function OPTIONS(_: NextRequest) {
+  if (!readioFeatures.opds) {
+    return disabledResponse();
+  }
+
   return new NextResponse(null, {
     status: 200,
     headers: {

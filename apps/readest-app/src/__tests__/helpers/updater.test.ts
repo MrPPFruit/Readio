@@ -1,6 +1,21 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import semver from 'semver';
 
+const storage = vi.hoisted(() => {
+  const values = new Map<string, string>();
+  return {
+    clear: vi.fn(() => values.clear()),
+    getItem: vi.fn((key: string) => values.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+    removeItem: vi.fn((key: string) => values.delete(key)),
+  };
+});
+
+Object.defineProperty(window, 'localStorage', {
+  value: storage,
+  configurable: true,
+});
+
 // ── Mocks for Tauri and internal modules ─────────────────────────
 const mockCheck = vi.fn();
 const mockOsType = vi.fn();
@@ -45,6 +60,12 @@ vi.mock('@/services/environment', () => ({
 let mockAppVersion = '1.0.0';
 vi.mock('@/utils/version', () => ({
   getAppVersion: () => mockAppVersion,
+}));
+
+vi.mock('@/config/features', () => ({
+  readioFeatures: {
+    updater: true,
+  },
 }));
 
 vi.mock('@/services/constants', () => ({

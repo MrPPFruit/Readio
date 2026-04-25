@@ -8,6 +8,7 @@ import { PiRobot, PiSpeakerHigh, PiSun, PiMoon } from 'react-icons/pi';
 import { TbSunMoon } from 'react-icons/tb';
 import { MdRefresh } from 'react-icons/md';
 import { IconType } from 'react-icons';
+import { readioFeatures } from '@/config/features';
 import { stubTranslation as _ } from '@/utils/misc';
 
 export type CommandCategory = 'settings' | 'actions' | 'navigation';
@@ -593,6 +594,28 @@ const customPanelItems = [
   },
 ];
 
+const isSettingsItemEnabled = (def: { id: string; section?: string }): boolean => {
+  if (def.id.startsWith('settings.tts.')) return readioFeatures.tts;
+  if (def.id.startsWith('settings.language.tts')) return readioFeatures.tts;
+  if (
+    def.section === 'Translation' ||
+    def.id.includes('translation') ||
+    def.id.includes('targetLanguage')
+  ) {
+    return readioFeatures.translation;
+  }
+  if (def.id === 'settings.color.highlightColors') return readioFeatures.annotations;
+  if (
+    def.id === 'settings.control.enableQuickActions' ||
+    def.id === 'settings.control.quickAction'
+  ) {
+    return readioFeatures.annotations;
+  }
+  if (def.id === 'settings.control.copyToNotebook') return readioFeatures.notebook;
+  if (def.id === 'settings.color.readingRuler') return readioFeatures.proofreading;
+  return true;
+};
+
 const actionItems = [
   {
     id: 'action.toggleTheme',
@@ -631,12 +654,12 @@ const actionItems = [
   },
   {
     id: 'action.about',
-    labelKey: _('About Readest'),
-    keywords: ['about', 'readest', 'version', 'info'],
+    labelKey: _('About Readio'),
+    keywords: ['about', 'readio', 'readest', 'version', 'info'],
   },
   {
     id: 'action.telemetry',
-    labelKey: _('Help improve Readest'),
+    labelKey: _('Help improve Readio'),
     keywords: ['telemetry', 'analytics', 'improve', 'statistics'],
   },
 ];
@@ -679,6 +702,18 @@ export const buildCommandRegistry = (options: CommandRegistryOptions): CommandIt
     action: () => openSettingsPanel(panel, def.id),
   });
 
+  const addSettingsItems = (
+    definitions: { id: string; labelKey: string; keywords: string[]; section?: string }[],
+    panel: SettingsPanelType,
+    panelLabel?: string,
+  ) => {
+    for (const def of definitions) {
+      if (isSettingsItemEnabled(def)) {
+        items.push(createSettingsItem(def, panel, panelLabel));
+      }
+    }
+  };
+
   // add font panel items
   for (const def of fontPanelItems) {
     items.push(createSettingsItem(def, 'Font'));
@@ -690,30 +725,26 @@ export const buildCommandRegistry = (options: CommandRegistryOptions): CommandIt
   }
 
   // add color panel items
-  for (const def of colorPanelItems) {
-    items.push(createSettingsItem(def, 'Color'));
-  }
+  addSettingsItems(colorPanelItems, 'Color');
 
   // add control panel items
-  for (const def of controlPanelItems) {
-    items.push(createSettingsItem(def, 'Control', 'Behavior'));
-  }
+  addSettingsItems(controlPanelItems, 'Control', 'Behavior');
 
   // add language panel items
-  for (const def of languagePanelItems) {
-    items.push(createSettingsItem(def, 'Language'));
-  }
+  addSettingsItems(languagePanelItems, 'Language');
 
   // add ai panel items (only in dev, as of now atleast)
-  if (process.env.NODE_ENV !== 'production') {
+  if (readioFeatures.ai && process.env.NODE_ENV !== 'production') {
     for (const def of aiPanelItems) {
       items.push(createSettingsItem(def, 'AI'));
     }
   }
 
   // add custom panel items
-  for (const def of customPanelItems) {
-    items.push(createSettingsItem(def, 'Custom'));
+  if (readioFeatures.advancedSettings) {
+    for (const def of customPanelItems) {
+      items.push(createSettingsItem(def, 'Custom'));
+    }
   }
 
   // add action items
@@ -773,12 +804,14 @@ export const buildCommandRegistry = (options: CommandRegistryOptions): CommandIt
     }),
   );
 
-  items.push(
-    createActionItem({
-      id: 'action.autoUpload',
-      action: options.toggleAutoUpload,
-    }),
-  );
+  if (readioFeatures.cloudSync) {
+    items.push(
+      createActionItem({
+        id: 'action.autoUpload',
+        action: options.toggleAutoUpload,
+      }),
+    );
+  }
 
   items.push(
     createActionItem({
@@ -803,12 +836,14 @@ export const buildCommandRegistry = (options: CommandRegistryOptions): CommandIt
     }),
   );
 
-  items.push(
-    createActionItem({
-      id: 'action.telemetry',
-      action: options.toggleTelemetry,
-    }),
-  );
+  if (readioFeatures.telemetry) {
+    items.push(
+      createActionItem({
+        id: 'action.telemetry',
+        action: options.toggleTelemetry,
+      }),
+    );
+  }
 
   return items;
 };

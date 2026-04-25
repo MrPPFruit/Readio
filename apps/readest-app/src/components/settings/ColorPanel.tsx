@@ -20,6 +20,7 @@ import { SettingsPanelPanelProp } from './SettingsDialog';
 import { useFileSelector } from '@/hooks/useFileSelector';
 import { PREDEFINED_TEXTURES } from '@/styles/textures';
 import { useAtmosphereStore } from '@/store/atmosphereStore';
+import { readioFeatures } from '@/config/features';
 import { DefaultHighlightColor, HighlightColor, UserHighlightColor } from '@/types/book';
 import { HIGHLIGHT_COLOR_HEX } from '@/services/constants';
 import ThemeEditor from './color/ThemeEditor';
@@ -363,30 +364,34 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
             data-setting-id='settings.color.backgroundTexture'
           />
 
-          <HighlightColorsEditor
-            customHighlightColors={customHighlightColors}
-            userHighlightColors={userHighlightColors}
-            defaultHighlightLabels={defaultHighlightLabels}
-            highlightOpacity={highlightOpacity}
-            isEink={viewSettings.isEink}
-            onCustomHighlightColorsChange={handleCustomHighlightColorsChange}
-            onUserHighlightColorsChange={handleUserHighlightColorsChange}
-            onDefaultHighlightLabelsChange={handleDefaultHighlightLabelsChange}
-            onOpacityChange={setHighlightOpacity}
-            data-setting-id='settings.color.highlightColors'
-          />
+          {readioFeatures.annotations && (
+            <HighlightColorsEditor
+              customHighlightColors={customHighlightColors}
+              userHighlightColors={userHighlightColors}
+              defaultHighlightLabels={defaultHighlightLabels}
+              highlightOpacity={highlightOpacity}
+              isEink={viewSettings.isEink}
+              onCustomHighlightColorsChange={handleCustomHighlightColorsChange}
+              onUserHighlightColorsChange={handleUserHighlightColorsChange}
+              onDefaultHighlightLabelsChange={handleDefaultHighlightLabelsChange}
+              onOpacityChange={setHighlightOpacity}
+              data-setting-id='settings.color.highlightColors'
+            />
+          )}
 
-          <ReadingRulerSettings
-            enabled={readingRulerEnabled}
-            lines={readingRulerLines}
-            opacity={readingRulerOpacity}
-            color={readingRulerColor}
-            onEnabledChange={setReadingRulerEnabled}
-            onLinesChange={setReadingRulerLines}
-            onOpacityChange={setReadingRulerOpacity}
-            onColorChange={setReadingRulerColor}
-            data-setting-id='settings.color.readingRuler'
-          />
+          {readioFeatures.proofreading && (
+            <ReadingRulerSettings
+              enabled={readingRulerEnabled}
+              lines={readingRulerLines}
+              opacity={readingRulerOpacity}
+              color={readingRulerColor}
+              onEnabledChange={setReadingRulerEnabled}
+              onLinesChange={setReadingRulerLines}
+              onOpacityChange={setReadingRulerOpacity}
+              onColorChange={setReadingRulerColor}
+              data-setting-id='settings.color.readingRuler'
+            />
+          )}
 
           <CodeHighlightingSettings
             codeHighlighting={codeHighlighting}

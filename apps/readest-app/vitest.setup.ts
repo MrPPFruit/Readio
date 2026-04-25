@@ -1,3 +1,5 @@
+process.env.NODE_ENV = 'test';
+
 // matchMedia mock
 if (typeof window !== 'undefined' && !window.matchMedia) {
   window.matchMedia = (query: string) =>

@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import React, { useEffect, useRef, useState } from 'react';
+import { readioFeatures } from '@/config/features';
 import { useEnv } from '@/context/EnvContext';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
@@ -95,29 +96,32 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       tab: 'TTS',
       icon: PiSpeakerHigh,
       label: _('TTS'),
+      disabled: !readioFeatures.tts,
     },
     {
       tab: 'AI',
       icon: PiRobot,
       label: _('AI Assistant'),
-      disabled: process.env.NODE_ENV === 'production',
+      disabled: !readioFeatures.ai || process.env.NODE_ENV === 'production',
     },
     {
       tab: 'Custom',
       icon: IoAccessibilityOutline,
       label: _('Custom'),
+      disabled: !readioFeatures.advancedSettings,
     },
   ] as TabConfig[];
 
   const [activePanel, setActivePanel] = useState<SettingsPanelType>(() => {
     const lastPanel = localStorage.getItem('lastConfigPanel');
-    if (lastPanel && tabConfig.some((tab) => tab.tab === lastPanel)) {
+    if (lastPanel && tabConfig.some((tab) => tab.tab === lastPanel && !tab.disabled)) {
       return lastPanel as SettingsPanelType;
     }
     return 'Font' as SettingsPanelType;
   });
 
   const handleSetActivePanel = (tab: SettingsPanelType) => {
+    if (tabConfig.some((config) => config.tab === tab && config.disabled)) return;
     setActivePanel(tab);
     setFontPanelView('main-fonts');
     localStorage.setItem('lastConfigPanel', tab);
@@ -180,7 +184,11 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       };
       const panelKey = parts[1]?.toLowerCase();
       const targetPanel = panelMap[panelKey || ''];
-      if (targetPanel && targetPanel !== activePanel) {
+      if (
+        targetPanel &&
+        targetPanel !== activePanel &&
+        tabConfig.some((tab) => tab.tab === targetPanel && !tab.disabled)
+      ) {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- panel switch based on external navigation is intended
         setActivePanel(targetPanel);
       }
@@ -382,7 +390,7 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
             onRegisterReset={(fn) => registerResetFunction('Control', fn)}
           />
         )}
-        {activePanel === 'TTS' && (
+        {readioFeatures.tts && activePanel === 'TTS' && (
           <TTSPanel bookKey={bookKey} onRegisterReset={(fn) => registerResetFunction('TTS', fn)} />
         )}
         {activePanel === 'Language' && (
@@ -391,8 +399,8 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
             onRegisterReset={(fn) => registerResetFunction('Language', fn)}
           />
         )}
-        {activePanel === 'AI' && <AIPanel />}
-        {activePanel === 'Custom' && (
+        {readioFeatures.ai && activePanel === 'AI' && <AIPanel />}
+        {readioFeatures.advancedSettings && activePanel === 'Custom' && (
           <MiscPanel
             bookKey={bookKey}
             onRegisterReset={(fn) => registerResetFunction('Custom', fn)}

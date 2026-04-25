@@ -12,6 +12,7 @@ import { getMaxInlineSize } from '@/utils/config';
 import { saveSysSettings, saveViewSettings } from '@/helpers/settings';
 import { SettingsPanelPanelProp } from './SettingsDialog';
 import { annotationToolQuickActions } from '@/app/reader/components/annotator/AnnotationTools';
+import { readioFeatures } from '@/config/features';
 import NumberInput from './NumberInput';
 import Select from '../Select';
 
@@ -359,40 +360,50 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
         </div>
       </div>
 
-      <div className='w-full' data-setting-id='settings.control.enableQuickActions'>
-        <h2 className='mb-2 font-medium'>{_('Annotation Tools')}</h2>
-        <div className='card border-base-200 bg-base-100 border shadow'>
-          <div className='divide-base-200 divide-y'>
-            <div className='config-item'>
-              <span className=''>{_('Enable Quick Actions')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={enableAnnotationQuickActions}
-                onChange={() => setEnableAnnotationQuickActions(!enableAnnotationQuickActions)}
-              />
-            </div>
-            <div className='config-item' data-setting-id='settings.control.quickAction'>
-              <span className=''>{_('Quick Action')}</span>
-              <Select
-                value={annotationQuickAction || ''}
-                onChange={handleSelectAnnotationQuickAction}
-                options={getQuickActionOptions()}
-                disabled={!enableAnnotationQuickActions}
-              />
-            </div>
-            <div className='config-item' data-setting-id='settings.control.copyToNotebook'>
-              <span className=''>{_('Copy to Notebook')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={copyToNotebook}
-                onChange={() => setCopyToNotebook(!copyToNotebook)}
-              />
+      {(readioFeatures.annotations || readioFeatures.notebook) && (
+        <div className='w-full' data-setting-id='settings.control.enableQuickActions'>
+          <h2 className='mb-2 font-medium'>{_('Annotation Tools')}</h2>
+          <div className='card border-base-200 bg-base-100 border shadow'>
+            <div className='divide-base-200 divide-y'>
+              {readioFeatures.annotations && (
+                <>
+                  <div className='config-item'>
+                    <span className=''>{_('Enable Quick Actions')}</span>
+                    <input
+                      type='checkbox'
+                      className='toggle'
+                      checked={enableAnnotationQuickActions}
+                      onChange={() =>
+                        setEnableAnnotationQuickActions(!enableAnnotationQuickActions)
+                      }
+                    />
+                  </div>
+                  <div className='config-item' data-setting-id='settings.control.quickAction'>
+                    <span className=''>{_('Quick Action')}</span>
+                    <Select
+                      value={annotationQuickAction || ''}
+                      onChange={handleSelectAnnotationQuickAction}
+                      options={getQuickActionOptions()}
+                      disabled={!enableAnnotationQuickActions}
+                    />
+                  </div>
+                </>
+              )}
+              {readioFeatures.notebook && (
+                <div className='config-item' data-setting-id='settings.control.copyToNotebook'>
+                  <span className=''>{_('Copy to Notebook')}</span>
+                  <input
+                    type='checkbox'
+                    className='toggle'
+                    checked={copyToNotebook}
+                    onChange={() => setCopyToNotebook(!copyToNotebook)}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className='w-full' data-setting-id='settings.control.pagingAnimation'>
         <h2 className='mb-2 font-medium'>{_('Animation')}</h2>

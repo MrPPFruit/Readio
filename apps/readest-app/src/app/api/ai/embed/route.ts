@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { embed, embedMany, createGateway } from 'ai';
+import { readioFeatures } from '@/config/features';
 import { validateUserAndToken } from '@/utils/access';
 
 export async function POST(req: Request): Promise<Response> {
+  if (!readioFeatures.ai) {
+    return NextResponse.json({ error: 'Feature disabled' }, { status: 404 });
+  }
+
   try {
     const { user, token } = await validateUserAndToken(req.headers.get('authorization'));
     if (!user || !token) {

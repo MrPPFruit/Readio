@@ -69,6 +69,7 @@ import {
   ensureLibraryGroupByType,
   findGroupById,
   getBreadcrumbs,
+  getContinueReadingBook,
 } from './utils/libraryUtils';
 import Spinner from '@/components/Spinner';
 import LibraryHeader from './components/LibraryHeader';
@@ -79,6 +80,8 @@ import DropIndicator from '@/components/DropIndicator';
 import SettingsDialog from '@/components/settings/SettingsDialog';
 import ModalPortal from '@/components/ModalPortal';
 import TransferQueuePanel from './components/TransferQueuePanel';
+import ContinueReadingCard from './components/ContinueReadingCard';
+import LibraryEmptyState from './components/LibraryEmptyState';
 
 const LibraryPageWithSearchParams = () => {
   const searchParams = useSearchParams();
@@ -857,6 +860,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   }
 
   const showBookshelf = libraryLoaded || libraryBooks.length > 0;
+  const continueReadingBook = getContinueReadingBook(libraryBooks);
+  const showContinueReadingCard = !!continueReadingBook && !isSelectMode && !currentGroupPath;
+  const handleOpenContinueReadingBook = () => {
+    if (!continueReadingBook) return;
+    navigateToReader(router, [continueReadingBook.hash]);
+  };
 
   return (
     <div
@@ -958,6 +967,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
               }}
             >
               <DropIndicator />
+              {showContinueReadingCard && (
+                <ContinueReadingCard
+                  book={continueReadingBook}
+                  onOpen={handleOpenContinueReadingBook}
+                />
+              )}
               <Bookshelf
                 libraryBooks={libraryBooks}
                 isSelectMode={isSelectMode}
@@ -979,19 +994,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         ) : (
           <div className='hero drop-zone h-screen items-center justify-center'>
             <DropIndicator />
-            <div className='hero-content text-neutral-content text-center'>
-              <div className='max-w-md'>
-                <h1 className='mb-5 text-5xl font-bold'>{_('Your Library')}</h1>
-                <p className='mb-5'>
-                  {_(
-                    'Welcome to your library. You can import your books here and read them anytime.',
-                  )}
-                </p>
-                <button className='btn btn-primary rounded-xl' onClick={handleImportBooksFromFiles}>
-                  {_('Import Books')}
-                </button>
-              </div>
-            </div>
+            <LibraryEmptyState onImportBooks={handleImportBooksFromFiles} />
           </div>
         ))}
       {showDetailsBook && (

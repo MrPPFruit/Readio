@@ -82,7 +82,7 @@ export const AboutWindow = () => {
     <Dialog
       id='about_window'
       isOpen={isOpen}
-      title={_('About Readest')}
+      title={_('About Readio')}
       onClose={handleClose}
       boxClassName='sm:!w-[480px] sm:!max-w-screen-sm sm:h-auto'
     >
@@ -93,7 +93,7 @@ export const AboutWindow = () => {
               <Image src='/icon.png' alt='App Logo' className='h-20 w-20' width={64} height={64} />
             </div>
             <div className='flex select-text flex-col items-center'>
-              <h2 className='mb-2 text-2xl font-bold'>Readest</h2>
+              <h2 className='mb-2 text-2xl font-bold'>Readio</h2>
               <p className='text-neutral-content text-center text-sm'>
                 {_('Version {{version}}', { version: getAppVersion() })} {`(${browserInfo})`}
               </p>
@@ -132,7 +132,7 @@ export const AboutWindow = () => {
             </p>
 
             <p className='text-neutral-content text-xs'>
-              This software is licensed under the{' '}
+              Readio is based on Readest. This client is licensed under the{' '}
               <Link
                 href='https://www.gnu.org/licenses/agpl-3.0.html'
                 className='text-blue-500 underline'
@@ -143,7 +143,7 @@ export const AboutWindow = () => {
               AGPL v3 license. Please see the license for more details.
             </p>
             <p className='text-neutral-content text-xs'>
-              Source code is available at{' '}
+              Upstream Readest source code is available at{' '}
               <Link href='https://github.com/readest/readest' className='text-blue-500 underline'>
                 GitHub
               </Link>

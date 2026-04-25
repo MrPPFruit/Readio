@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EdgeSpeechTTS, EdgeTTSPayload } from '@/libs/edgeTTS';
+import { readioFeatures } from '@/config/features';
 import { validateUserAndToken } from '@/utils/access';
 
 const getLangFromVoice = (voiceId: string): string => {
@@ -12,6 +13,10 @@ const isValidVoice = (voiceId: string): boolean => {
 };
 
 export async function POST(request: NextRequest) {
+  if (!readioFeatures.tts) {
+    return NextResponse.json({ error: 'Feature disabled' }, { status: 404 });
+  }
+
   const { user, token } = await validateUserAndToken(request.headers.get('authorization'));
   if (!user || !token) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 403 });
@@ -94,6 +99,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  if (!readioFeatures.tts) {
+    return NextResponse.json({ error: 'Feature disabled' }, { status: 404 });
+  }
+
   const { user, token } = await validateUserAndToken(request.headers.get('authorization'));
   if (!user || !token) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 403 });

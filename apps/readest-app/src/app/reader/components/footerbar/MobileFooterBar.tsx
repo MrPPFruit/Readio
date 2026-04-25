@@ -15,6 +15,7 @@ const MobileFooterBar: React.FC<FooterBarChildProps> = ({
   navigationHandlers,
   forceMobileLayout,
   onSetActionTab,
+  ttsEnabled,
 }) => {
   const isMobile = forceMobileLayout || window.innerWidth < 640 || window.innerHeight < 640;
   const sliderHeight = useResponsiveSize(28);
@@ -51,6 +52,7 @@ const MobileFooterBar: React.FC<FooterBarChildProps> = ({
         gridInsets={gridInsets}
         forceMobileLayout={forceMobileLayout}
         onSetActionTab={onSetActionTab!}
+        ttsEnabled={ttsEnabled}
       />
     </>
   );

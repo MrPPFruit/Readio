@@ -5,9 +5,14 @@ import {
   createOrUpdateSubscription,
   createOrUpdatePayment,
 } from '@/libs/payment/stripe/server';
+import { readioFeatures } from '@/config/features';
 import { createSupabaseAdminClient } from '@/utils/supabase';
 
 export async function POST(request: NextRequest) {
+  if (!readioFeatures.commerce) {
+    return NextResponse.json({ error: 'Feature disabled' }, { status: 404 });
+  }
+
   try {
     const body = await request.text();
     const signature = request.headers.get('stripe-signature');

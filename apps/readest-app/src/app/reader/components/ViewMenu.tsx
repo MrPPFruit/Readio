@@ -10,6 +10,7 @@ import { IoMdExpand } from 'react-icons/io';
 import { TbArrowAutofitWidth } from 'react-icons/tb';
 import { TbColumns1, TbColumns2 } from 'react-icons/tb';
 
+import { readioFeatures } from '@/config/features';
 import { MAX_ZOOM_LEVEL, MIN_ZOOM_LEVEL, ZOOM_STEP } from '@/services/constants';
 import { useEnv } from '@/context/EnvContext';
 import { useAuth } from '@/context/AuthContext';
@@ -298,30 +299,36 @@ const ViewMenu: React.FC<ViewMenuProps> = ({ bookKey, setIsDropdownOpen }) => {
         disabled={bookData.isFixedLayout}
       />
 
-      <MenuItem
-        label={_('Speed Reading Mode')}
-        onClick={handleStartRSVP}
-        disabled={bookData.isFixedLayout}
-      />
+      {readioFeatures.speedReading && (
+        <MenuItem
+          label={_('Speed Reading Mode')}
+          onClick={handleStartRSVP}
+          disabled={bookData.isFixedLayout}
+        />
+      )}
 
-      <hr aria-hidden='true' className='border-base-300 my-1' />
+      {(readioFeatures.speedReading || readioFeatures.cloudSync) && (
+        <hr aria-hidden='true' className='border-base-300 my-1' />
+      )}
 
-      <MenuItem
-        label={
-          !user
-            ? _('Sign in to Sync')
-            : lastSyncTime
-              ? _('Synced at {{time}}', {
-                  time: formatLocaleDateTime(lastSyncTime),
-                })
-              : _('Never synced')
-        }
-        Icon={user ? MdSync : MdSyncProblem}
-        iconClassName={user && viewState?.syncing ? 'animate-reverse-spin' : ''}
-        onClick={handleSync}
-      />
+      {readioFeatures.cloudSync && (
+        <MenuItem
+          label={
+            !user
+              ? _('Sign in to Sync')
+              : lastSyncTime
+                ? _('Synced at {{time}}', {
+                    time: formatLocaleDateTime(lastSyncTime),
+                  })
+                : _('Never synced')
+          }
+          Icon={user ? MdSync : MdSyncProblem}
+          iconClassName={user && viewState?.syncing ? 'animate-reverse-spin' : ''}
+          onClick={handleSync}
+        />
+      )}
 
-      <hr aria-hidden='true' className='border-base-300 my-1' />
+      {readioFeatures.cloudSync && <hr aria-hidden='true' className='border-base-300 my-1' />}
 
       {appService?.hasWindow && <MenuItem label={_('Fullscreen')} onClick={handleFullScreen} />}
       <MenuItem

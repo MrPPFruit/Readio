@@ -9,6 +9,7 @@ import { useReaderStore } from '@/store/readerStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTranslation } from '@/hooks/useTranslation';
+import { readioFeatures } from '@/config/features';
 import { useResetViewSettings } from '@/hooks/useResetSettings';
 import { isCJKEnv } from '@/utils/misc';
 import { getStyles } from '@/utils/style';
@@ -440,6 +441,7 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
   const langCode = getBookLangCode(bookData?.bookDoc?.metadata?.language);
   const mightBeRTLBook = MIGHT_BE_RTL_LANGS.includes(langCode) || isCJKEnv();
   const isVertical = viewSettings.vertical || writingMode.includes('vertical');
+  const showAdvancedLayoutSettings = readioFeatures.advancedSettings;
 
   return (
     <div className='my-4 w-full space-y-6'>
@@ -606,16 +608,18 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
                 onChange={() => setFullJustification(!fullJustification)}
               />
             </div>
-            <div className='config-item' data-setting-id='settings.layout.hyphenation'>
-              <span className=''>{_('Hyphenation')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={hyphenation}
-                disabled={useBookLayout}
-                onChange={() => setHyphenation(!hyphenation)}
-              />
-            </div>
+            {showAdvancedLayoutSettings && (
+              <div className='config-item' data-setting-id='settings.layout.hyphenation'>
+                <span className=''>{_('Hyphenation')}</span>
+                <input
+                  type='checkbox'
+                  className='toggle'
+                  checked={hyphenation}
+                  disabled={useBookLayout}
+                  onChange={() => setHyphenation(!hyphenation)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -664,42 +668,50 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
               max={88}
               step={4}
             />
-            <NumberInput
-              label={_('Column Gap (%)')}
-              value={gapPercent}
-              onChange={setGapPercent}
-              min={0}
-              max={30}
-              data-setting-id='settings.layout.pageGap'
-            />
-            <NumberInput
-              label={_('Maximum Number of Columns')}
-              value={maxColumnCount}
-              onChange={setMaxColumnCount}
-              min={1}
-              max={4}
-              data-setting-id='settings.layout.maxColumnCount'
-            />
-            <NumberInput
-              label={viewSettings.vertical ? _('Maximum Column Height') : _('Maximum Column Width')}
-              value={maxInlineSize}
-              onChange={setMaxInlineSize}
-              disabled={false}
-              min={200}
-              max={9999}
-              step={50}
-              data-setting-id='settings.layout.maxInlineSize'
-            />
-            <NumberInput
-              label={viewSettings.vertical ? _('Maximum Column Width') : _('Maximum Column Height')}
-              value={maxBlockSize}
-              onChange={setMaxBlockSize}
-              disabled={false}
-              min={400}
-              max={9999}
-              step={50}
-              data-setting-id='settings.layout.maxBlockSize'
-            />
+            {showAdvancedLayoutSettings && (
+              <>
+                <NumberInput
+                  label={_('Column Gap (%)')}
+                  value={gapPercent}
+                  onChange={setGapPercent}
+                  min={0}
+                  max={30}
+                  data-setting-id='settings.layout.pageGap'
+                />
+                <NumberInput
+                  label={_('Maximum Number of Columns')}
+                  value={maxColumnCount}
+                  onChange={setMaxColumnCount}
+                  min={1}
+                  max={4}
+                  data-setting-id='settings.layout.maxColumnCount'
+                />
+                <NumberInput
+                  label={
+                    viewSettings.vertical ? _('Maximum Column Height') : _('Maximum Column Width')
+                  }
+                  value={maxInlineSize}
+                  onChange={setMaxInlineSize}
+                  disabled={false}
+                  min={200}
+                  max={9999}
+                  step={50}
+                  data-setting-id='settings.layout.maxInlineSize'
+                />
+                <NumberInput
+                  label={
+                    viewSettings.vertical ? _('Maximum Column Width') : _('Maximum Column Height')
+                  }
+                  value={maxBlockSize}
+                  onChange={setMaxBlockSize}
+                  disabled={false}
+                  min={400}
+                  max={9999}
+                  step={50}
+                  data-setting-id='settings.layout.maxBlockSize'
+                />
+              </>
+            )}
             <div className='config-item'>
               <span className=''>{_('Apply also in Scrolled Mode')}</span>
               <input
@@ -813,26 +825,30 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
                 />
               </div>
             )}
-            <div className='config-item'>
-              <span className=''>{_('Show Current Battery Status')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={showCurrentBatteryStatus}
-                disabled={!showFooter}
-                onChange={() => setShowCurrentBatteryStatus(!showCurrentBatteryStatus)}
-              />
-            </div>
-            <div className='config-item'>
-              <span className=''>{_('Show Battery Percentage')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={showBatteryPercentage}
-                disabled={!showFooter || !showCurrentBatteryStatus}
-                onChange={() => setShowBatteryPercentage(!showBatteryPercentage)}
-              />
-            </div>
+            {showAdvancedLayoutSettings && (
+              <>
+                <div className='config-item'>
+                  <span className=''>{_('Show Current Battery Status')}</span>
+                  <input
+                    type='checkbox'
+                    className='toggle'
+                    checked={showCurrentBatteryStatus}
+                    disabled={!showFooter}
+                    onChange={() => setShowCurrentBatteryStatus(!showCurrentBatteryStatus)}
+                  />
+                </div>
+                <div className='config-item'>
+                  <span className=''>{_('Show Battery Percentage')}</span>
+                  <input
+                    type='checkbox'
+                    className='toggle'
+                    checked={showBatteryPercentage}
+                    disabled={!showFooter || !showCurrentBatteryStatus}
+                    onChange={() => setShowBatteryPercentage(!showBatteryPercentage)}
+                  />
+                </div>
+              </>
+            )}
             <div className='config-item'>
               <span className=''>{_('Tap to Toggle Footer')}</span>
               <input

@@ -18,6 +18,7 @@ interface NavigationBarProps {
   gridInsets: Insets;
   forceMobileLayout: boolean;
   onSetActionTab: (tab: string) => void;
+  ttsEnabled: boolean;
 }
 
 export const NavigationBar: React.FC<NavigationBarProps> = ({
@@ -26,6 +27,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   gridInsets,
   forceMobileLayout,
   onSetActionTab,
+  ttsEnabled,
 }) => {
   const isMobile = forceMobileLayout || window.innerWidth < 640 || window.innerHeight < 640;
   const _ = useTranslation();
@@ -70,11 +72,13 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
         }
         onClick={() => onSetActionTab('font')}
       />
-      <Button
-        label={_('Speak')}
-        icon={<TTSIcon className={viewState?.ttsEnabled ? 'text-blue-500' : ''} />}
-        onClick={() => onSetActionTab('tts')}
-      />
+      {ttsEnabled && (
+        <Button
+          label={_('Speak')}
+          icon={<TTSIcon className={viewState?.ttsEnabled ? 'text-blue-500' : ''} />}
+          onClick={() => onSetActionTab('tts')}
+        />
+      )}
     </div>
   );
 };

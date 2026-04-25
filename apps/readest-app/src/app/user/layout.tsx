@@ -1,10 +1,19 @@
-import { Metadata } from 'next';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'User Account',
-  description: 'Manage your account settings and subscription',
-};
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { readioFeatures } from '@/config/features';
 
 export default function ProfileLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!readioFeatures.auth && !readioFeatures.commerce) {
+      router.replace('/library');
+    }
+  }, [router]);
+
+  if (!readioFeatures.auth && !readioFeatures.commerce) return null;
+
   return <>{children}</>;
 }

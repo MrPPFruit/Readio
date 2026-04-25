@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { readioFeatures } from '@/config/features';
 import { Book } from '@/types/book';
 import { useSync } from '@/hooks/useSync';
 import { useEnv } from '@/context/EnvContext';
@@ -20,7 +21,7 @@ export const useBooksSync = () => {
   const isPullingRef = useRef(false);
 
   const getNewBooks = useCallback(() => {
-    if (!user) return {};
+    if (!readioFeatures.cloudSync || !user) return {};
     const library = useLibraryStore.getState().library;
     const newBooks = library.filter(
       (book) =>
@@ -36,7 +37,7 @@ export const useBooksSync = () => {
 
   const pullLibrary = useCallback(
     async (fullRefresh = false, verbose = false) => {
-      if (!user) return;
+      if (!readioFeatures.cloudSync || !user) return;
       if (isPullingRef.current) {
         console.log('Pull already in progress, skipping...');
         return;
@@ -78,7 +79,7 @@ export const useBooksSync = () => {
   );
 
   useEffect(() => {
-    if (!user) return;
+    if (!readioFeatures.cloudSync || !user) return;
     if (isPullingRef.current) {
       return;
     }
@@ -86,7 +87,7 @@ export const useBooksSync = () => {
   }, [user, library, handleAutoSync]);
 
   const pushLibrary = useCallback(async () => {
-    if (!user) return;
+    if (!readioFeatures.cloudSync || !user) return;
     const newBooks = getNewBooks();
     if (newBooks.lastSyncedAt) {
       await syncBooks(newBooks?.books, 'push');
@@ -94,12 +95,12 @@ export const useBooksSync = () => {
   }, [user, syncBooks, getNewBooks]);
 
   useEffect(() => {
-    if (!user || !useSyncInited || !libraryLoaded) return;
+    if (!readioFeatures.cloudSync || !user || !useSyncInited || !libraryLoaded) return;
     pullLibrary();
   }, [user, useSyncInited, libraryLoaded, pullLibrary]);
 
   const updateLibrary = useCallback(async () => {
-    if (!syncedBooks?.length) return;
+    if (!readioFeatures.cloudSync || !syncedBooks?.length) return;
 
     // Process old books first so that when we update the library the order is preserved
     syncedBooks.sort((a, b) => a.updatedAt - b.updatedAt);

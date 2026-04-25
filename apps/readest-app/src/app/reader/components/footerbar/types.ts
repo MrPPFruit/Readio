@@ -30,4 +30,5 @@ export interface FooterBarChildProps {
   forceMobileLayout: boolean;
   onSetActionTab: (tab: string) => void;
   onSpeakText: () => void;
+  ttsEnabled: boolean;
 }

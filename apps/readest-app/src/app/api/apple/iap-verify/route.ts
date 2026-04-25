@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { NextResponse } from 'next/server';
 import { IAPError } from '@/libs/payment/iap/types';
+import { readioFeatures } from '@/config/features';
 import { validateUserAndToken } from '@/utils/access';
 import { getAppleIAPVerifier } from '@/libs/payment/iap/apple/verifier';
 import { processPurchaseData, VerifiedPurchase } from '@/libs/payment/iap/apple/server';
@@ -11,6 +12,10 @@ const iapVerificationSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  if (!readioFeatures.commerce) {
+    return NextResponse.json({ error: 'Feature disabled' }, { status: 404 });
+  }
+
   const body = await request.json();
   let validatedInput;
   try {

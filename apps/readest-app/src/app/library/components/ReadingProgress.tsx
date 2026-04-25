@@ -9,14 +9,18 @@ interface ReadingProgressProps {
   book: Book;
 }
 
-const getProgressPercentage = (book: Book) => {
+export const getProgressPercentage = (book: Book) => {
   if (!book.progress || !book.progress[1]) {
     return null;
   }
   if (book.progress && book.progress[1] === 1) {
     return 100;
   }
-  const percentage = Math.round((book.progress[0] / book.progress[1]) * 100);
+  const [current, total] = book.progress;
+  const percentage = Math.round((current / total) * 100);
+  if (current > 0 && current < total) {
+    return Math.max(1, Math.min(99, percentage));
+  }
   return Math.max(0, Math.min(100, percentage));
 };
 
