@@ -403,7 +403,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
       {appService?.hasWindow && (
         <MenuItem label={_('Always on Top')} toggled={isAlwaysOnTop} onClick={toggleAlwaysOnTop} />
       )}
-      {appService?.isMobileApp && (
+      {readioFeatures.advancedSettings && appService?.isMobileApp && (
         <MenuItem
           label={_('Always Show Status Bar')}
           toggled={isAlwaysShowStatusBar}

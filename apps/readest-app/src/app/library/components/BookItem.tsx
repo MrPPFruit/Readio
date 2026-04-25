@@ -7,6 +7,7 @@ import {
 } from 'react-icons/lia';
 
 import { Book } from '@/types/book';
+import { readioFeatures } from '@/config/features';
 import { useEnv } from '@/context/EnvContext';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -143,47 +144,48 @@ const BookItem: React.FC<BookItemProps> = ({
                 </div>
               </button>
             )}
-            {transferProgress !== null ? (
-              transferProgress === 100 ? null : (
-                <div
-                  className='radial-progress'
-                  style={
-                    {
-                      '--value': transferProgress,
-                      '--size': `${iconSize15}px`,
-                      '--thickness': '2px',
-                    } as React.CSSProperties
-                  }
-                  role='progressbar'
-                ></div>
-              )
-            ) : (
-              (!book.uploadedAt || (book.uploadedAt && !book.downloadedAt)) && (
-                <button
-                  aria-label={!book.uploadedAt ? _('Upload Book') : _('Download Book')}
-                  className='show-cloud-button -m-2 p-2'
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => {
-                    if (!user) {
-                      navigateToLogin(router);
-                      return;
+            {readioFeatures.cloudSync &&
+              (transferProgress !== null ? (
+                transferProgress === 100 ? null : (
+                  <div
+                    className='radial-progress'
+                    style={
+                      {
+                        '--value': transferProgress,
+                        '--size': `${iconSize15}px`,
+                        '--thickness': '2px',
+                      } as React.CSSProperties
                     }
-                    if (!book.uploadedAt) {
-                      handleBookUpload(book);
-                    } else if (!book.downloadedAt) {
-                      handleBookDownload(book, { queued: true });
-                    }
-                  }}
-                >
-                  {!book.uploadedAt && settings.autoUpload && (
-                    <LiaCloudUploadAltSolid size={iconSize15} />
-                  )}
-                  {book.uploadedAt && !book.downloadedAt && (
-                    <LiaCloudDownloadAltSolid size={iconSize15} />
-                  )}
-                </button>
-              )
-            )}
+                    role='progressbar'
+                  ></div>
+                )
+              ) : (
+                (!book.uploadedAt || (book.uploadedAt && !book.downloadedAt)) && (
+                  <button
+                    aria-label={!book.uploadedAt ? _('Upload Book') : _('Download Book')}
+                    className='show-cloud-button -m-2 p-2'
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => {
+                      if (!user) {
+                        navigateToLogin(router);
+                        return;
+                      }
+                      if (!book.uploadedAt) {
+                        handleBookUpload(book);
+                      } else if (!book.downloadedAt) {
+                        handleBookDownload(book, { queued: true });
+                      }
+                    }}
+                  >
+                    {!book.uploadedAt && settings.autoUpload && (
+                      <LiaCloudUploadAltSolid size={iconSize15} />
+                    )}
+                    {book.uploadedAt && !book.downloadedAt && (
+                      <LiaCloudDownloadAltSolid size={iconSize15} />
+                    )}
+                  </button>
+                )
+              ))}
           </div>
         </div>
       </div>
