@@ -1,11 +1,8 @@
 process.env.NODE_ENV = 'test';
 
-const ensureStorage = (target: typeof globalThis | Window) => {
-  const storage = Reflect.get(target, 'localStorage') as Partial<Storage> | undefined;
-  if (typeof storage?.getItem === 'function') return;
-
+const createMockStorage = () => {
   const values = new Map<string, string>();
-  const mockStorage = {
+  return {
     get length() {
       return values.size;
     },
@@ -15,7 +12,11 @@ const ensureStorage = (target: typeof globalThis | Window) => {
     removeItem: (key: string) => values.delete(key),
     setItem: (key: string, value: string) => values.set(key, value),
   };
+};
 
+const mockStorage = createMockStorage();
+
+const defineStorage = (target: typeof globalThis | Window) => {
   Object.defineProperty(target, 'localStorage', {
     value: mockStorage,
     writable: true,
@@ -23,8 +24,21 @@ const ensureStorage = (target: typeof globalThis | Window) => {
   });
 };
 
-ensureStorage(globalThis);
-if (typeof window !== 'undefined') ensureStorage(window);
+defineStorage(globalThis);
+if (typeof window !== 'undefined') defineStorage(window);
+
+if (typeof HTMLMediaElement !== 'undefined') {
+  Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+    value: () => Promise.resolve(),
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
+    value: () => {},
+    writable: true,
+    configurable: true,
+  });
+}
 
 // matchMedia mock
 if (typeof window !== 'undefined' && !window.matchMedia) {
