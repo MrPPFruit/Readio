@@ -113,7 +113,16 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   const transPopupHeight = Math.min(265, maxHeight);
   const proofreadPopupWidth = Math.min(440, maxWidth);
   const proofreadPopupHeight = Math.min(200, maxHeight);
-  const annotPopupWidth = Math.min(useResponsiveSize(300), maxWidth);
+  const annotPopupButtonSize = useResponsiveSize(32);
+  const annotPopupPadding = useResponsiveSize(16);
+  const annotPopupGap = useResponsiveSize(16);
+  const annotPopupButtonCount = annotationToolButtons.length;
+  const annotPopupWidth = Math.min(
+    annotPopupButtonCount * annotPopupButtonSize +
+      annotPopupPadding +
+      Math.max(0, annotPopupButtonCount - 1) * annotPopupGap,
+    maxWidth,
+  );
   const annotPopupHeight = useResponsiveSize(44);
   const androidSelectionHandlerHeight = 0;
 

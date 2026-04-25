@@ -1,6 +1,6 @@
 {
   "name": "@readest/readest-app",
-  "version": "0.10.6",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,6 +14,7 @@
     "build-web:vinext": "dotenv -e .env.web -- vinext build",
     "start-web:vinext": "dotenv -e .env.web -- vinext start",
     "build-tauri": "dotenv -e .env.tauri -- next build",
+    "build-readio-apk": "bash scripts/build-readio-apk.sh",
     "dev-android": "tauri android build -t aarch64 -- --features devtools && adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk",
     "dev-ios": "tauri ios build -- --features devtools && ideviceinstaller -i src-tauri/gen/apple/build/arm64/Readest.ipa",
     "i18n:extract": "i18next-scanner --config i18next-scanner.config.cjs",

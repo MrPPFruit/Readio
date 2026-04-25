@@ -8,6 +8,7 @@ import { BsTranslate } from 'react-icons/bs';
 import { TbHexagonLetterD } from 'react-icons/tb';
 import { FaHeadphones } from 'react-icons/fa6';
 import { IoIosBuild } from 'react-icons/io';
+import { readioFeatures } from '@/config/features';
 import { AnnotationToolType } from '@/types/annotator';
 import { stubTranslation as _ } from '@/utils/misc';
 
@@ -35,7 +36,7 @@ function createAnnotationToolButtons<T extends AnnotationToolType>(
   return buttons;
 }
 
-export const annotationToolButtons = createAnnotationToolButtons([
+const allAnnotationToolButtons = createAnnotationToolButtons([
   {
     type: 'copy',
     label: _('Copy'),
@@ -98,6 +99,13 @@ export const annotationToolButtons = createAnnotationToolButtons([
     Icon: IoIosBuild,
   },
 ]);
+
+const readioSelectionToolTypes = new Set<AnnotationToolType>(['copy', 'highlight', 'annotate']);
+
+export const annotationToolButtons = allAnnotationToolButtons.filter((button) => {
+  if (readioFeatures.translation && readioFeatures.tts && readioFeatures.proofreading) return true;
+  return readioSelectionToolTypes.has(button.type);
+});
 
 export const annotationToolQuickActions = annotationToolButtons.filter(
   (button) => button.quickAction,

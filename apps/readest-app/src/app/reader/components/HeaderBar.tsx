@@ -1,9 +1,9 @@
 import clsx from 'clsx';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { PiDotsThreeVerticalBold } from 'react-icons/pi';
 import { VscLibrary } from 'react-icons/vsc';
 
 import { Insets } from '@/types/misc';
+import { readioFeatures } from '@/config/features';
 import { useEnv } from '@/context/EnvContext';
 import { useThemeStore } from '@/store/themeStore';
 import { useReaderStore } from '@/store/readerStore';
@@ -25,9 +25,7 @@ import QuickActionMenu from './annotator/QuickActionMenu';
 import SidebarToggler from './SidebarToggler';
 import BookmarkToggler from './BookmarkToggler';
 import NotebookToggler from './NotebookToggler';
-import SettingsToggler from './SettingsToggler';
 import TranslationToggler from './TranslationToggler';
-import ViewMenu from './ViewMenu';
 
 interface HeaderBarProps {
   bookKey: string;
@@ -213,9 +211,10 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
               <VscLibrary size={iconSize18} className='fill-base-content' />
             </button>
             <BookmarkToggler bookKey={bookKey} />
-            <TranslationToggler bookKey={bookKey} />
+            <NotebookToggler bookKey={bookKey} />
+            {readioFeatures.translation && <TranslationToggler bookKey={bookKey} />}
           </div>
-          {enableAnnotationQuickActions && (
+          {readioFeatures.advancedSettings && enableAnnotationQuickActions && (
             <Dropdown
               label={
                 annotationQuickAction
@@ -273,17 +272,6 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         </div>
 
         <div className='header-tools-end bg-base-100 z-20 ms-auto flex h-full min-w-max items-center gap-x-4 ps-2 max-[350px]:gap-x-2'>
-          {!isHeaderCompact && <SettingsToggler bookKey={bookKey} />}
-          <NotebookToggler bookKey={bookKey} />
-          <Dropdown
-            label={_('View Options')}
-            className='exclude-title-bar-mousedown dropdown-bottom dropdown-end'
-            buttonClassName='btn btn-ghost h-8 min-h-8 w-8 p-0'
-            toggleButton={<PiDotsThreeVerticalBold size={iconSize16} />}
-            onToggle={handleToggleDropdown}
-          >
-            <ViewMenu bookKey={bookKey} />
-          </Dropdown>
           <WindowButtons
             className='window-buttons flex items-center'
             headerRef={headerRef}

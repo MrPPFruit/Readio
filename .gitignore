@@ -54,3 +54,7 @@ result*
 .claude/worktrees
 .claude/settings.local.json
 
+# local APK outputs
+/apks/*.apk
+/apks/*.aab
+

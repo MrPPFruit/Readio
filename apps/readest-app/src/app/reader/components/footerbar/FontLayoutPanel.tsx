@@ -1,10 +1,12 @@
 import clsx from 'clsx';
 import React, { useCallback } from 'react';
+import { PiGear } from 'react-icons/pi';
 import { TbBoxMargin } from 'react-icons/tb';
 import { RxLineHeight } from 'react-icons/rx';
 import { useEnv } from '@/context/EnvContext';
 import { useReaderStore } from '@/store/readerStore';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useSettingsStore } from '@/store/settingsStore';
 import { saveViewSettings } from '@/helpers/settings';
 import Slider from '@/components/Slider';
 
@@ -45,6 +47,7 @@ export const FontLayoutPanel: React.FC<FontLayoutPanelProps> = ({
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
   const { getView, getViewSettings } = useReaderStore();
+  const { setSettingsDialogOpen, setSettingsDialogBookKey } = useSettingsStore();
   const viewSettings = getViewSettings(bookKey);
   const view = getView(bookKey);
 
@@ -92,6 +95,11 @@ export const FontLayoutPanel: React.FC<FontLayoutPanelProps> = ({
     return (marginPx / MAX_MARGIN_PX + gapPercent / MAX_GAP_PERCENT) * MARGIN_RATIO;
   }, []);
 
+  const openFullFontLayoutSettings = useCallback(() => {
+    setSettingsDialogBookKey(bookKey);
+    setSettingsDialogOpen(true);
+  }, [bookKey, setSettingsDialogBookKey, setSettingsDialogOpen]);
+
   const classes = clsx(
     'footerbar-font-mobile bg-base-200 absolute flex w-full flex-col items-center gap-y-8 px-4 transition-all',
     !forceMobileLayout && 'sm:hidden',
@@ -109,18 +117,29 @@ export const FontLayoutPanel: React.FC<FontLayoutPanelProps> = ({
           : bottomOffset,
       }}
     >
-      <Slider
-        label={_('Font Size')}
-        initialValue={viewSettings?.defaultFontSize ?? FONT_SIZE_LIMITS.DEFAULT}
-        bubbleLabel={`${viewSettings?.defaultFontSize ?? FONT_SIZE_LIMITS.DEFAULT}`}
-        minLabel='A'
-        maxLabel='A'
-        minClassName='text-xs'
-        maxClassName='text-base'
-        onChange={handleFontSizeChange}
-        min={FONT_SIZE_LIMITS.MIN}
-        max={FONT_SIZE_LIMITS.MAX}
-      />
+      <div className='flex w-full items-center gap-x-3'>
+        <Slider
+          label={_('Font Size')}
+          initialValue={viewSettings?.defaultFontSize ?? FONT_SIZE_LIMITS.DEFAULT}
+          bubbleLabel={`${viewSettings?.defaultFontSize ?? FONT_SIZE_LIMITS.DEFAULT}`}
+          minLabel='A'
+          maxLabel='A'
+          minClassName='text-xs'
+          maxClassName='text-base'
+          onChange={handleFontSizeChange}
+          min={FONT_SIZE_LIMITS.MIN}
+          max={FONT_SIZE_LIMITS.MAX}
+        />
+        <button
+          type='button'
+          onClick={openFullFontLayoutSettings}
+          aria-label={_('Font & Layout')}
+          title={_('Font & Layout')}
+          className='btn btn-ghost bg-base-100 h-11 min-h-11 w-11 shrink-0 rounded-full p-0 shadow-sm'
+        >
+          <PiGear size={20} />
+        </button>
+      </div>
       <div className='flex w-full items-center justify-between gap-x-6'>
         <Slider
           label={_('Page Margin')}

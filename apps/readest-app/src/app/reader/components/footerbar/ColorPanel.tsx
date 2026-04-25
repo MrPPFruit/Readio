@@ -71,10 +71,11 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
     [appService, debouncedSetScreenBrightness],
   );
 
-  const cycleThemeMode = () => {
-    const nextMode = themeMode === 'auto' ? 'light' : themeMode === 'light' ? 'dark' : 'auto';
-    setThemeMode(nextMode);
-  };
+  const themeModeOptions = [
+    { mode: 'light' as const, label: _('Light Mode'), Icon: PiSun },
+    { mode: 'dark' as const, label: _('Dark Mode'), Icon: PiMoon },
+    { mode: 'auto' as const, label: _('Auto Mode'), Icon: TbSunMoon },
+  ];
 
   const classes = clsx(
     'footerbar-color-mobile bg-base-200 absolute flex w-full flex-col items-center gap-y-8 px-4 transition-all',
@@ -124,6 +125,28 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
 
       <div className='w-full'>
         <div className='flex items-center justify-between p-2'>
+          <span className='text-sm font-medium'>{_('Theme')}</span>
+        </div>
+        <div className='grid grid-cols-3 gap-2 p-2'>
+          {themeModeOptions.map(({ mode, label, Icon }) => (
+            <button
+              key={mode}
+              type='button'
+              onClick={() => setThemeMode(mode)}
+              className={clsx(
+                'btn btn-ghost bg-base-100 h-auto min-h-12 flex-col gap-1 rounded-xl px-2 py-2 text-xs font-normal',
+                themeMode === mode && 'bg-base-300 text-primary',
+              )}
+            >
+              <Icon size={18} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className='w-full'>
+        <div className='flex items-center justify-between p-2'>
           <span className='text-sm font-medium'>{_('Color')}</span>
         </div>
         <div
@@ -149,31 +172,6 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
               <span className='text-xs font-medium'>{_(label)}</span>
             </button>
           ))}
-          <button
-            onClick={() => cycleThemeMode()}
-            className={clsx(
-              'flex flex-shrink-0 flex-col items-center justify-center rounded-lg p-3 transition-all',
-              'h-[40px] min-w-[80px]',
-              themeMode === 'dark'
-                ? 'ring-primary ring-offset-base-200 ring-2 ring-offset-2'
-                : 'hover:opacity-80',
-            )}
-            style={{
-              backgroundColor: (themes.find((t) => t.name === themeColor) || themes[0]!).colors
-                .dark['base-100'],
-              color: (themes.find((t) => t.name === themeColor) || themes[0]!).colors.dark[
-                'base-content'
-              ],
-            }}
-          >
-            {themeMode === 'light' ? (
-              <PiSun size={20} />
-            ) : themeMode === 'dark' ? (
-              <PiMoon size={20} />
-            ) : (
-              <TbSunMoon size={20} />
-            )}
-          </button>
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const appRoot = resolve(__dirname, '../../..');
+const projectRoot = resolve(appRoot, '../..');
 
 describe('Readio Android package identity', () => {
   it('uses a package id that can coexist with upstream Readest', () => {
@@ -44,5 +45,22 @@ describe('Readio Android package identity', () => {
     const tauriActivity = readFileSync(generatedTauriActivityPath, 'utf8');
     expect(mainActivity).toContain('package com.ppg.readio');
     expect(tauriActivity).toContain('package com.ppg.readio');
+  });
+
+  it('uses Readio product versioning and a high Android versionCode', () => {
+    const packageJson = JSON.parse(readFileSync(resolve(appRoot, 'package.json'), 'utf8')) as {
+      version: string;
+      scripts: Record<string, string>;
+    };
+    const tauriConfig = JSON.parse(
+      readFileSync(resolve(appRoot, 'src-tauri/tauri.conf.json'), 'utf8'),
+    ) as { bundle: { android: { versionCode: number } } };
+    const gitignore = readFileSync(resolve(projectRoot, '.gitignore'), 'utf8');
+
+    expect(packageJson.version).toBe('0.1.0-alpha.1');
+    expect(packageJson.scripts['build-readio-apk']).toBe('bash scripts/build-readio-apk.sh');
+    expect(tauriConfig.bundle.android.versionCode).toBe(1001001);
+    expect(gitignore).toContain('/apks/*.apk');
+    expect(gitignore).toContain('/apks/*.aab');
   });
 });
