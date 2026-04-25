@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 import { DocumentLoader } from '@/libs/document';
 import type { BookDoc } from '@/libs/document';
 import type { FoliateView } from '@/types/view';
@@ -25,9 +23,20 @@ let book: BookDoc;
 let view: FoliateView;
 let totalSections: number;
 
+const importNodeModule = async <T>(moduleName: string): Promise<T> => {
+  return import(/* @vite-ignore */ moduleName) as Promise<T>;
+};
+
+const readFixture = async (relativePath: string) => {
+  const [{ readFileSync }, { join }] = await Promise.all([
+    importNodeModule<typeof import('node:fs')>('node:fs'),
+    importNodeModule<typeof import('node:path')>('node:path'),
+  ]);
+  return readFileSync(join(process.cwd(), relativePath));
+};
+
 const loadEPUB = async () => {
-  const epubPath = resolve(__dirname, '../fixtures/data/sample-alice.epub');
-  const buffer = readFileSync(epubPath);
+  const buffer = await readFixture('src/__tests__/fixtures/data/sample-alice.epub');
   const file = new File([buffer], 'sample-alice.epub', { type: 'application/epub+zip' });
   const loader = new DocumentLoader(file);
   const { book } = await loader.open();

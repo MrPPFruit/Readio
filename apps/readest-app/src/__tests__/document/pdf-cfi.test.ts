@@ -1,11 +1,24 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve, join } from 'path';
 import { parse, toRange, fromRange } from 'foliate-js/epubcfi.js';
 import { DocumentLoader } from '@/libs/document';
 import type { BookDoc } from '@/libs/document';
 
-const vendorDir = join(process.cwd(), 'public/vendor');
+const importNodeModule = async <T>(moduleName: string): Promise<T> => {
+  return import(/* @vite-ignore */ moduleName) as Promise<T>;
+};
+
+const readFixture = async (relativePath: string) => {
+  const [{ readFileSync }, { join }] = await Promise.all([
+    importNodeModule<typeof import('node:fs')>('node:fs'),
+    importNodeModule<typeof import('node:path')>('node:path'),
+  ]);
+  return readFileSync(join(process.cwd(), relativePath));
+};
+
+const resolveFixturePath = async (relativePath: string) => {
+  const { join } = await importNodeModule<typeof import('node:path')>('node:path');
+  return join(process.cwd(), relativePath);
+};
 
 /**
  * Tests EPUB CFI resolution with a real PDF loaded via DocumentLoader.
@@ -36,11 +49,10 @@ describe('PDF CFI resolution with real document', () => {
       GlobalWorkerOptions: { workerSrc: string };
     };
     pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      `file://${join(vendorDir, 'pdfjs/pdf.worker.min.mjs')}`,
+      `file://${await resolveFixturePath('public/vendor/pdfjs/pdf.worker.min.mjs')}`,
     ).href;
 
-    const pdfPath = resolve(__dirname, '../fixtures/data/sample-alice.pdf');
-    const buffer = readFileSync(pdfPath);
+    const buffer = await readFixture('src/__tests__/fixtures/data/sample-alice.pdf');
     const file = new File([buffer], 'sample-alice.pdf', { type: 'application/pdf' });
     const loader = new DocumentLoader(file);
     const result = await loader.open();

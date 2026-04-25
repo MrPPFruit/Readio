@@ -1,4 +1,31 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+// @vitest-environment node
+import { createRequire } from 'node:module';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+
+const require = createRequire(import.meta.url);
+const { JSDOM } = require('jsdom') as {
+  JSDOM: new (
+    html?: string,
+    options?: { url?: string },
+  ) => {
+    window: {
+      DOMParser: typeof DOMParser;
+      localStorage: Storage;
+    };
+  };
+};
+const dom = new JSDOM('', { url: 'https://readio.test' });
+globalThis.DOMParser = dom.window.DOMParser;
+globalThis.localStorage = dom.window.localStorage;
+
+vi.mock('@/services/cloudService', () => ({
+  deleteBook: vi.fn(),
+  uploadFileToCloud: vi.fn(),
+  uploadBook: vi.fn(),
+  downloadCloudFile: vi.fn(),
+  downloadBookCovers: vi.fn(),
+  downloadBook: vi.fn(),
+}));
 import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import { NodeAppService } from '@/services/nodeAppService';

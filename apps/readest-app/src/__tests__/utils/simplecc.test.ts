@@ -1,12 +1,21 @@
 import { describe, test, expect, beforeAll } from 'vitest';
 import init, { simplecc } from '@simplecc/simplecc_wasm';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
+
+const importNodeModule = async <T>(moduleName: string): Promise<T> => {
+  return import(/* @vite-ignore */ moduleName) as Promise<T>;
+};
+
+const readFixture = async (relativePath: string) => {
+  const [{ readFile }, { join }] = await Promise.all([
+    importNodeModule<typeof import('node:fs/promises')>('node:fs/promises'),
+    importNodeModule<typeof import('node:path')>('node:path'),
+  ]);
+  return readFile(join(process.cwd(), relativePath));
+};
 
 describe.concurrent('suite', () => {
   beforeAll(async () => {
-    const wasmPath = join(process.cwd(), 'public/vendor/simplecc/simplecc_wasm_bg.wasm');
-    const wasmBuffer = await readFile(wasmPath);
+    const wasmBuffer = await readFixture('public/vendor/simplecc/simplecc_wasm_bg.wasm');
     await init({ module_or_path: wasmBuffer });
   });
 

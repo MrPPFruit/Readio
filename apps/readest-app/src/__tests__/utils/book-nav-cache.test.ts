@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 import { DocumentLoader } from '@/libs/document';
 import type { BookDoc, TOCItem, SectionItem } from '@/libs/document';
 import {
@@ -35,9 +33,20 @@ if (!customElements.get('foliate-paginator')) {
 // Mock the paginator module import so View doesn't try to load the real one
 vi.mock('foliate-js/paginator.js', () => ({}));
 
+const importNodeModule = async <T>(moduleName: string): Promise<T> => {
+  return import(/* @vite-ignore */ moduleName) as Promise<T>;
+};
+
+const readFixture = async (relativePath: string) => {
+  const [{ readFileSync }, { join }] = await Promise.all([
+    importNodeModule<typeof import('node:fs')>('node:fs'),
+    importNodeModule<typeof import('node:path')>('node:path'),
+  ]);
+  return readFileSync(join(process.cwd(), relativePath));
+};
+
 const openFixture = async (name: string): Promise<BookDoc> => {
-  const epubPath = resolve(__dirname, `../fixtures/data/${name}`);
-  const buffer = readFileSync(epubPath);
+  const buffer = await readFixture(`src/__tests__/fixtures/data/${name}`);
   const file = new File([buffer], name, { type: 'application/epub+zip' });
   const loader = new DocumentLoader(file);
   const result = await loader.open();

@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 import { DocumentLoader, CFI } from '@/libs/document';
 import type { BookDoc, TOCItem } from '@/libs/document';
 import { computeBookNav, hydrateBookNav, updateToc, findTocItemBS } from '@/services/nav';
@@ -42,12 +40,23 @@ vi.mock('foliate-js/paginator.js', () => ({}));
  * cfi: undefined, and the sectionsMap lookup found these subitems
  * instead of the parent sections with valid CFIs.
  */
+const importNodeModule = async <T>(moduleName: string): Promise<T> => {
+  return import(/* @vite-ignore */ moduleName) as Promise<T>;
+};
+
+const readFixture = async (relativePath: string) => {
+  const [{ readFileSync }, { join }] = await Promise.all([
+    importNodeModule<typeof import('node:fs')>('node:fs'),
+    importNodeModule<typeof import('node:path')>('node:path'),
+  ]);
+  return readFileSync(join(process.cwd(), relativePath));
+};
+
 describe('TOC-to-CFI mapping with fragment hrefs (#3688)', () => {
   let book: BookDoc;
 
   beforeAll(async () => {
-    const epubPath = resolve(__dirname, '../fixtures/data/repro-3688.epub');
-    const buffer = readFileSync(epubPath);
+    const buffer = await readFixture('src/__tests__/fixtures/data/repro-3688.epub');
     const file = new File([buffer], 'repro-3688.epub', {
       type: 'application/epub+zip',
     });

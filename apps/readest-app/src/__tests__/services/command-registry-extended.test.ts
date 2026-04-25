@@ -85,7 +85,7 @@ describe('buildCommandRegistry', () => {
     expect(panels.has('Color')).toBe(true);
     expect(panels.has('Control')).toBe(true);
     expect(panels.has('Language')).toBe(true);
-    expect(panels.has('Custom')).toBe(true);
+    expect(panels.has('Custom')).toBe(false);
   });
 
   it('should include action items', () => {
@@ -98,7 +98,7 @@ describe('buildCommandRegistry', () => {
     expect(actionIds).toContain('action.fullscreen');
     expect(actionIds).toContain('action.reload');
     expect(actionIds).toContain('action.about');
-    expect(actionIds).toContain('action.telemetry');
+    expect(actionIds).not.toContain('action.telemetry');
   });
 
   it('should use the provided translation function for localized labels', () => {
@@ -174,11 +174,10 @@ describe('buildCommandRegistry', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('should include AI panel items in non-production', () => {
+  it('should hide AI panel items when AI is disabled', () => {
     const items = buildCommandRegistry(createMockOptions());
     const aiItems = items.filter((i) => i.panel === 'AI');
-    // In test environment (not production), AI items should be included
-    expect(aiItems.length).toBeGreaterThan(0);
+    expect(aiItems.length).toBe(0);
   });
 
   it('should give each settings item keywords and section', () => {
