@@ -60,7 +60,7 @@ describe('Readio Android package identity', () => {
     expect(packageJson.version).toBe('0.1.0-alpha.1');
     expect(packageJson.scripts['build-readio-apk']).toBe('bash scripts/build-readio-apk.sh');
     expect(tauriConfig.bundle.android.versionCode).toBe(1001001);
-    expect(gitignore).toContain('/apks/*.apk');
-    expect(gitignore).toContain('/apks/*.aab');
+    expect(gitignore).toContain('/apks/');
+    expect(gitignore).toContain('/artifacts/');
   });
 });
