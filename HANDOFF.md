@@ -18,6 +18,7 @@
 - 版本与 APK 产物规则已建立：当前 Readio 版本为 `0.1.0-alpha.2`，Android `versionCode=1001002`；后续默认用 `pnpm --filter @readest/readest-app build-readio-apk` 构建签名 release 小包，统一输出到 `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/`。
 - 已生成并安装验证小包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.1-android-arm64-release.apk`，大小 52.6 MB；APK 元信息为 `package=com.ppg.readio`、`versionName=0.1.0-alpha.1`、`versionCode=1001001`，签名 v2/v3 验证通过，模拟器 `adb install -r` 成功。
 - M1.1 阅读器精简收口 + 翻页唯一化已完成：`scrolled` / `noContinuousScroll` 在 serializer、settings store、reader store、book data store、settings service、viewer renderer 与 command registry/UI 测试中被锁定为分页模式；模拟器从书库继续阅读进入阅读页后，右侧点击翻到下一页，行为设置页只显示“翻页/点击翻页/点击两侧翻页”等分页项，无滚动模式入口。本批还包含前序阅读 UI 精简延续改动，提交/交付时不要描述成纯滚动模式修复。
+- 2026-04-26 alpha.2 已冻结为可交付测试包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.2-android-arm64-release.apk`。签名 v2/v3 验证通过，模拟器安装/启动通过，书架渲染、继续阅读进入正文、本地 EPUB 导入、导入后打开阅读均通过。当前分支 `readio/restart-readest-base` 工作区干净，后续新功能/深度剥离应进入 alpha.3 批次。
 
 ## 已尝试路径
 
@@ -56,8 +57,8 @@
 
 ## 下一步可执行动作
 
-1. 当前阅读模式第一批减法、版本规则和 release 小包流程已完成；若用户确认体验无误，可提交并推送这一小批次。
-2. 继续按用户实测反馈做阅读模式用户视角 polish；下一批可重点看笔记/书签入口优先级、阅读设置文案、更多菜单信息密度，以及更接近多看的阅读控制布局。
+1. `0.1.0-alpha.2` 已作为可交付测试包冻结；优先让用户真机试读，不再把已完成的 M1.1 精简项当作下一步重复做。
+2. 若进入 `0.1.0-alpha.3`，优先按用户实测反馈做阅读模式用户视角 polish；可重点看笔记/书签入口优先级、阅读设置文案、更多菜单信息密度，以及更接近多看的阅读控制布局。
 3. 可选深化：继续检查 auth/sync/telemetry providers 和支付/AI/TTS 依赖是否需要更硬的 no-op/移除，以减少包体与运行期表面积。
 4. 后续独立批次：开发 TXT 导入支持，并在本地导入文件选择器中筛选/限制可导入格式，避免展示不支持文件。
 5. 后续独立批次：如需要更正式发布命名，可从当前 `com.ppg.readio` 迁移到 `io.readio.app`，并重新验证安装/启动/文件关联。
@@ -298,5 +299,10 @@
   - `readio-reader-settings-panel.png`: compact font/settings panel opens from reader.
   - `readio-reader-control-settings.png`: behavior settings show only pagination controls (`点击翻页`, `点击两侧翻页`, `交换点击区域`, `禁用双击`, `音量键翻页`, `显示翻页按钮`); no scroll mode controls are visible.
 - PASS M1.1 UI hierarchy evidence: `artifacts/emulator-validation/readio-reader-control-settings.xml` contains pagination controls and no visible `Scrolled Mode` / `Single Section Scroll` / `Overlap Pixels` / scrollbar setting text; WebView hierarchy marks the book content root as `scrollable="false"` during the validated reader/settings state.
+- PASS alpha.2 release APK build: `pnpm -C /Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest --filter @readest/readest-app build-readio-apk` completed with exit code 0 and produced `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.2-android-arm64-release.apk` (53 MB). Next/Tauri/Gradle release build completed; expected warnings were limited to Next static export route/header warnings, Rust unused-code warnings in vendored Tauri code, and Gradle 9 deprecation notice.
+- PASS alpha.2 APK signature: apksigner output reported `Verifies`, v2=true, v3=true, 1 signer.
+- PASS alpha.2 emulator install/launch: `adb install -r .../readio-v0.1.0-alpha.2-android-arm64-release.apk` returned `Success`; package is `com.ppg.readio`; launch activity resolves to `com.ppg.readio/.MainActivity`; `adb shell am start -n com.ppg.readio/.MainActivity` launched and process stayed running.
+- PASS alpha.2 library/continue-reading validation: screenshot `/tmp/readio-launch.png` showed Readio library with search/import controls, Continue Reading card, and existing 《诡秘之主》 progress at 39%; tapping Continue Reading opened readable Chinese text page (`/tmp/readio-reader-2.png`) with progress `4057 / 10397`; Android back returned to library (`/tmp/readio-back-library.png`).
+- PASS alpha.2 local EPUB import validation: pushed test fixture `sample-alice.epub` to emulator Downloads; Android DocumentsUI opened from Readio import menu; selecting the file added `Alice's Adventures in Wonderland` to the shelf; tapping the imported book opened its reader cover page (`/tmp/readio-alice-reader.png`) with progress `1 / 112`.
 - REVIEW NOTE M1.1: `FootnotePopup.tsx` still sets its internal footnote popup renderer to `flow='scrolled'`. This is intentionally treated as a non-reading-mode exception for footnote content, because it has no user settings/command entry and does not persist `scrolled` / `noContinuousScroll`. If future product requirement becomes “no renderer may ever scroll,” handle footnote behavior in a separate focused batch.
 - REVIEW NOTE M1.1: current working tree includes reading UI simplification continuation beyond pure pagination hardening (for example progress preview / annotation popup / hiding additional advanced controls). Commit/PR wording should describe the batch as “M1.1 reader simplification closeout + pagination-only hardening,” or split commits if a tighter history is desired.
