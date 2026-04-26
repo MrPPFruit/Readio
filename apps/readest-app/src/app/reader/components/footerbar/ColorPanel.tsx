@@ -78,10 +78,10 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
   ];
 
   const classes = clsx(
-    'footerbar-color-mobile bg-base-200 absolute flex w-full flex-col items-center gap-y-8 px-4 transition-all',
+    'footerbar-color-mobile bg-base-200 absolute flex w-full flex-col items-center gap-y-5 px-4 transition-all',
     !forceMobileLayout && 'sm:hidden',
     actionTab === 'color'
-      ? 'pointer-events-auto translate-y-0 pb-4 pt-8 ease-out'
+      ? 'pointer-events-auto translate-y-0 pb-3 pt-5 ease-out'
       : 'pointer-events-none invisible translate-y-full overflow-hidden pb-0 pt-0 ease-in',
   );
 
@@ -124,17 +124,17 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
       )}
 
       <div className='w-full'>
-        <div className='flex items-center justify-between p-2'>
+        <div className='flex items-center justify-between px-2 py-1'>
           <span className='text-sm font-medium'>{_('Theme')}</span>
         </div>
-        <div className='grid grid-cols-3 gap-2 p-2'>
+        <div className='grid grid-cols-3 gap-2 px-2 py-1'>
           {themeModeOptions.map(({ mode, label, Icon }) => (
             <button
               key={mode}
               type='button'
               onClick={() => setThemeMode(mode)}
               className={clsx(
-                'btn btn-ghost bg-base-100 h-auto min-h-12 flex-col gap-1 rounded-xl px-2 py-2 text-xs font-normal',
+                'btn btn-ghost bg-base-100 h-auto min-h-11 flex-col gap-1 rounded-xl px-2 py-1.5 text-xs font-normal',
                 themeMode === mode && 'bg-base-300 text-primary',
               )}
             >
@@ -146,11 +146,11 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
       </div>
 
       <div className='w-full'>
-        <div className='flex items-center justify-between p-2'>
+        <div className='flex items-center justify-between px-2 py-1'>
           <span className='text-sm font-medium'>{_('Color')}</span>
         </div>
         <div
-          className='flex gap-3 overflow-x-auto p-2'
+          className='flex gap-3 overflow-x-auto px-2 py-1.5'
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {themes.map(({ name, label, colors }) => (

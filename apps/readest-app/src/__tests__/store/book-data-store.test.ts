@@ -201,6 +201,32 @@ describe('bookDataStore', () => {
       expect(config!.location).toBe('new-loc');
     });
 
+    test('normalizes view settings to pagination-only mode', () => {
+      const data = makeBookData('book1', {
+        viewSettings: {
+          defaultFontSize: 16,
+          scrolled: false,
+          noContinuousScroll: false,
+        } as never,
+      });
+      useBookDataStore.setState({ booksData: { book1: data } });
+
+      useBookDataStore.getState().setConfig('book1', {
+        viewSettings: {
+          defaultFontSize: 20,
+          scrolled: true,
+          noContinuousScroll: true,
+        } as never,
+      });
+
+      const config = useBookDataStore.getState().getConfig('book1');
+      expect(config!.viewSettings).toMatchObject({
+        defaultFontSize: 20,
+        scrolled: false,
+        noContinuousScroll: false,
+      });
+    });
+
     test('does nothing and warns when book data does not exist', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 

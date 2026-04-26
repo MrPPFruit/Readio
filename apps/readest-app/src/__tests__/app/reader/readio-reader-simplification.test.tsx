@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import AnnotationToolButton from '@/app/reader/components/annotator/AnnotationToolButton';
 import {
   annotationToolButtons,
   annotationToolQuickActions,
@@ -339,6 +340,21 @@ describe('Readio reader simplification', () => {
       'annotate',
     ]);
     expect(annotationToolQuickActions.map((button) => button.type)).toEqual(['copy', 'highlight']);
+  });
+
+  it('shows text labels under the compact selection tool icons', () => {
+    render(
+      <AnnotationToolButton
+        showTooltip
+        tooltipText='Copy'
+        labelText='复制'
+        Icon={() => <span>Icon</span>}
+        onClick={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
+    expect(screen.getByText('复制')).toBeTruthy();
   });
 
   it('hides disabled reader sidebar menu items', () => {

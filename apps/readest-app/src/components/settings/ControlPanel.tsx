@@ -7,13 +7,10 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useResetViewSettings } from '@/hooks/useResetSettings';
 import { useEinkMode } from '@/hooks/useEinkMode';
-import { getStyles } from '@/utils/style';
-import { getMaxInlineSize } from '@/utils/config';
 import { saveSysSettings, saveViewSettings } from '@/helpers/settings';
 import { SettingsPanelPanelProp } from './SettingsDialog';
 import { annotationToolQuickActions } from '@/app/reader/components/annotator/AnnotationTools';
 import { readioFeatures } from '@/config/features';
-import NumberInput from './NumberInput';
 import Select from '../Select';
 
 const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset }) => {
@@ -27,10 +24,6 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
   const bookData = getBookData(bookKey);
   const viewSettings = getViewSettings(bookKey) || settings.globalViewSettings;
 
-  const [isScrolledMode, setScrolledMode] = useState(viewSettings.scrolled);
-  const [noContinuousScroll, setNoContinuousScroll] = useState(viewSettings.noContinuousScroll);
-  const [scrollingOverlap, setScrollingOverlap] = useState(viewSettings.scrollingOverlap);
-  const [hideScrollbar, setHideScrollbar] = useState(viewSettings.hideScrollbar || false);
   const [volumeKeysToFlip, setVolumeKeysToFlip] = useState(viewSettings.volumeKeysToFlip);
   const [showPaginationButtons, setShowPaginationButtons] = useState(
     viewSettings.showPaginationButtons,
@@ -48,7 +41,7 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
   const [copyToNotebook, setCopyToNotebook] = useState(viewSettings.copyToNotebook);
   const [animated, setAnimated] = useState(viewSettings.animated);
   const [isEink, setIsEink] = useState(viewSettings.isEink);
-  const [isColorEink, setIsColorEink] = useState(viewSettings.isColorEink);
+  const [isColorEink] = useState(viewSettings.isColorEink);
   const [autoScreenBrightness, setAutoScreenBrightness] = useState(settings.autoScreenBrightness);
   const [allowScript, setAllowScript] = useState(viewSettings.allowScript);
 
@@ -56,10 +49,6 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
 
   const handleReset = () => {
     resetToDefaults({
-      scrolled: setScrolledMode,
-      noContinuousScroll: setNoContinuousScroll,
-      scrollingOverlap: setScrollingOverlap,
-      hideScrollbar: setHideScrollbar,
       volumeKeysToFlip: setVolumeKeysToFlip,
       showPaginationButtons: setShowPaginationButtons,
       disableClick: setIsDisableClick,
@@ -78,40 +67,6 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
     onRegisterReset(handleReset);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (isScrolledMode === viewSettings.scrolled) return;
-    saveViewSettings(envConfig, bookKey, 'scrolled', isScrolledMode);
-    getView(bookKey)?.renderer.setAttribute('flow', isScrolledMode ? 'scrolled' : 'paginated');
-    getView(bookKey)?.renderer.setAttribute(
-      'max-inline-size',
-      `${getMaxInlineSize(viewSettings)}px`,
-    );
-    getView(bookKey)?.renderer.setStyles?.(getStyles(viewSettings!));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isScrolledMode]);
-
-  useEffect(() => {
-    if (noContinuousScroll === viewSettings.noContinuousScroll) return;
-    saveViewSettings(envConfig, bookKey, 'noContinuousScroll', noContinuousScroll);
-    if (noContinuousScroll) {
-      getView(bookKey)?.renderer.setAttribute('no-continuous-scroll', '');
-    } else {
-      getView(bookKey)?.renderer.removeAttribute('no-continuous-scroll');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noContinuousScroll]);
-
-  useEffect(() => {
-    saveViewSettings(envConfig, bookKey, 'hideScrollbar', hideScrollbar, false, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hideScrollbar]);
-
-  useEffect(() => {
-    if (scrollingOverlap === viewSettings.scrollingOverlap) return;
-    saveViewSettings(envConfig, bookKey, 'scrollingOverlap', scrollingOverlap, false, false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrollingOverlap]);
 
   useEffect(() => {
     saveViewSettings(envConfig, bookKey, 'volumeKeysToFlip', volumeKeysToFlip, false, false);
@@ -235,57 +190,6 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
 
   return (
     <div className='my-4 w-full space-y-6'>
-      <div className='w-full' data-setting-id='settings.control.scrolledMode'>
-        <h2 className='mb-2 font-medium'>{_('Scroll')}</h2>
-        <div className='card border-base-200 bg-base-100 border shadow'>
-          <div className='divide-base-200 divide-y'>
-            <div className='config-item'>
-              <span className=''>{_('Scrolled Mode')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={isScrolledMode}
-                disabled={bookData?.isFixedLayout}
-                onChange={() => setScrolledMode(!isScrolledMode)}
-              />
-            </div>
-            <div
-              className='config-item'
-              data-setting-id='settings.control.scroll.noContinuousScroll'
-            >
-              <span className=''>{_('Single Section Scroll')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={noContinuousScroll}
-                disabled={!viewSettings.scrolled}
-                onChange={() => setNoContinuousScroll(!noContinuousScroll)}
-              />
-            </div>
-            <NumberInput
-              label={_('Overlap Pixels')}
-              value={scrollingOverlap}
-              onChange={setScrollingOverlap}
-              disabled={!viewSettings.scrolled}
-              min={0}
-              max={200}
-              step={10}
-              data-setting-id='settings.control.overlapPixels'
-            />
-            <div className='config-item' data-setting-id='settings.control.scroll.hideScrollbar'>
-              <span className=''>{_('Hide Scrollbar')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={hideScrollbar}
-                disabled={!viewSettings.scrolled}
-                onChange={() => setHideScrollbar(!hideScrollbar)}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className='w-full' data-setting-id='settings.control.clickToPaginate'>
         <h2 className='mb-2 font-medium'>{_('Pagination')}</h2>
         <div className='card border-base-200 bg-base-100 border shadow'>
@@ -405,51 +309,11 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
         </div>
       )}
 
-      <div className='w-full' data-setting-id='settings.control.pagingAnimation'>
-        <h2 className='mb-2 font-medium'>{_('Animation')}</h2>
-        <div className='card border-base-200 bg-base-100 border shadow'>
-          <div className='divide-base-200 divide-y'>
-            <div className='config-item'>
-              <span className=''>{_('Paging Animation')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={animated}
-                onChange={() => setAnimated(!animated)}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {(appService?.isMobileApp || appService?.appPlatform === 'web') && (
         <div className='w-full' data-setting-id='settings.control.einkMode'>
           <h2 className='mb-2 font-medium'>{_('Device')}</h2>
           <div className='card border-base-200 bg-base-100 border shadow'>
             <div className='divide-base-200 divide-y'>
-              {(appService?.isAndroidApp || appService?.appPlatform === 'web') && (
-                <div className='config-item'>
-                  <span className=''>{_('E-Ink Mode')}</span>
-                  <input
-                    type='checkbox'
-                    className='toggle'
-                    checked={isEink}
-                    onChange={() => setIsEink(!isEink)}
-                  />
-                </div>
-              )}
-              {(appService?.isAndroidApp || appService?.appPlatform === 'web') && (
-                <div className='config-item' data-setting-id='settings.control.colorEinkMode'>
-                  <span className=''>{_('Color E-Ink Mode')}</span>
-                  <input
-                    type='checkbox'
-                    className='toggle'
-                    disabled={!isEink}
-                    checked={isColorEink}
-                    onChange={() => setIsColorEink(!isColorEink)}
-                  />
-                </div>
-              )}
               {appService?.isMobileApp && (
                 <div className='config-item'>
                   <span className=''>{_('System Screen Brightness')}</span>

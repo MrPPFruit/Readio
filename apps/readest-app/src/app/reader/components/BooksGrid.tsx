@@ -227,6 +227,7 @@ const BooksGrid: React.FC<BooksGridProps> = ({ bookKeys, onCloseBook, onGoToLibr
               bookFormat={book.format}
               section={section}
               pageinfo={pageinfo}
+              toc={bookDoc.toc}
               isHoveredAnim={false}
               gridInsets={gridInsets}
             />

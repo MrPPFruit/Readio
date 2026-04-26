@@ -28,11 +28,6 @@ const DEFAULT_SHORTCUTS = {
     description: _('Search in Book'),
     section: 'General',
   },
-  onToggleScrollMode: {
-    keys: ['shift+j'],
-    description: _('Toggle Scroll Mode'),
-    section: 'General',
-  },
   onToggleSelectMode: {
     keys: ['shift+s'],
     description: _('Toggle Select Mode'),

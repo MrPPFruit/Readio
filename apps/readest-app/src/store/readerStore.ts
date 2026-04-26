@@ -239,8 +239,16 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
           [id]: newBookData,
         },
       }));
-      const configViewSettings = config.viewSettings!;
-      const globalViewSettings = settings.globalViewSettings;
+      const configViewSettings = {
+        ...config.viewSettings!,
+        scrolled: false,
+        noContinuousScroll: false,
+      };
+      const globalViewSettings = {
+        ...settings.globalViewSettings,
+        scrolled: false,
+        noContinuousScroll: false,
+      };
       set((state) => ({
         viewStates: {
           ...state.viewStates,
@@ -291,6 +299,11 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
   getViewSettings: (key: string) => get().viewStates[key]?.viewSettings || null,
   setViewSettings: (key: string, viewSettings: ViewSettings) => {
     if (!key) return;
+    viewSettings = {
+      ...viewSettings,
+      scrolled: false,
+      noContinuousScroll: false,
+    };
     const id = key.split('-')[0]!;
     const bookData = useBookDataStore.getState().booksData[id];
     const viewState = get().viewStates[key];

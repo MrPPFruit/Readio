@@ -256,9 +256,6 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
     if (gapPercent === viewSettings.gapPercent) return;
     saveViewSettings(envConfig, bookKey, 'gapPercent', gapPercent, false, false);
     view?.renderer.setAttribute('gap', `${gapPercent}%`);
-    if (viewSettings.scrolled) {
-      view?.renderer.setAttribute('flow', 'scrolled');
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gapPercent]);
 
@@ -712,15 +709,6 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
                 />
               </>
             )}
-            <div className='config-item'>
-              <span className=''>{_('Apply also in Scrolled Mode')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={showMarginsOnScroll}
-                onChange={() => setShowMarginsOnScroll(!showMarginsOnScroll)}
-              />
-            </div>
           </div>
         </div>
       </div>
@@ -748,40 +736,6 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
               />
             </div>
             <div className='config-item'>
-              <span className=''>{_('Show Remaining Time')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={showRemainingTime}
-                disabled={!showFooter}
-                onChange={() => {
-                  if (!showRemainingTime) {
-                    setShowRemainingTime(true);
-                    setShowRemainingPages(false);
-                  } else {
-                    setShowRemainingTime(false);
-                  }
-                }}
-              />
-            </div>
-            <div className='config-item'>
-              <span className=''>{_('Show Remaining Pages')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={showRemainingPages}
-                disabled={!showFooter}
-                onChange={() => {
-                  if (!showRemainingPages) {
-                    setShowRemainingPages(true);
-                    setShowRemainingTime(false);
-                  } else {
-                    setShowRemainingPages(false);
-                  }
-                }}
-              />
-            </div>
-            <div className='config-item'>
               <span className=''>{_('Show Reading Progress')}</span>
               <input
                 type='checkbox'
@@ -803,28 +757,6 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
                 disabled={!showProgressInfo}
               />
             </div>
-            <div className='config-item'>
-              <span className=''>{_('Show Current Time')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={showCurrentTime}
-                disabled={!showFooter}
-                onChange={() => setShowCurrentTime(!showCurrentTime)}
-              />
-            </div>
-            {showCurrentTime && (
-              <div className='config-item'>
-                <span className=''>{_('Use 24 Hour Clock')}</span>
-                <input
-                  type='checkbox'
-                  className='toggle'
-                  checked={use24HourClock}
-                  disabled={!showFooter}
-                  onChange={() => setUse24HourClock(!use24HourClock)}
-                />
-              </div>
-            )}
             {showAdvancedLayoutSettings && (
               <>
                 <div className='config-item'>
@@ -857,15 +789,6 @@ const LayoutPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRese
                 checked={tapToToggleFooter}
                 disabled={!showFooter}
                 onChange={() => setTapToToggleFooter(!tapToToggleFooter)}
-              />
-            </div>
-            <div className='config-item'>
-              <span className=''>{_('Apply also in Scrolled Mode')}</span>
-              <input
-                type='checkbox'
-                className='toggle'
-                checked={showBarsOnScroll}
-                onChange={() => setShowBarsOnScroll(!showBarsOnScroll)}
               />
             </div>
           </div>

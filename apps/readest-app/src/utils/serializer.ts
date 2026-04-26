@@ -10,6 +10,7 @@ export const serializeConfig = (
   const searchConfig = config.searchConfig as Partial<BookSearchConfig>;
   config.viewSettings = Object.entries(viewSettings).reduce(
     (acc: Partial<Record<keyof ViewSettings, unknown>>, [key, value]) => {
+      if (key === 'scrolled' || key === 'noContinuousScroll') return acc;
       if (globalViewSettings[key as keyof ViewSettings] !== value) {
         acc[key as keyof ViewSettings] = value;
       }
@@ -37,7 +38,12 @@ export const deserializeConfig = (
 ): BookConfig => {
   const config = JSON.parse(str) as BookConfig;
   const { viewSettings, searchConfig } = config;
-  config.viewSettings = { ...globalViewSettings, ...viewSettings };
+  config.viewSettings = {
+    ...globalViewSettings,
+    ...viewSettings,
+    scrolled: false,
+    noContinuousScroll: false,
+  };
   config.searchConfig = { ...defaultSearchConfig, ...searchConfig };
   config.updatedAt ??= Date.now();
   return config;

@@ -17,6 +17,7 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
   gridInsets,
   progressValid,
   progressFraction,
+  getProgressPreview,
   navigationHandlers,
   forceMobileLayout,
   onSpeakText,
@@ -35,6 +36,7 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
   const [progressValue, setProgressValue] = React.useState(
     progressValid ? progressFraction * 100 : 0,
   );
+  const [showProgressPreview, setShowProgressPreview] = React.useState(false);
 
   const { section, pageinfo } = progress || {};
   const template = progressStyle === 'fraction' ? '{current} / {total}' : '{percent}%';
@@ -45,6 +47,7 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
 
   useEffect(() => {
     if (hoveredBookKey !== bookKey) {
+      setShowProgressPreview(false);
       if (rangeInputRef.current && document.activeElement === rangeInputRef.current) {
         rangeInputRef.current.blur();
       }
@@ -66,6 +69,7 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
     [navigationHandlers],
   );
 
+  const progressPreview = getProgressPreview?.(progressValue);
   const isMobile = window.innerWidth < 640 || window.innerHeight < 640;
 
   return (
@@ -119,16 +123,30 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
           <span aria-hidden='true'>{progressInfo}</span>
         </span>
       )}
-      <input
-        ref={rangeInputRef}
-        type='range'
-        className='text-base-content mx-2 min-w-0 flex-1'
-        min={0}
-        max={100}
-        aria-label={_('Jump to Location')}
-        value={progressValue}
-        onChange={(e) => handleProgressChange(parseInt(e.target.value, 10))}
-      />
+      <div className='relative mx-2 flex min-w-0 flex-1 items-center'>
+        {showProgressPreview && progressPreview && (
+          <div className='bg-base-content text-base-100 absolute bottom-full left-1/2 mb-3 max-w-[80%] -translate-x-1/2 rounded-lg px-4 py-2 text-center text-xs shadow-lg'>
+            <div className='line-clamp-1 font-medium'>{progressPreview.sectionLabel}</div>
+            <div className='mt-0.5 opacity-80'>{progressPreview.pageLabel}</div>
+          </div>
+        )}
+        <input
+          ref={rangeInputRef}
+          type='range'
+          className='text-base-content min-w-0 flex-1'
+          min={0}
+          max={100}
+          aria-label={_('Jump to Location')}
+          value={progressValue}
+          onChange={(e) => handleProgressChange(parseInt(e.target.value, 10))}
+          onPointerDown={() => setShowProgressPreview(true)}
+          onPointerUp={() => setShowProgressPreview(false)}
+          onPointerCancel={() => setShowProgressPreview(false)}
+          onTouchStart={() => setShowProgressPreview(true)}
+          onTouchEnd={() => setShowProgressPreview(false)}
+          onBlur={() => setShowProgressPreview(false)}
+        />
+      </div>
       {ttsEnabled && (
         <Button
           icon={<FaHeadphones className={viewState?.ttsEnabled ? 'text-blue-500' : ''} />}

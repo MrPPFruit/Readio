@@ -75,10 +75,6 @@ export const FontLayoutPanel: React.FC<FontLayoutPanelProps> = ({
       saveViewSettings(envConfig, bookKey, 'gapPercent', gapPercent, false, false);
       view?.renderer.setAttribute('margin', `${marginPx}px`);
       view?.renderer.setAttribute('gap', `${gapPercent}%`);
-
-      if (currentViewSettings?.scrolled) {
-        view?.renderer.setAttribute('flow', 'scrolled');
-      }
     },
     [envConfig, bookKey, view, getViewSettings],
   );
@@ -101,10 +97,10 @@ export const FontLayoutPanel: React.FC<FontLayoutPanelProps> = ({
   }, [bookKey, setSettingsDialogBookKey, setSettingsDialogOpen]);
 
   const classes = clsx(
-    'footerbar-font-mobile bg-base-200 absolute flex w-full flex-col items-center gap-y-8 px-4 transition-all',
+    'footerbar-font-mobile bg-base-200 absolute flex w-full flex-col items-center gap-y-5 px-4 transition-all',
     !forceMobileLayout && 'sm:hidden',
     actionTab === 'font'
-      ? 'pointer-events-auto translate-y-0 pb-4 pt-8 ease-out'
+      ? 'pointer-events-auto translate-y-0 pb-3 pt-5 ease-out'
       : 'pointer-events-none invisible translate-y-full overflow-hidden pb-0 pt-0 ease-in',
   );
 

@@ -1,12 +1,16 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import ControlPanel from '@/components/settings/ControlPanel';
 import FontPanel from '@/components/settings/FontPanel';
 import LayoutPanel from '@/components/settings/LayoutPanel';
 
 const readioFeaturesMock = vi.hoisted(() => ({
   readioFeatures: {
     advancedSettings: false,
+    annotations: false,
+    notebook: false,
+    proofreading: false,
   },
 }));
 
@@ -38,6 +42,7 @@ vi.mock('@/context/EnvContext', () => ({
     appService: {
       isAndroidApp: true,
       isMobileApp: true,
+      appPlatform: 'android',
       hasOrientationLock: false,
     },
   }),
@@ -103,6 +108,34 @@ const viewSettings = {
   tapToToggleFooter: false,
   progressStyle: 'fraction',
   screenOrientation: 'auto',
+  noContinuousScroll: false,
+  scrollingOverlap: 0,
+  hideScrollbar: false,
+  volumeKeysToFlip: false,
+  showPaginationButtons: false,
+  disableClick: false,
+  fullscreenClickArea: false,
+  swapClickArea: false,
+  disableDoubleClick: true,
+  enableAnnotationQuickActions: false,
+  annotationQuickAction: 'copy',
+  copyToNotebook: false,
+  animated: true,
+  isEink: false,
+  isColorEink: false,
+  allowScript: false,
+  invertImgColorInDark: false,
+  overrideColor: false,
+  backgroundTextureId: 'none',
+  backgroundOpacity: 0.6,
+  backgroundSize: 'cover',
+  highlightOpacity: 0.3,
+  codeHighlighting: false,
+  codeLanguage: 'auto-detect',
+  readingRulerEnabled: false,
+  readingRulerLines: 2,
+  readingRulerOpacity: 0.5,
+  readingRulerColor: 'transparent',
   vertical: false,
   scrolled: false,
 };
@@ -141,6 +174,18 @@ vi.mock('@/store/settingsStore', () => ({
     settings: {
       globalViewSettings: viewSettings,
       autoScreenBrightness: true,
+      globalReadSettings: {
+        customThemes: [],
+        customHighlightColors: {
+          red: '#f87171',
+          yellow: '#facc15',
+          green: '#4ade80',
+          blue: '#60a5fa',
+          violet: '#a78bfa',
+        },
+        userHighlightColors: [],
+        defaultHighlightLabels: {},
+      },
     },
     fontPanelView: 'main-fonts',
     setFontPanelView: settingsStoreMock.setFontPanelView,
@@ -188,6 +233,7 @@ vi.mock('@/utils/config', () => ({
 
 vi.mock('@/utils/bridge', () => ({
   getSysFontsList: vi.fn(),
+  interceptKeys: vi.fn(),
   lockScreenOrientation: vi.fn(),
 }));
 
@@ -240,6 +286,16 @@ describe('Readio reader settings', () => {
     expect(screen.queryByText('Monospace Font')).toBeNull();
   });
 
+  it('does not expose scroll mode controls', () => {
+    render(<ControlPanel bookKey='book-1' onRegisterReset={vi.fn()} />);
+
+    expect(screen.getByText('Pagination')).toBeTruthy();
+    expect(screen.queryByText('Scrolled Mode')).toBeNull();
+    expect(screen.queryByText('Single Section Scroll')).toBeNull();
+    expect(screen.queryByText('Overlap Pixels')).toBeNull();
+    expect(screen.queryByText('Hide Scrollbar')).toBeNull();
+  });
+
   it('keeps the layout panel focused on readable Chinese novel spacing', () => {
     render(<LayoutPanel bookKey='book-1' onRegisterReset={vi.fn()} />);
 
@@ -257,6 +313,11 @@ describe('Readio reader settings', () => {
     expect(screen.queryByText('Maximum Column Height')).toBeNull();
     expect(screen.queryByText('Show Current Battery Status')).toBeNull();
     expect(screen.queryByText('Show Battery Percentage')).toBeNull();
+    expect(screen.queryByText('Apply also in Scrolled Mode')).toBeNull();
+    expect(screen.queryByText('Show Remaining Time')).toBeNull();
+    expect(screen.queryByText('Show Remaining Pages')).toBeNull();
+    expect(screen.queryByText('Show Current Time')).toBeNull();
+    expect(screen.queryByText('Use 24 Hour Clock')).toBeNull();
   });
 
   it('shows advanced font controls when advanced settings are enabled', () => {
@@ -282,5 +343,9 @@ describe('Readio reader settings', () => {
     expect(screen.getByText('Maximum Column Height')).toBeTruthy();
     expect(screen.getByText('Show Current Battery Status')).toBeTruthy();
     expect(screen.getByText('Show Battery Percentage')).toBeTruthy();
+    expect(screen.queryByText('Apply also in Scrolled Mode')).toBeNull();
+    expect(screen.queryByText('Show Remaining Time')).toBeNull();
+    expect(screen.queryByText('Show Remaining Pages')).toBeNull();
+    expect(screen.queryByText('Show Current Time')).toBeNull();
   });
 });

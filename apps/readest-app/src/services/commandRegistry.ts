@@ -594,7 +594,16 @@ const customPanelItems = [
   },
 ];
 
+const hiddenReadioSettings = new Set([
+  'settings.color.codeHighlighting',
+  'settings.control.pagingAnimation',
+  'settings.control.einkMode',
+  'settings.control.colorEinkMode',
+]);
+
 const isSettingsItemEnabled = (def: { id: string; section?: string }): boolean => {
+  if (def.section === 'Scroll') return false;
+  if (hiddenReadioSettings.has(def.id)) return false;
   if (def.id.startsWith('settings.tts.')) return readioFeatures.tts;
   if (def.id.startsWith('settings.language.tts')) return readioFeatures.tts;
   if (

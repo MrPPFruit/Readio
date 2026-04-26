@@ -15,7 +15,6 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useResetViewSettings } from '@/hooks/useResetSettings';
 import { useCustomTextureStore } from '@/store/customTextureStore';
 import { saveViewSettings } from '@/helpers/settings';
-import { manageSyntaxHighlighting } from '@/utils/highlightjs';
 import { SettingsPanelPanelProp } from './SettingsDialog';
 import { useFileSelector } from '@/hooks/useFileSelector';
 import { PREDEFINED_TEXTURES } from '@/styles/textures';
@@ -28,7 +27,6 @@ import ThemeModeSelector from './color/ThemeModeSelector';
 import ThemeColorSelector from './color/ThemeColorSelector';
 import BackgroundTextureSelector from './color/BackgroundTextureSelector';
 import HighlightColorsEditor from './color/HighlightColorsEditor';
-import CodeHighlightingSettings from './color/CodeHighlightingSettings';
 import ReadingRulerSettings from './color/ReadingRulerSettings';
 
 const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset }) => {
@@ -37,7 +35,7 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
     useThemeStore();
   const { envConfig, appService } = useEnv();
   const { settings, setSettings, saveSettings } = useSettingsStore();
-  const { getView, getViewSettings } = useReaderStore();
+  const { getViewSettings } = useReaderStore();
   const viewSettings = getViewSettings(bookKey) || settings.globalViewSettings;
 
   const [invertImgColorInDark, setInvertImgColorInDark] = useState(
@@ -47,8 +45,6 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
   const [customThemes, setCustomThemes] = useState<Theme[]>([]);
   const [showCustomThemeEditor, setShowCustomThemeEditor] = useState(false);
   const [overrideColor, setOverrideColor] = useState(viewSettings.overrideColor);
-  const [codeHighlighting, setcodeHighlighting] = useState(viewSettings.codeHighlighting);
-  const [codeLanguage, setCodeLanguage] = useState(viewSettings.codeLanguage);
   const [selectedTextureId, setSelectedTextureId] = useState(viewSettings.backgroundTextureId);
   const [backgroundOpacity, setBackgroundOpacity] = useState(viewSettings.backgroundOpacity);
   const [backgroundSize, setBackgroundSize] = useState(viewSettings.backgroundSize);
@@ -86,8 +82,6 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
       overrideColor: setOverrideColor,
       invertImgColorInDark: setInvertImgColorInDark,
       highlightOpacity: setHighlightOpacity,
-      codeHighlighting: setcodeHighlighting,
-      codeLanguage: setCodeLanguage,
       readingRulerEnabled: setReadingRulerEnabled,
       readingRulerLines: setReadingRulerLines,
       readingRulerOpacity: setReadingRulerOpacity,
@@ -139,24 +133,6 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
     saveViewSettings(envConfig, bookKey, 'highlightOpacity', highlightOpacity);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [highlightOpacity]);
-
-  useEffect(() => {
-    let update = false;
-    if (codeHighlighting !== viewSettings.codeHighlighting) {
-      saveViewSettings(envConfig, bookKey, 'codeHighlighting', codeHighlighting);
-      update = true;
-    }
-    if (codeLanguage !== viewSettings.codeLanguage) {
-      saveViewSettings(envConfig, bookKey, 'codeLanguage', codeLanguage);
-      update = true;
-    }
-    if (!update) return;
-    const view = getView(bookKey);
-    if (!view) return;
-    const docs = view.renderer.getContents();
-    docs.forEach(({ doc }) => manageSyntaxHighlighting(doc, viewSettings));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codeHighlighting, codeLanguage]);
 
   useEffect(() => {
     if (selectedTextureId === viewSettings.backgroundTextureId) return;
@@ -392,14 +368,6 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
               data-setting-id='settings.color.readingRuler'
             />
           )}
-
-          <CodeHighlightingSettings
-            codeHighlighting={codeHighlighting}
-            codeLanguage={codeLanguage}
-            onToggle={setcodeHighlighting}
-            onLanguageChange={setCodeLanguage}
-            data-setting-id='settings.color.codeHighlighting'
-          />
         </>
       )}
     </div>

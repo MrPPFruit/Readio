@@ -16,6 +16,12 @@ interface NavigationPanelProps {
   actionTab: string;
   progressFraction: number;
   progressValid: boolean;
+  getProgressPreview?: (value: number) =>
+    | {
+        sectionLabel: string;
+        pageLabel: string;
+      }
+    | undefined;
   navigationHandlers: NavigationHandlers;
   bottomOffset: string;
   sliderHeight: number;
@@ -27,6 +33,7 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
   actionTab,
   progressFraction,
   progressValid,
+  getProgressPreview,
   navigationHandlers,
   bottomOffset,
   sliderHeight,
@@ -57,11 +64,13 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
     [navigationHandlers],
   );
 
+  const progressPreview = getProgressPreview?.(progressValue);
+
   const classes = clsx(
-    'footerbar-progress-mobile bg-base-200 absolute flex w-full flex-col items-center gap-y-8 px-4 transition-all',
+    'footerbar-progress-mobile bg-base-200 absolute flex w-full flex-col items-center gap-y-5 px-4 transition-all',
     !forceMobileLayout && 'sm:hidden',
     actionTab === 'progress'
-      ? 'pointer-events-auto translate-y-0 pb-4 pt-8 ease-out'
+      ? 'pointer-events-auto translate-y-0 pb-3 pt-5 ease-out'
       : 'pointer-events-none invisible translate-y-full overflow-hidden pb-0 pt-0 ease-in',
   );
 
@@ -74,7 +83,13 @@ export const NavigationPanel: React.FC<NavigationPanelProps> = ({
           : bottomOffset,
       }}
     >
-      <div className='flex w-full items-center justify-between gap-x-6'>
+      <div className='flex w-full flex-col gap-y-2'>
+        {progressPreview && (
+          <div className='text-base-content/70 flex min-h-4 items-center justify-between gap-x-3 text-xs'>
+            <span className='line-clamp-1 min-w-0 font-medium'>{progressPreview.sectionLabel}</span>
+            <span className='shrink-0 tabular-nums'>{progressPreview.pageLabel}</span>
+          </div>
+        )}
         <Slider
           label={_('Reading Progress')}
           heightPx={sliderHeight}

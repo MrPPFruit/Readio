@@ -2,7 +2,6 @@ import clsx from 'clsx';
 import React from 'react';
 import { IoIosList as TOCIcon } from 'react-icons/io';
 import { RxSlider as SliderIcon } from 'react-icons/rx';
-import { RiFontFamily as FontIcon } from 'react-icons/ri';
 import { PiSun as ColorIcon } from 'react-icons/pi';
 import { MdOutlineHeadphones as TTSIcon } from 'react-icons/md';
 import { useEnv } from '@/context/EnvContext';
@@ -37,6 +36,10 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   const tocIconSize = useResponsiveSize(23);
   const fontIconSize = useResponsiveSize(18);
   const navPadding = isMobile ? `${gridInsets.bottom * 0.33 + 16}px` : '0px';
+  const fontIconClassName = clsx(
+    'flex h-[18px] w-[22px] items-baseline justify-center gap-[1px] font-serif leading-none',
+    actionTab === 'font' && 'text-blue-500',
+  );
 
   return (
     <div
@@ -68,7 +71,14 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
       <Button
         label={_('Font & Layout')}
         icon={
-          <FontIcon size={fontIconSize} className={clsx(actionTab === 'font' && 'text-blue-500')} />
+          <span
+            className={fontIconClassName}
+            style={{ fontSize: `${fontIconSize}px` }}
+            aria-hidden='true'
+          >
+            <span className='font-semibold'>A</span>
+            <span className='text-[0.72em] font-medium'>a</span>
+          </span>
         }
         onClick={() => onSetActionTab('font')}
       />

@@ -21,6 +21,7 @@ const FooterBar: React.FC<FooterBarProps> = ({
   bookFormat,
   section,
   pageinfo,
+  toc,
   isHoveredAnim,
   gridInsets,
 }) => {
@@ -58,6 +59,47 @@ const FooterBar: React.FC<FooterBarProps> = ({
     }
     return 0;
   }, [progressValid, progressInfo]);
+
+  const tocItems = useMemo(() => {
+    const items: NonNullable<typeof toc> = [];
+    const collectItems = (list?: typeof toc) => {
+      list?.forEach((item) => {
+        items.push(item);
+        collectItems(item.subitems);
+      });
+    };
+
+    collectItems(toc);
+    return items.sort((a, b) => {
+      const aPage = a.location?.current ?? a.index ?? 0;
+      const bPage = b.location?.current ?? b.index ?? 0;
+      return bPage - aPage;
+    });
+  }, [toc]);
+
+  const getProgressPreview = useCallback(
+    (value: number) => {
+      if (!progressValid || !progressInfo) return undefined;
+      const targetPage = Math.max(
+        1,
+        Math.min(progressInfo.total, Math.round((value / 100) * progressInfo.total)),
+      );
+      const targetIndex = targetPage - 1;
+      const sectionLabel =
+        tocItems.find((item) => {
+          const itemPage = item.location?.current ?? item.index;
+          return itemPage !== undefined && itemPage <= targetIndex;
+        })?.label ||
+        progress?.sectionLabel ||
+        '';
+
+      return {
+        sectionLabel,
+        pageLabel: `${targetPage} / ${progressInfo.total}`,
+      };
+    },
+    [progress?.sectionLabel, progressInfo, progressValid, tocItems],
+  );
 
   const handleProgressChange = useMemo(
     () =>
@@ -208,6 +250,7 @@ const FooterBar: React.FC<FooterBarProps> = ({
     actionTab,
     progressValid,
     progressFraction,
+    getProgressPreview,
     navigationHandlers,
     forceMobileLayout,
     onSetActionTab: handleSetActionTab,

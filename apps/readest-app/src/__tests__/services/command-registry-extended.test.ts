@@ -117,7 +117,7 @@ describe('buildCommandRegistry', () => {
     expect(fontItem!.panelLabel).toBe('t:Font');
 
     // Control panel items use panelLabel 'Behavior'
-    const controlItem = items.find((i) => i.id === 'settings.control.scrolledMode');
+    const controlItem = items.find((i) => i.id === 'settings.control.clickToPaginate');
     expect(controlItem!.panelLabel).toBe('t:Behavior');
   });
 
@@ -178,6 +178,26 @@ describe('buildCommandRegistry', () => {
     const items = buildCommandRegistry(createMockOptions());
     const aiItems = items.filter((i) => i.panel === 'AI');
     expect(aiItems.length).toBe(0);
+  });
+
+  it('does not expose scroll-mode commands in Readio', () => {
+    const items = buildCommandRegistry(createMockOptions());
+    const ids = items.map((item) => item.id);
+
+    expect(ids).not.toContain('settings.control.scrolledMode');
+    expect(ids).not.toContain('settings.control.scroll.noContinuousScroll');
+    expect(ids).not.toContain('settings.control.overlapPixels');
+    expect(items.some((item) => item.section === 'Scroll')).toBe(false);
+  });
+
+  it('does not expose commands for settings removed from the Readio UI', () => {
+    const items = buildCommandRegistry(createMockOptions());
+    const ids = items.map((item) => item.id);
+
+    expect(ids).not.toContain('settings.color.codeHighlighting');
+    expect(ids).not.toContain('settings.control.pagingAnimation');
+    expect(ids).not.toContain('settings.control.einkMode');
+    expect(ids).not.toContain('settings.control.colorEinkMode');
   });
 
   it('should give each settings item keywords and section', () => {

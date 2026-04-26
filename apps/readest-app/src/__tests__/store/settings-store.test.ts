@@ -80,6 +80,22 @@ describe('settingsStore', () => {
       expect(useSettingsStore.getState().settings.version).toBe(42);
     });
 
+    test('normalizes global view settings to pagination-only mode', () => {
+      const settings = makeSettings({
+        globalViewSettings: {
+          scrolled: true,
+          noContinuousScroll: true,
+        },
+      } as Partial<SystemSettings>);
+
+      useSettingsStore.getState().setSettings(settings);
+
+      expect(useSettingsStore.getState().settings.globalViewSettings).toMatchObject({
+        scrolled: false,
+        noContinuousScroll: false,
+      });
+    });
+
     test('replaces previous settings entirely', () => {
       const settings1 = makeSettings({ localBooksDir: '/old' });
       const settings2 = makeSettings({ localBooksDir: '/new' });
@@ -88,6 +104,34 @@ describe('settingsStore', () => {
       useSettingsStore.getState().setSettings(settings2);
 
       expect(useSettingsStore.getState().settings.localBooksDir).toBe('/new');
+    });
+  });
+
+  describe('saveSettings', () => {
+    test('persists pagination-only global view settings', async () => {
+      const saveSettings = vi.fn();
+      const settings = makeSettings({
+        globalViewSettings: {
+          scrolled: true,
+          noContinuousScroll: true,
+        },
+      } as Partial<SystemSettings>);
+
+      await useSettingsStore.getState().saveSettings(
+        {
+          getAppService: async () => ({ saveSettings }),
+        } as never,
+        settings,
+      );
+
+      expect(saveSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          globalViewSettings: expect.objectContaining({
+            scrolled: false,
+            noContinuousScroll: false,
+          }),
+        }),
+      );
     });
   });
 

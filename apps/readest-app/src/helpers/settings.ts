@@ -14,6 +14,8 @@ export const saveViewSettings = async <K extends keyof ViewSettings>(
   skipGlobal = false,
   applyStyles = true,
 ) => {
+  if (key === 'scrolled' || key === 'noContinuousScroll') return;
+
   const { settings, setSettings, saveSettings } = useSettingsStore.getState();
   const { bookKeys, getView, getViewState, getViewSettings, setViewSettings } =
     useReaderStore.getState();

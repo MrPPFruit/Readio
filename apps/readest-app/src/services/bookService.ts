@@ -536,7 +536,13 @@ export async function loadBookConfig(
     if (await fs.exists(getConfigFilename(book), 'Books')) {
       str = (await fs.readFile(getConfigFilename(book), 'Books', 'text')) as string;
     }
-    return deserializeConfig(str, globalViewSettings, DEFAULT_BOOK_SEARCH_CONFIG);
+    const config = deserializeConfig(str, globalViewSettings, DEFAULT_BOOK_SEARCH_CONFIG);
+    config.viewSettings = {
+      ...config.viewSettings,
+      scrolled: false,
+      noContinuousScroll: false,
+    };
+    return config;
   } catch {
     return deserializeConfig('{}', globalViewSettings, DEFAULT_BOOK_SEARCH_CONFIG);
   }
@@ -550,8 +556,15 @@ export async function saveBookConfig(
 ): Promise<void> {
   let serializedConfig: string;
   if (settings) {
+    config.viewSettings = {
+      ...config.viewSettings,
+      scrolled: false,
+      noContinuousScroll: false,
+    };
     const globalViewSettings = {
       ...settings.globalViewSettings,
+      scrolled: false,
+      noContinuousScroll: false,
       ...(FIXED_LAYOUT_FORMATS.has(book.format) ? DEFAULT_FIXED_LAYOUT_VIEW_SETTINGS : {}),
     };
     serializedConfig = serializeConfig(config, globalViewSettings, DEFAULT_BOOK_SEARCH_CONFIG);

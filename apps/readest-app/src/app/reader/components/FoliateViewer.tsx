@@ -252,7 +252,7 @@ const FoliateViewer: React.FC<{
       applyImageStyle(detail.doc);
       applyTableStyle(detail.doc);
       applyThemeModeClass(detail.doc, isDarkMode);
-      applyScrollModeClass(detail.doc, viewSettings.scrolled || false);
+      applyScrollModeClass(detail.doc, false);
       applyScrollbarStyle(document, viewSettings.hideScrollbar || false);
       keepTextAlignment(detail.doc);
       handleA11yNavigation(viewRef.current, detail.doc, {
@@ -579,6 +579,8 @@ const FoliateViewer: React.FC<{
 
   const applyMarginAndGap = () => {
     const viewSettings = getViewSettings(bookKey)!;
+    viewSettings.scrolled = false;
+    viewSettings.noContinuousScroll = false;
     const viewState = getViewState(bookKey);
     const viewInsets = getViewInsets(viewSettings);
     const showDoubleBorder = viewSettings.vertical && viewSettings.doubleBorder;
@@ -598,7 +600,7 @@ const FoliateViewer: React.FC<{
     const rightMargin = insets.right + moreRightInset;
     const bottomMargin = (showBottomFooter ? insets.bottom : viewInsets.bottom) + moreBottomInset;
     const leftMargin = insets.left + moreLeftInset;
-    const viewMargins = viewSettings.showMarginsOnScroll && viewSettings.scrolled;
+    const viewMargins = false;
 
     viewRef.current?.renderer.setAttribute('margin-top', `${viewMargins ? 0 : topMargin}px`);
     viewRef.current?.renderer.setAttribute('margin-right', `${rightMargin}px`);
@@ -617,14 +619,8 @@ const FoliateViewer: React.FC<{
       setScrollMargins({ top: 0, bottom: 0 });
     }
     viewRef.current?.renderer.setAttribute('gap', `${viewSettings.gapPercent}%`);
-    if (viewSettings.scrolled) {
-      viewRef.current?.renderer.setAttribute('flow', 'scrolled');
-      if (viewSettings.noContinuousScroll) {
-        viewRef.current?.renderer.setAttribute('no-continuous-scroll', '');
-      } else {
-        viewRef.current?.renderer.removeAttribute('no-continuous-scroll');
-      }
-    }
+    viewRef.current?.renderer.setAttribute('flow', 'paginated');
+    viewRef.current?.renderer.removeAttribute('no-continuous-scroll');
   };
 
   useEffect(() => {
@@ -638,7 +634,7 @@ const FoliateViewer: React.FC<{
           applyFixedlayoutStyles(doc, viewSettings);
         }
         applyThemeModeClass(doc, isDarkMode);
-        applyScrollModeClass(doc, viewSettings.scrolled || false);
+        applyScrollModeClass(doc, false);
         applyScrollbarStyle(document, viewSettings.hideScrollbar || false);
       });
 

@@ -28,10 +28,27 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   isSettingsDialogOpen: false,
   fontPanelView: 'main-fonts',
   activeSettingsItemId: null,
-  setSettings: (settings) => set({ settings }),
+  setSettings: (settings) =>
+    set({
+      settings: {
+        ...settings,
+        globalViewSettings: {
+          ...settings.globalViewSettings,
+          scrolled: false,
+          noContinuousScroll: false,
+        },
+      },
+    }),
   saveSettings: async (envConfig: EnvConfigType, settings: SystemSettings) => {
     const appService = await envConfig.getAppService();
-    await appService.saveSettings(settings);
+    await appService.saveSettings({
+      ...settings,
+      globalViewSettings: {
+        ...settings.globalViewSettings,
+        scrolled: false,
+        noContinuousScroll: false,
+      },
+    });
   },
   setSettingsDialogBookKey: (bookKey) => set({ settingsDialogBookKey: bookKey }),
   setSettingsDialogOpen: (open) => set({ isSettingsDialogOpen: open }),

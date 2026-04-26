@@ -113,9 +113,9 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   const transPopupHeight = Math.min(265, maxHeight);
   const proofreadPopupWidth = Math.min(440, maxWidth);
   const proofreadPopupHeight = Math.min(200, maxHeight);
-  const annotPopupButtonSize = useResponsiveSize(32);
+  const annotPopupButtonSize = useResponsiveSize(44);
   const annotPopupPadding = useResponsiveSize(16);
-  const annotPopupGap = useResponsiveSize(16);
+  const annotPopupGap = useResponsiveSize(12);
   const annotPopupButtonCount = annotationToolButtons.length;
   const annotPopupWidth = Math.min(
     annotPopupButtonCount * annotPopupButtonSize +
@@ -123,7 +123,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       Math.max(0, annotPopupButtonCount - 1) * annotPopupGap,
     maxWidth,
   );
-  const annotPopupHeight = useResponsiveSize(44);
+  const annotPopupHeight = useResponsiveSize(52);
   const androidSelectionHandlerHeight = 0;
 
   // Reposition popups on scroll without dismissing them
@@ -918,16 +918,18 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   const toolButtons = annotationToolButtons.map(({ type, label, Icon }) => {
     switch (type) {
       case 'copy':
-        return { tooltipText: _(label), Icon, onClick: handleCopy };
+        return { tooltipText: _(label), labelText: _(label), Icon, onClick: handleCopy };
       case 'highlight':
         return {
           tooltipText: selectionAnnotated ? _('Delete Highlight') : _(label),
+          labelText: _(label),
           Icon: selectionAnnotated ? RiDeleteBinLine : Icon,
           onClick: handleHighlight,
         };
       case 'annotate':
         return {
           tooltipText: _(label),
+          labelText: _(label),
           Icon,
           onClick: handleAnnotate,
         };

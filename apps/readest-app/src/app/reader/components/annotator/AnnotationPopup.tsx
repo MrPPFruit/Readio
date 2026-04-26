@@ -13,6 +13,7 @@ interface AnnotationPopupProps {
   isVertical: boolean;
   buttons: Array<{
     tooltipText: string;
+    labelText?: string;
     Icon: React.ElementType;
     onClick: () => void;
     disabled?: boolean;
@@ -77,6 +78,7 @@ const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
                   key={index}
                   showTooltip={!highlightOptionsVisible}
                   tooltipText={button.tooltipText}
+                  labelText={button.labelText}
                   Icon={button.Icon}
                   onClick={button.onClick}
                   disabled={button.disabled}

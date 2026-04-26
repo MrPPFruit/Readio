@@ -140,6 +140,8 @@ export async function loadSettings(ctx: Context): Promise<SystemSettings> {
   settings.globalViewSettings = {
     ...getDefaultViewSettings(ctx),
     ...settings.globalViewSettings,
+    scrolled: false,
+    noContinuousScroll: false,
   };
   settings.aiSettings = {
     ...DEFAULT_AI_SETTINGS,

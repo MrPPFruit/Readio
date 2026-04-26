@@ -12,6 +12,7 @@ const MobileFooterBar: React.FC<FooterBarChildProps> = ({
   actionTab,
   progressValid,
   progressFraction,
+  getProgressPreview,
   navigationHandlers,
   forceMobileLayout,
   onSetActionTab,
@@ -34,6 +35,7 @@ const MobileFooterBar: React.FC<FooterBarChildProps> = ({
         actionTab={actionTab}
         progressFraction={progressFraction}
         progressValid={progressValid}
+        getProgressPreview={getProgressPreview}
         navigationHandlers={navigationHandlers}
         bottomOffset={bottomOffset}
         sliderHeight={sliderHeight}

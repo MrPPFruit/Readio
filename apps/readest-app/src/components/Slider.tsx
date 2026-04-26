@@ -18,6 +18,7 @@ interface SliderProps {
   maxClassName?: string;
   bubbleClassName?: string;
   onChange?: (value: number) => void;
+  onInteractionChange?: (isInteracting: boolean) => void;
   valueToPosition?: (value: number, min: number, max: number) => number;
   positionToValue?: (position: number, min: number, max: number) => number;
 }
@@ -40,6 +41,7 @@ const Slider: React.FC<SliderProps> = ({
   maxClassName = '',
   bubbleClassName = '',
   onChange,
+  onInteractionChange,
   valueToPosition,
   positionToValue,
 }) => {
@@ -136,6 +138,12 @@ const Slider: React.FC<SliderProps> = ({
           value={percentage}
           className='slider-input absolute inset-0 h-full min-h-12 w-full cursor-pointer opacity-0'
           onChange={handleChange}
+          onPointerDown={() => onInteractionChange?.(true)}
+          onPointerUp={() => onInteractionChange?.(false)}
+          onPointerCancel={() => onInteractionChange?.(false)}
+          onBlur={() => onInteractionChange?.(false)}
+          onTouchStart={() => onInteractionChange?.(true)}
+          onTouchEnd={() => onInteractionChange?.(false)}
           aria-label={label}
           aria-valuemin={min}
           aria-valuemax={max}

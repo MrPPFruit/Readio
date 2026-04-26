@@ -202,7 +202,7 @@ describe('readerStore', () => {
       expect(useReaderStore.getState().getViewSettings('missing')).toBeNull();
     });
 
-    test('setViewSettings stores and getViewSettings retrieves settings', () => {
+    test('setViewSettings stores settings but keeps Readio pagination-only mode', () => {
       const key = 'bookid-0';
       seedViewState(key, { isPrimary: false });
 
@@ -220,11 +220,50 @@ describe('readerStore', () => {
         },
       });
 
-      const settings = { fontSize: 16 } as unknown as ViewSettings;
+      const settings = {
+        fontSize: 16,
+        scrolled: true,
+        noContinuousScroll: true,
+      } as unknown as ViewSettings;
       useReaderStore.getState().setViewSettings(key, settings);
 
       const retrieved = useReaderStore.getState().getViewSettings(key);
-      expect(retrieved).toEqual(settings);
+      expect(retrieved).toMatchObject({
+        fontSize: 16,
+        scrolled: false,
+        noContinuousScroll: false,
+      });
+    });
+
+    test('setViewSettings persists pagination-only settings for primary views', () => {
+      const key = 'bookid-0';
+      seedViewState(key, { isPrimary: true });
+
+      useBookDataStore.setState({
+        booksData: {
+          bookid: {
+            id: 'bookid',
+            book: null,
+            file: null,
+            config: { updatedAt: Date.now() },
+            bookDoc: null,
+            isFixedLayout: false,
+          },
+        },
+      });
+
+      useReaderStore.getState().setViewSettings(key, {
+        fontSize: 16,
+        scrolled: true,
+        noContinuousScroll: true,
+      } as unknown as ViewSettings);
+
+      const storedConfig = useBookDataStore.getState().booksData['bookid']?.config;
+      expect(storedConfig?.viewSettings).toMatchObject({
+        fontSize: 16,
+        scrolled: false,
+        noContinuousScroll: false,
+      });
     });
 
     test('setViewSettings does nothing for empty key', () => {

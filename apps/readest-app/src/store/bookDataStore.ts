@@ -59,12 +59,20 @@ export const useBookDataStore = create<BookDataState>((set, get) => ({
         console.warn('No config found for book', id);
         return state;
       }
+      const nextConfig = { ...config, ...partialConfig };
+      if (nextConfig.viewSettings) {
+        nextConfig.viewSettings = {
+          ...nextConfig.viewSettings,
+          scrolled: false,
+          noContinuousScroll: false,
+        };
+      }
       return {
         booksData: {
           ...state.booksData,
           [id]: {
             ...state.booksData[id]!,
-            config: { ...config, ...partialConfig },
+            config: nextConfig,
           },
         },
       };
@@ -97,6 +105,11 @@ export const useBookDataStore = create<BookDataState>((set, get) => ({
     setLibrary(newLibrary);
 
     config.updatedAt = Date.now();
+    config.viewSettings = {
+      ...config.viewSettings,
+      scrolled: false,
+      noContinuousScroll: false,
+    };
     await appService.saveBookConfig(updatedBook, config, settings);
     await appService.saveLibraryBooks(useLibraryStore.getState().library);
   },

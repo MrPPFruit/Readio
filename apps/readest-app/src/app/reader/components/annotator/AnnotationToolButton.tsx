@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 interface AnnotationToolButtonProps {
   showTooltip: boolean;
   tooltipText: string;
+  labelText?: string;
   disabled?: boolean;
   Icon: React.ElementType;
   onClick: () => void;
@@ -12,6 +13,7 @@ interface AnnotationToolButtonProps {
 const AnnotationToolButton: React.FC<AnnotationToolButtonProps> = ({
   showTooltip,
   tooltipText,
+  labelText,
   disabled,
   Icon,
   onClick,
@@ -30,14 +32,15 @@ const AnnotationToolButton: React.FC<AnnotationToolButtonProps> = ({
         onClick={handleClick}
         aria-label={tooltipText}
         className={clsx(
-          'flex h-8 min-h-8 w-8 items-center justify-center p-0',
+          'flex min-h-10 min-w-10 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1',
           disabled
             ? 'cursor-not-allowed opacity-50'
-            : 'not-eink:hover:bg-gray-500 eink:hover:border rounded-md',
+            : 'not-eink:hover:bg-gray-500 eink:hover:border',
         )}
         disabled={disabled}
       >
-        <Icon />
+        <Icon className='text-base' />
+        {labelText && <span className='text-[10px] leading-none'>{labelText}</span>}
       </button>
     </div>
   );
