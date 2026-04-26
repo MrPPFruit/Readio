@@ -1,5 +1,13 @@
 # HANDOFF
 
+## 2026-04-25 Readest-based restart archive status
+- 当前 Kotlin/Compose 版 Readio 仓库进入 **archive / spike evidence** 状态，不再作为主实现线继续打磨阅读器 UI 与功能。
+- 新主线迁移到 Readest-based 独立工作区：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest`。
+- 本仓库保留 M0/M1/M1.1 技术验证、ADR、设计计划、APK 与调试证据，作为后续 Readio 产品需求和风险边界的参考。
+- 不删除旧 spike 代码；后续实现以 Readest 底座重启，并在验证原版构建通过后再做功能减法和 Readio 定制。
+- AGPL 约束已确认：Readest 派生客户端需按 AGPL-3.0 开源；商业化能力应放在边界清晰的独立服务层。
+- 2026-04-26：Android 版本已提升到 `0.1.0-alpha.2` / `versionCode = 2`，`./gradlew test` 与 `:app:testDebugUnitTest` 已通过；剩余上传目录、临时 markdown 与 APK 产物不纳入 Git。
+
 ## 当前目标与进度
 - Task 7 已完成：已生成 `docs/adr/ADR-001` ~ `ADR-005`、AI runtime matrix、M0 evidence log、M0 exit checklist。
 - 最终验证已完成：` :app:testDebugUnitTest :app:connectedDebugAndroidTest ` 全部通过。
