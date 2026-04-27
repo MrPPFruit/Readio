@@ -884,7 +884,7 @@ class NativeBridgePlugin: Plugin {
         try fileManager.copyItem(at: uri, to: dstURL)
       }
 
-      invoke.resolve(["success": true])
+      invoke.resolve(["success": true, "path": dstPath, "displayName": uri.lastPathComponent])
     } catch {
       invoke.reject("Failed to copy file: \(error.localizedDescription)")
     }

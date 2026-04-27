@@ -24,6 +24,8 @@ pub struct CopyURIRequest {
 #[serde(rename_all = "camelCase")]
 pub struct CopyURIResponse {
     pub success: bool,
+    pub path: Option<String>,
+    pub display_name: Option<String>,
     pub error: Option<String>,
 }
 

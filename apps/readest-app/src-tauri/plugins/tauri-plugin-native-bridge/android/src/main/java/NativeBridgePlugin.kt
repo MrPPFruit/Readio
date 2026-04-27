@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.view.View
 import android.view.KeyEvent
 import android.view.WindowInsets
@@ -49,6 +50,16 @@ class AuthRequestArgs {
 class CopyURIRequestArgs {
     var uri: String? = null
     var dst: String? = null
+}
+
+private fun queryDisplayName(activity: Activity, uri: Uri): String? {
+    activity.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (nameIndex >= 0 && cursor.moveToFirst()) {
+            return cursor.getString(nameIndex)
+        }
+    }
+    return null
 }
 
 @InvokeArg
@@ -194,7 +205,14 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         val ret = JSObject()
         try {
             val uri = Uri.parse(args.uri ?: "")
-            val dst = File(args.dst ?: "")
+            val requestedDst = File(args.dst ?: "")
+            val displayName = queryDisplayName(activity, uri)?.let { File(it).name }?.takeIf { it.isNotBlank() }
+            val dst = if (displayName != null) {
+                val parent = requestedDst.parentFile
+                if (parent != null) File(parent, displayName) else File(displayName)
+            } else {
+                requestedDst
+            }
             val inputStream = activity.contentResolver.openInputStream(uri)
 
             if (inputStream != null) {
@@ -204,6 +222,10 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
                     }
                 }
                 ret.put("success", true)
+                ret.put("path", dst.absolutePath)
+                if (displayName != null) {
+                    ret.put("displayName", displayName)
+                }
             } else {
                 ret.put("success", false)
                 ret.put("error", "Failed to open input stream from URI")

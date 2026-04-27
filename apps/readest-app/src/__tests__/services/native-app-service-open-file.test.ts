@@ -80,7 +80,11 @@ describe('nativeFileSystem.openFile', () => {
   test('copies Android document content URIs to cache before opening', async () => {
     const uri =
       'content://com.android.externalstorage.documents/document/primary%3ADownload%2Flord-of-mysteries.epub';
-    mockBasename.mockResolvedValue('lord-of-mysteries.epub');
+    mockCopyURIToPath.mockResolvedValue({
+      success: true,
+      path: '/tmp/app-cache/lord-of-mysteries.epub',
+      displayName: 'lord-of-mysteries.epub',
+    });
 
     const file = await nativeFileSystem.openFile(uri, 'None');
 
@@ -92,15 +96,19 @@ describe('nativeFileSystem.openFile', () => {
     expect(file.name).toBe('lord-of-mysteries.epub');
   });
 
-  test('uses Android content URI display name when document URI path has no extension', async () => {
+  test('uses Android content URI display name returned by native bridge when document URI path has no extension', async () => {
     const uri = 'content://com.android.providers.downloads.documents/document/msf%3A42';
-    mockBasename.mockResolvedValue('sample.txt');
+    mockCopyURIToPath.mockResolvedValue({
+      success: true,
+      path: '/tmp/app-cache/sample.txt',
+      displayName: 'sample.txt',
+    });
 
     const file = await nativeFileSystem.openFile(uri, 'None');
 
     expect(mockCopyURIToPath).toHaveBeenCalledWith({
       uri,
-      dst: '/tmp/app-cache/sample.txt',
+      dst: '/tmp/app-cache/msf:42',
     });
     expect(mockOpen).toHaveBeenCalledWith('/tmp/app-cache/sample.txt', undefined);
     expect(file.name).toBe('sample.txt');

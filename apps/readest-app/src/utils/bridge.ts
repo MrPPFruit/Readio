@@ -7,6 +7,8 @@ export interface CopyURIRequest {
 
 export interface CopyURIResponse {
   success: boolean;
+  path?: string;
+  displayName?: string;
   error?: string;
 }
 

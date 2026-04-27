@@ -219,9 +219,7 @@ export const nativeFileSystem: FileSystem = {
     if (isValidURL(path)) {
       return await new RemoteFile(path, fname).open();
     } else if (isContentURI(path) || (isFileURI(path) && OS_TYPE === 'ios')) {
-      fname = isContentURI(path)
-        ? safeDecodePath(await basename(path).catch(() => getURIFileName(path)))
-        : safeDecodePath(await basename(path));
+      fname = isContentURI(path) ? getURIFileName(path) : safeDecodePath(await basename(path));
       const prefix = await this.getPrefix('Cache');
       const dst = await join(prefix, fname);
       const res = await copyURIToPath({ uri: path, dst });
@@ -229,7 +227,10 @@ export const nativeFileSystem: FileSystem = {
         console.error('Failed to open file:', res);
         throw new Error('Failed to open file');
       }
-      return await new NativeFile(dst, fname, null).open();
+      if (res.displayName) {
+        fname = safeDecodePath(res.displayName);
+      }
+      return await new NativeFile(res.path || dst, fname, null).open();
     } else if (isFileURI(path)) {
       return await new NativeFile(fp, fname, baseDir ? baseDir : null).open();
     } else {
