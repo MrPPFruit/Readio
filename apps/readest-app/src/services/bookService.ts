@@ -30,7 +30,7 @@ import { DEFAULT_BOOK_SEARCH_CONFIG, DEFAULT_FIXED_LAYOUT_VIEW_SETTINGS } from '
 import { isContentURI, isValidURL, makeSafeFilename } from '@/utils/misc';
 import { deserializeConfig, serializeConfig } from '@/utils/serializer';
 import { ClosableFile } from '@/utils/file';
-import { TxtToEpubConverter } from '@/utils/txt';
+import { convertTxtToEpubWithFallback } from '@/utils/txt-worker';
 import { svg2png } from '@/utils/svg';
 import { normalizeMetadataIsbn } from '@/utils/isbn';
 import { BookFileNotFoundError } from './errors';
@@ -257,8 +257,7 @@ export async function importBook(
         filename = file.name;
       }
       if (/\.txt$/i.test(filename)) {
-        const txt2epub = new TxtToEpubConverter();
-        ({ file: fileobj } = await txt2epub.convert({ file: fileobj }));
+        ({ file: fileobj } = await convertTxtToEpubWithFallback({ file: fileobj }));
       }
       if (!fileobj || fileobj.size === 0) {
         throw new Error('Invalid or empty book file');

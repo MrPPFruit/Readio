@@ -219,7 +219,9 @@ export const nativeFileSystem: FileSystem = {
     if (isValidURL(path)) {
       return await new RemoteFile(path, fname).open();
     } else if (isContentURI(path) || (isFileURI(path) && OS_TYPE === 'ios')) {
-      fname = isContentURI(path) ? getURIFileName(path) : safeDecodePath(await basename(path));
+      fname = isContentURI(path)
+        ? safeDecodePath(await basename(path).catch(() => getURIFileName(path)))
+        : safeDecodePath(await basename(path));
       const prefix = await this.getPrefix('Cache');
       const dst = await join(prefix, fname);
       const res = await copyURIToPath({ uri: path, dst });

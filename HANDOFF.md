@@ -15,10 +15,11 @@
 - Phase 7 第一批小步修复已完成：Android package id/namespace/Tauri identifier 从上游 `com.bilingify.readest` 切换为 `com.ppg.readio`，可与原 Readest 共存安装；空书库首屏 Readio 本地导入引导补齐 zh-CN/zh-TW 翻译；已生成签名 release APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/readio-phase7-package-i18n-release-signed.apk`，大小 52.6 MB。
 - 导入图书后的首页 polish 已完成：当 `readioFeatures.cloudSync=false` 时，书籍卡片不再显示上传/下载云图标与传输进度入口；右上角菜单的 `Always Show Status Bar` 已收进 `advancedSettings`，Readio MVP 默认隐藏，避免用户在书库页看到无明显效果的状态栏开关。
 - 阅读模式第一批减法已完成：隐藏已禁用的 KOReader/Readwise/Hardcover Sync、Proofread、Export Annotations、Parallel Read 菜单项；阅读页顶部隐藏翻译/语言按钮与画笔/快捷动作按钮；长按选中文本弹出的工具仅保留复制、划线、笔记，隐藏搜索、词典、百科、翻译、朗读。已通过 TDD、lint、代码审查、cleaned-env Next build、Android debug APK 构建、模拟器安装与截图验证。
-- 版本与 APK 产物规则已建立：当前 Readio 版本为 `0.1.0-alpha.2`，Android `versionCode=1001002`；后续默认用 `pnpm --filter @readest/readest-app build-readio-apk` 构建签名 release 小包，统一输出到 `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/`。
+- 版本与 APK 产物规则已建立：当前 Readio 版本为 `0.1.0-alpha.3`，Android `versionCode=1001003`；后续默认用 `pnpm --filter @readest/readest-app build-readio-apk` 构建签名 release 小包，统一输出到 `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/`。
 - 已生成并安装验证小包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.1-android-arm64-release.apk`，大小 52.6 MB；APK 元信息为 `package=com.ppg.readio`、`versionName=0.1.0-alpha.1`、`versionCode=1001001`，签名 v2/v3 验证通过，模拟器 `adb install -r` 成功。
 - M1.1 阅读器精简收口 + 翻页唯一化已完成：`scrolled` / `noContinuousScroll` 在 serializer、settings store、reader store、book data store、settings service、viewer renderer 与 command registry/UI 测试中被锁定为分页模式；模拟器从书库继续阅读进入阅读页后，右侧点击翻到下一页，行为设置页只显示“翻页/点击翻页/点击两侧翻页”等分页项，无滚动模式入口。本批还包含前序阅读 UI 精简延续改动，提交/交付时不要描述成纯滚动模式修复。
 - 2026-04-26 alpha.2 已冻结为可交付测试包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.2-android-arm64-release.apk`。签名 v2/v3 验证通过，模拟器安装/启动通过，书架渲染、继续阅读进入正文、本地 EPUB 导入、导入后打开阅读均通过。当前分支 `readio/restart-readest-base` 工作区干净，后续新功能/深度剥离应进入 alpha.3 批次。
+- 2026-04-27 alpha.3 TXT 导入 + 文件过滤批次已实现并验证：本地导入 Android picker 传入 `SUPPORTED_BOOK_EXTS`，TXT 文件先经 `convertTxtToEpubWithFallback` 转 EPUB 再进入 `DocumentLoader`；Android `content://.../document/msf%3A42` 这类 URI 先用 Tauri `basename()` 获取真实 display name（如 `sample.txt`），避免被 URI 尾段 `msf:42` 误判为非 TXT 后提示“文件已损坏”。版本已 bump 到 `0.1.0-alpha.3` / Android `versionCode=1001003`。已构建签名 release APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.3-android-arm64-release.apk`，签名 v2/v3 通过，模拟器安装/启动通过，书库可见真实 TXT 导入书 `雪中悍刀行`。
 
 ## 已尝试路径
 
@@ -34,6 +35,7 @@
 - Gradle TLS 依赖解析失败通过停止 daemon 并用 `--no-daemon --refresh-dependencies` 重新解析解决。
 - Android resource linking 失败通过修正 `apps/readest-app/src-tauri/gen/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` 中 launcher background 引用解决：`@color/ic_launcher_background` → `@drawable/ic_launcher_background`。
 - Android 文件选择器真实导入 EPUB 成功；针对 `content://com.android.externalstorage.documents/...` open-with/import 失败，已用 TDD 修复 `apps/readest-app/src/services/nativeAppService.ts`：content URI 先复制到 app cache，再通过 `NativeFile` 打开。
+- Android TXT 导入失败的根因是 `content://com.android.providers.downloads.documents/document/msf%3A42` 这类 URI 没有扩展名，旧逻辑用 URI 尾段 `msf:42` 作为文件名，导致 `.txt` 检测失败并把原始 TXT 送进 `DocumentLoader`，最终映射成“文件已损坏”；有效修复是 content URI 优先 `basename(path)` 取 Android display name，失败再 fallback 到 `getURIFileName(path)`。
 - React 组件测试的 `React.act is not a function` 根因是宿主 `NODE_ENV=production` 让 `react-dom/test-utils` 加载 production build；已在 `apps/readest-app/vitest.setup.ts` 将 Vitest 环境固定为 `NODE_ENV=test`，目标组件测试恢复通过。
 
 ### 无效 / 已排除
@@ -60,7 +62,7 @@
 1. `0.1.0-alpha.2` 已作为可交付测试包冻结；优先让用户真机试读，不再把已完成的 M1.1 精简项当作下一步重复做。
 2. 若进入 `0.1.0-alpha.3`，优先按用户实测反馈做阅读模式用户视角 polish；可重点看笔记/书签入口优先级、阅读设置文案、更多菜单信息密度，以及更接近多看的阅读控制布局。
 3. 可选深化：继续检查 auth/sync/telemetry providers 和支付/AI/TTS 依赖是否需要更硬的 no-op/移除，以减少包体与运行期表面积。
-4. 后续独立批次：开发 TXT 导入支持，并在本地导入文件选择器中筛选/限制可导入格式，避免展示不支持文件。
+4. alpha.3 TXT 导入 + 文件过滤已完成；签名 APK 已安装到模拟器并通过最小验收。下一步让用户真机复验 TXT 导入。
 5. 后续独立批次：如需要更正式发布命名，可从当前 `com.ppg.readio` 迁移到 `io.readio.app`，并重新验证安装/启动/文件关联。
 
 ## 关键文件路径
@@ -117,7 +119,11 @@
 - `apps/readest-app/src/components/settings/SettingsDialog.tsx`
 - `apps/readest-app/src/services/commandRegistry.ts`
 - `apps/readest-app/src/services/nativeAppService.ts`
+- `apps/readest-app/src/hooks/useFileSelector.ts`
+- `apps/readest-app/src/services/bookService.ts`
 - `apps/readest-app/src/__tests__/services/native-app-service-open-file.test.ts`
+- `apps/readest-app/src/__tests__/services/import-txt.test.ts`
+- `apps/readest-app/src/__tests__/hooks/use-file-selector.test.ts`
 - `apps/readest-app/src/components/AboutWindow.tsx`
 - `apps/readest-app/src/components/SupportLinks.tsx`
 - `apps/readest-app/src/components/UpdaterWindow.tsx`
@@ -306,3 +312,11 @@
 - PASS alpha.2 local EPUB import validation: pushed test fixture `sample-alice.epub` to emulator Downloads; Android DocumentsUI opened from Readio import menu; selecting the file added `Alice's Adventures in Wonderland` to the shelf; tapping the imported book opened its reader cover page (`/tmp/readio-alice-reader.png`) with progress `1 / 112`.
 - REVIEW NOTE M1.1: `FootnotePopup.tsx` still sets its internal footnote popup renderer to `flow='scrolled'`. This is intentionally treated as a non-reading-mode exception for footnote content, because it has no user settings/command entry and does not persist `scrolled` / `noContinuousScroll`. If future product requirement becomes “no renderer may ever scroll,” handle footnote behavior in a separate focused batch.
 - REVIEW NOTE M1.1: current working tree includes reading UI simplification continuation beyond pure pagination hardening (for example progress preview / annotation popup / hiding additional advanced controls). Commit/PR wording should describe the batch as “M1.1 reader simplification closeout + pagination-only hardening,” or split commits if a tighter history is desired.
+- PASS alpha.3 TXT import/file filtering RED: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app test -- src/__tests__/services/native-app-service-open-file.test.ts --runInBand` initially failed for `content://com.android.providers.downloads.documents/document/msf%3A42`, showing `dst` was `/tmp/app-cache/msf:42` instead of `/tmp/app-cache/sample.txt`.
+- PASS alpha.3 TXT import/file filtering GREEN: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app test -- src/__tests__/services/native-app-service-open-file.test.ts src/__tests__/services/import-txt.test.ts src/__tests__/hooks/use-file-selector.test.ts --runInBand` passed; observed Vitest still ran broad suite: 155 files passed / 2 skipped, 3247 tests passed / 7 skipped.
+- PASS alpha.3 version/TXT focused tests after bump: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/services/native-app-service-open-file.test.ts src/__tests__/services/import-txt.test.ts src/__tests__/hooks/use-file-selector.test.ts src/__tests__/config/readio-android-package.test.ts --reporter=dot` passed, 4 files / 6 tests.
+- PASS alpha.3 lint: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app lint` passed with `tsgo --noEmit && biome check .`, 759 files checked.
+- PASS alpha.3 release APK build/signature: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app build-readio-apk` completed exit code 0; APK copied to `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.3-android-arm64-release.apk`; apksigner reports `Verifies`, v2=true, v3=true, 1 signer.
+- PASS alpha.3 emulator TXT import/open validation: pushed `/private/tmp/readio-txt-import-msf42-regression.txt` to emulator Downloads, launched `android.intent.action.SEND -t text/plain` into `com.ppg.readio/.MainActivity`, captured `/private/tmp/readio-screen.png` and `/private/tmp/readio-txt-open.png`; TXT-derived item appeared in shelf and opened readable content without “文件已损坏”.
+- PASS alpha.3 real TXT fixture validation: `/Users/ppg/Downloads/雪中悍刀行.txt` is UTF-8 text, 14,387,160 bytes; local `TxtToEpubConverter` produced `雪中悍刀行.epub` (8,060,251 bytes, 1192 chapters, language `zh`) and `DocumentLoader` opened it as EPUB with 1192 sections/toc entries. Emulator import/open also passed: shelf shows `雪中悍刀行`, reader UI shows title `雪中悍刀行`, chapter `1`, body `第一卷`.
+- PASS alpha.3 installed APK validation: `adb install -r /Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.3-android-arm64-release.apk` returned `Success`; `adb shell dumpsys package com.ppg.readio` reports `versionCode=1001003` and `versionName=0.1.0-alpha.3`; `adb shell am start -n com.ppg.readio/.MainActivity` launches; UI hierarchy shows Readio library with `导入书籍` and shelf entries including `雪中悍刀行`.
