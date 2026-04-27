@@ -497,7 +497,7 @@ describe('Library EPUB scan import flow', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: '取消' }));
+      fireEvent.click(screen.getByRole('button', { name: '完成' }));
     });
     await waitFor(() =>
       expect(screen.getByRole('button', { name: '删除 readio-test.epub' })).toBeTruthy(),
