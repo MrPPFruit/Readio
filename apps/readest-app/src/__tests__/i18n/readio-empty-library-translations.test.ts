@@ -25,6 +25,7 @@ describe('Readio empty library translations', () => {
       ],
     ).toBe('推荐使用 EPUB 以获得最佳阅读体验。PDF 为基础支持，可能会保留原始固定版式。');
     expect(translation['Import Local Books']).toBe('导入本地书籍');
+    expect(translation['Find EPUB Files']).toBe('查找 EPUB 文件');
   });
 
   it('localizes the first-run local import card for Traditional Chinese', () => {
@@ -41,5 +42,6 @@ describe('Readio empty library translations', () => {
       ],
     ).toBe('推薦使用 EPUB 以獲得最佳閱讀體驗。PDF 為基礎支援，可能會保留原始固定版式。');
     expect(translation['Import Local Books']).toBe('導入本地書籍');
+    expect(translation['Find EPUB Files']).toBe('尋找 EPUB 文件');
   });
 });

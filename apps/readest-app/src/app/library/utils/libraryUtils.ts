@@ -3,6 +3,8 @@ import { LibraryGroupByType, LibrarySortByType } from '@/types/settings';
 import { formatAuthors, formatTitle } from '@/utils/book';
 import { md5Fingerprint } from '@/utils/md5';
 
+export const isEpubPath = (path: string) => path.toLowerCase().endsWith('.epub');
+
 /** Valid sort types for the library */
 const VALID_SORT_TYPES: LibrarySortByType[] = Object.values(LibrarySortByType);
 

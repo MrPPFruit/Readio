@@ -225,6 +225,17 @@ impl<R: Runtime> NativeBridge<R> {
 }
 
 impl<R: Runtime> NativeBridge<R> {
+    pub fn find_local_epub_files(
+        &self,
+        payload: serde_json::Value,
+    ) -> crate::Result<FindLocalEpubFilesResponse> {
+        self.0
+            .run_mobile_plugin("find_local_epub_files", payload)
+            .map_err(Into::into)
+    }
+}
+
+impl<R: Runtime> NativeBridge<R> {
     pub fn get_storefront_region_code(&self) -> crate::Result<GetStorefrontRegionCodeResponse> {
         self.0
             .run_mobile_plugin("get_storefront_region_code", ())

@@ -187,6 +187,29 @@ pub(crate) async fn select_directory<R: Runtime>(
 }
 
 #[command]
+pub(crate) async fn find_local_epub_files<R: Runtime>(
+    app: AppHandle<R>,
+    payload: Option<serde_json::Value>,
+    callback_state: State<'_, DirectoryCallbackState<R>>,
+) -> Result<FindLocalEpubFilesResponse> {
+    let result = app
+        .native_bridge()
+        .find_local_epub_files(payload.unwrap_or(serde_json::json!({})))?;
+
+    if let Ok(callback_guard) = callback_state.callback.lock() {
+        if let Some(callback) = callback_guard.as_ref() {
+            for file in &result.files {
+                if let Some(parent) = PathBuf::from(&file.path).parent() {
+                    callback(&app, &parent.to_path_buf());
+                }
+            }
+        }
+    }
+
+    Ok(result)
+}
+
+#[command]
 pub(crate) async fn get_storefront_region_code<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<GetStorefrontRegionCodeResponse> {

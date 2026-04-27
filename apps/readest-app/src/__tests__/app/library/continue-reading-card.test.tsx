@@ -9,7 +9,11 @@ vi.mock('@/hooks/useTranslation', () => ({
 }));
 
 vi.mock('@/components/BookCover', () => ({
-  default: ({ book }: { book: Book }) => <div data-testid='book-cover'>{book.title}</div>,
+  default: ({ book, isPreview }: { book: Book; isPreview?: boolean }) => (
+    <div data-testid='book-cover' data-preview={isPreview ? 'true' : 'false'}>
+      {book.title}
+    </div>
+  ),
 }));
 
 afterEach(cleanup);
@@ -50,5 +54,11 @@ describe('ContinueReadingCard', () => {
     const progressBar = container.querySelector('.bg-primary') as HTMLElement;
 
     expect(progressBar.style.width).toBe('1%');
+  });
+
+  it('renders the small cover as a preview to prevent fallback title overflow', () => {
+    render(<ContinueReadingCard book={makeBook({ coverImageUrl: '' })} onOpen={vi.fn()} />);
+
+    expect(screen.getByTestId('book-cover').dataset['preview']).toBe('true');
   });
 });

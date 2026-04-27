@@ -26,6 +26,7 @@ Default permissions for the plugin
 - `allow-get-external-sdcard-path`
 - `allow-open-external-url`
 - `allow-select-directory`
+- `allow-find-local-epub-files`
 - `allow-get-storefront-region-code`
 - `allow-request-manage-storage-permission`
 - `allow-register-listener`
@@ -196,6 +197,32 @@ Enables the copy_uri_to_path command without any pre-configured scope.
 <td>
 
 Denies the copy_uri_to_path command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`native-bridge:allow-find-local-epub-files`
+
+</td>
+<td>
+
+Enables the find_local_epub_files command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`native-bridge:deny-find-local-epub-files`
+
+</td>
+<td>
+
+Denies the find_local_epub_files command without any pre-configured scope.
 
 </td>
 </tr>

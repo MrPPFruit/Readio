@@ -38,6 +38,7 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.JSArray
 import app.tauri.plugin.Plugin
 import app.tauri.plugin.Invoke
+import app.tauri.plugin.Channel
 import org.json.JSONArray
 import java.io.*
 
@@ -102,6 +103,11 @@ class FetchProductsRequestArgs {
 @InvokeArg
 class PurchaseProductRequestArgs {
     val productId: String? = null
+}
+
+@InvokeArg
+class FindLocalEpubFilesRequestArgs {
+    var onProgress: Channel? = null
 }
 
 data class ProductData(
@@ -724,6 +730,63 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         } catch (e: Exception) {
             invoke.reject("Failed to open URL: ${e.message}")
         }
+    }
+
+    @Command
+    fun find_local_epub_files(invoke: Invoke) {
+        val args = invoke.parseArgs(FindLocalEpubFilesRequestArgs::class.java)
+        val onProgress = args.onProgress
+        val result = JSObject()
+        val files = JSArray()
+        var scannedCount = 0
+        val roots = linkedSetOf<File>()
+        roots.add(Environment.getExternalStorageDirectory())
+        activity.getExternalFilesDirs(null).forEach { dir ->
+            val root = dir?.absolutePath?.split("/Android/")?.firstOrNull()?.let { File(it) }
+            if (root != null) roots.add(root)
+        }
+
+        fun sendProgress(file: File? = null) {
+            onProgress?.send(JSObject().apply {
+                put("scannedCount", scannedCount)
+                if (file != null) put("file", file.absolutePath)
+            })
+        }
+
+        fun scanDirectory(directory: File, basePath: String) {
+            val children = directory.listFiles() ?: return
+            for (child in children) {
+                if (child.isDirectory) {
+                    if (child.name.equals("Android", ignoreCase = true)) continue
+                    scanDirectory(child, basePath)
+                } else if (child.isFile) {
+                    scannedCount += 1
+                    if (scannedCount % 25 == 0) sendProgress(child)
+                    if (child.name.endsWith(".epub", ignoreCase = true)) {
+                        files.put(JSObject().apply {
+                            put("path", child.absolutePath)
+                            put("basePath", basePath)
+                            put("size", child.length())
+                        })
+                        sendProgress(child)
+                    }
+                }
+            }
+        }
+
+        try {
+            roots.forEach { root ->
+                if (root.exists() && root.isDirectory) {
+                    scanDirectory(root, root.absolutePath)
+                }
+            }
+            sendProgress()
+            result.put("files", files)
+        } catch (e: Exception) {
+            result.put("files", files)
+            result.put("error", e.message)
+        }
+        invoke.resolve(result)
     }
 
     @Command

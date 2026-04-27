@@ -235,6 +235,21 @@ pub struct SelectDirectoryResponse {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LocalEpubFile {
+    pub path: String,
+    pub base_path: Option<String>,
+    pub size: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindLocalEpubFilesResponse {
+    pub files: Vec<LocalEpubFile>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetStorefrontRegionCodeResponse {
     pub region_code: Option<String>,
     pub error: Option<String>,

@@ -137,6 +137,13 @@ impl<R: Runtime> NativeBridge<R> {
         Err(crate::Error::UnsupportedPlatformError)
     }
 
+    pub fn find_local_epub_files(
+        &self,
+        _payload: serde_json::Value,
+    ) -> crate::Result<FindLocalEpubFilesResponse> {
+        Err(crate::Error::UnsupportedPlatformError)
+    }
+
     pub fn get_storefront_region_code(&self) -> crate::Result<GetStorefrontRegionCodeResponse> {
         Err(crate::Error::UnsupportedPlatformError)
     }

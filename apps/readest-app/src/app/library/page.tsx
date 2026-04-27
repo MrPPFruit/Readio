@@ -41,7 +41,12 @@ import { useScreenWakeLock } from '@/hooks/useScreenWakeLock';
 import { useOpenWithBooks } from '@/hooks/useOpenWithBooks';
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
 import { SelectedFile, useFileSelector } from '@/hooks/useFileSelector';
-import { lockScreenOrientation, selectDirectory } from '@/utils/bridge';
+import {
+  findLocalEpubFiles,
+  FindLocalEpubFilesProgress,
+  lockScreenOrientation,
+  selectDirectory,
+} from '@/utils/bridge';
 import { requestStoragePermission } from '@/utils/permission';
 import { SUPPORTED_BOOK_EXTS } from '@/services/constants';
 import {
@@ -82,6 +87,7 @@ import ModalPortal from '@/components/ModalPortal';
 import TransferQueuePanel from './components/TransferQueuePanel';
 import ContinueReadingCard from './components/ContinueReadingCard';
 import LibraryEmptyState from './components/LibraryEmptyState';
+import EpubScanImportDialog, { type EpubScanImportResult } from './components/EpubScanImportDialog';
 
 const LibraryPageWithSearchParams = () => {
   const searchParams = useSearchParams();
@@ -130,6 +136,11 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   const [booksTransferProgress, setBooksTransferProgress] = useState<{
     [key: string]: number | null;
   }>({});
+  const [epubScanDialogOpen, setEpubScanDialogOpen] = useState(false);
+  const [isScanningEpubs, setIsScanningEpubs] = useState(false);
+  const [epubScanScannedCount, setEpubScanScannedCount] = useState(0);
+  const [epubScanFiles, setEpubScanFiles] = useState<SelectedFile[]>([]);
+  const epubScanFilesRef = useRef<SelectedFile[]>([]);
   const [pendingNavigationBookIds, setPendingNavigationBookIds] = useState<string[] | null>(null);
   const isInitiating = useRef(false);
 
@@ -142,6 +153,22 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   }, []);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const pageRef = useRef<HTMLDivElement>(null);
+
+  const addEpubScanFile = useCallback((file: SelectedFile) => {
+    const filename = getFilename(file.path || file.file?.name || '').toLowerCase();
+    if (!filename) return;
+    if (
+      epubScanFilesRef.current.some(
+        (existingFile) =>
+          getFilename(existingFile.path || existingFile.file?.name || '').toLowerCase() ===
+          filename,
+      )
+    ) {
+      return;
+    }
+    epubScanFilesRef.current = [...epubScanFilesRef.current, file];
+    setEpubScanFiles(epubScanFilesRef.current);
+  }, []);
 
   const getScrollKey = (group: string) => `library-scroll-${group || 'all'}`;
 
@@ -535,14 +562,28 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoBooks, libraryLoaded]);
 
-  const importBooks = async (files: SelectedFile[], groupId?: string) => {
-    setLoading(true);
+  const importBooks = async (
+    files: SelectedFile[],
+    groupId?: string,
+    options?: {
+      showLoading?: boolean;
+      groupByBasePath?: boolean;
+      clearGroup?: boolean;
+      showToast?: boolean;
+    },
+  ) => {
+    const showLoading = options?.showLoading ?? true;
+    const groupByBasePath = options?.groupByBasePath ?? true;
+    const clearGroup = options?.clearGroup ?? false;
+    const showToast = options?.showToast ?? true;
+    if (showLoading) setLoading(true);
     const { library } = useLibraryStore.getState();
     // Build the lookup index ONCE per import batch so each book lookup is
     // O(1) instead of O(n) over the existing library. importBook also keeps
     // the index updated as new books are appended, so subsequent files in
     // the same batch see the additions.
     const lookupIndex = buildBookLookupIndex(library);
+    const importedBooks = new Set(library.filter((book) => !book.deletedAt));
     const failedImports: Array<{ filename: string; errorMessage: string }> = [];
     const successfulImports: string[] = [];
 
@@ -552,11 +593,15 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       try {
         const book = await appService?.importBook(file, library, { lookupIndex });
         if (!book) return null;
+        const isNewVisibleBook = !importedBooks.has(book);
         const { path, basePath } = selectedFile;
-        if (groupId) {
+        if (clearGroup && isNewVisibleBook) {
+          book.groupId = undefined;
+          book.groupName = undefined;
+        } else if (groupId) {
           book.groupId = groupId;
           book.groupName = getGroupName(groupId);
-        } else if (path && basePath) {
+        } else if (groupByBasePath && path && basePath) {
           const rootPath = getDirPath(basePath);
           const groupName = getDirPath(path).replace(rootPath, '').replace(/^\//, '');
           book.groupName = groupName;
@@ -567,7 +612,10 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           console.log('Queueing upload for book:', book.title);
           transferManager.queueUpload(book);
         }
-        successfulImports.push(book.title);
+        if (isNewVisibleBook) {
+          importedBooks.add(book);
+          successfulImports.push(book.title);
+        }
         return book;
       } catch (error) {
         const filename = typeof file === 'string' ? file : file.name;
@@ -599,7 +647,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
 
     pushLibrary();
 
-    if (failedImports.length > 0) {
+    if (showToast && failedImports.length > 0) {
       const filenames = failedImports.map((f) => f.filename);
       const errorMessage = failedImports.find((f) => f.errorMessage)?.errorMessage || '';
 
@@ -611,7 +659,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
         timeout: 5000,
         type: 'error',
       });
-    } else if (successfulImports.length > 0) {
+    } else if (showToast && successfulImports.length > 0) {
       eventDispatcher.dispatch('toast', {
         message: _('Successfully imported {{count}} book(s)', {
           count: successfulImports.length,
@@ -621,7 +669,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       });
     }
 
-    setLoading(false);
+    if (showLoading) setLoading(false);
+    return { successCount: successfulImports.length, failedCount: failedImports.length };
   };
 
   const updateBookTransferProgress = throttle((bookHash: string, progress: ProgressPayload) => {
@@ -726,8 +775,8 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           if (syncBooks) pushLibrary();
         }
 
-        // Queue cloud deletion
-        if (deleteAction === 'cloud' || deleteAction === 'both') {
+        // Queue cloud deletion only when a cloud backup exists.
+        if (deleteAction === 'cloud' || (deleteAction === 'both' && book.uploadedAt)) {
           const transferId = transferManager.queueDelete(book, 1, true);
           if (!transferId) {
             throw new Error('Failed to queue cloud deletion');
@@ -791,20 +840,25 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     });
   };
 
+  const selectImportDirectory = async () => {
+    let importDirectory: string | undefined = '';
+    if (appService?.isAndroidApp) {
+      const response = await selectDirectory();
+      importDirectory = response.path;
+    } else {
+      const selectedDir = await appService?.selectDirectory?.('read');
+      importDirectory = selectedDir;
+    }
+    return importDirectory;
+  };
+
   const handleImportBooksFromDirectory = async () => {
     if (!appService || !isTauriAppPlatform()) return;
 
     setIsSelectMode(false);
     console.log('Importing books from directory...');
-    let importDirectory: string | undefined = '';
-    if (appService.isAndroidApp) {
-      if (!(await requestStoragePermission())) return;
-      const response = await selectDirectory();
-      importDirectory = response.path;
-    } else {
-      const selectedDir = await appService.selectDirectory?.('read');
-      importDirectory = selectedDir;
-    }
+    if (appService.isAndroidApp && !(await requestStoragePermission())) return;
+    const importDirectory = await selectImportDirectory();
     if (!importDirectory) {
       console.log('No directory selected');
       return;
@@ -823,6 +877,45 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       }),
     );
     importBooks(toImportFiles, undefined);
+  };
+
+  const handleImportEpubsFromDirectory = async () => {
+    if (!appService || !isTauriAppPlatform()) return;
+
+    setIsSelectMode(false);
+    setEpubScanDialogOpen(true);
+    setIsScanningEpubs(true);
+    setEpubScanScannedCount(0);
+    epubScanFilesRef.current = [];
+    setEpubScanFiles([]);
+    console.log('Finding local EPUB files...');
+
+    if (appService.isAndroidApp && !(await requestStoragePermission())) {
+      setEpubScanDialogOpen(false);
+      setIsScanningEpubs(false);
+      return;
+    }
+
+    const handleProgress = (progress: FindLocalEpubFilesProgress) => {
+      setEpubScanScannedCount(progress.scannedCount);
+      const foundFile = progress.file;
+      if (foundFile?.toLowerCase().endsWith('.epub')) {
+        addEpubScanFile({ path: foundFile, basePath: getDirPath(foundFile) });
+      }
+    };
+
+    try {
+      const result = await findLocalEpubFiles(handleProgress);
+      epubScanFilesRef.current = [];
+      result.files.forEach((file) => {
+        addEpubScanFile({
+          path: file.path,
+          basePath: file.basePath,
+        });
+      });
+    } finally {
+      setIsScanningEpubs(false);
+    }
   };
 
   const handleSetSelectMode = (selectMode: boolean) => {
@@ -890,6 +983,9 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           onImportBooksFromFiles={handleImportBooksFromFiles}
           onImportBooksFromDirectory={
             appService?.canReadExternalDir ? handleImportBooksFromDirectory : undefined
+          }
+          onImportEpubsFromDirectory={
+            appService?.canReadExternalDir ? handleImportEpubsFromDirectory : undefined
           }
           onOpenCatalogManager={handleShowOPDSDialog}
           onToggleSelectMode={() => handleSetSelectMode(!isSelectMode)}
@@ -1013,6 +1109,39 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       {isTransferQueueOpen && (
         <ModalPortal>
           <TransferQueuePanel />
+        </ModalPortal>
+      )}
+      {epubScanDialogOpen && (
+        <ModalPortal>
+          <EpubScanImportDialog
+            isScanning={isScanningEpubs}
+            scannedCount={epubScanScannedCount}
+            files={epubScanFiles}
+            onCancel={() => setEpubScanDialogOpen(false)}
+            onImportBook={async (file): Promise<EpubScanImportResult> => {
+              const result = await importBooks([file], undefined, {
+                showLoading: false,
+                groupByBasePath: false,
+                clearGroup: true,
+                showToast: false,
+              });
+              return result.successCount > 0 ? 'success' : 'skipped';
+            }}
+            onImportComplete={({ successCount, skippedCount, failedCount }) => {
+              eventDispatcher.dispatch('toast', {
+                message: _(
+                  '新增 {{successCount}} 本，{{skippedCount}} 个文件内容已在书架中，失败 {{failedCount}} 个',
+                  {
+                    successCount,
+                    skippedCount,
+                    failedCount,
+                  },
+                ),
+                timeout: 3000,
+                type: failedCount > 0 ? 'warning' : 'success',
+              });
+            }}
+          />
         </ModalPortal>
       )}
       <AboutWindow />

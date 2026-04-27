@@ -11,6 +11,7 @@ links = "tauri-plugin-native-bridge"
 [dependencies]
 tauri = { version = "2" }
 serde = "1.0"
+serde_json = "1.0"
 thiserror = "2"
 schemars = "0.8"
 

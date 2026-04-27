@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, Channel } from '@tauri-apps/api/core';
 
 export interface CopyURIRequest {
   uri: string;
@@ -92,6 +92,24 @@ interface SelectDirectoryResponse {
   path?: string;
   error?: string;
 }
+
+export interface LocalEpubFile {
+  path: string;
+  basePath?: string;
+  size?: number;
+}
+
+export interface FindLocalEpubFilesResponse {
+  files: LocalEpubFile[];
+  error?: string;
+}
+
+export interface FindLocalEpubFilesProgress {
+  scannedCount: number;
+  file?: string;
+}
+
+export type FindLocalEpubFilesProgressHandler = (progress: FindLocalEpubFilesProgress) => void;
 
 export interface GetStorefrontRegionCodeResponse {
   regionCode?: string;
@@ -208,6 +226,21 @@ export async function getExternalSDCardPath(): Promise<GetExternalSDCardPathResp
 export async function selectDirectory(): Promise<SelectDirectoryResponse> {
   const result = await invoke<SelectDirectoryResponse>('plugin:native-bridge|select_directory');
   return result;
+}
+
+export async function findLocalEpubFiles(
+  progressHandler?: FindLocalEpubFilesProgressHandler,
+): Promise<FindLocalEpubFilesResponse> {
+  if (!progressHandler) {
+    return await invoke<FindLocalEpubFilesResponse>('plugin:native-bridge|find_local_epub_files');
+  }
+
+  const onProgress = new Channel<FindLocalEpubFilesProgress>();
+  onProgress.onmessage = progressHandler;
+
+  return await invoke<FindLocalEpubFilesResponse>('plugin:native-bridge|find_local_epub_files', {
+    payload: { onProgress },
+  });
 }
 
 export async function getStorefrontRegionCode(): Promise<GetStorefrontRegionCodeResponse> {

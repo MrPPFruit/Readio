@@ -23,7 +23,7 @@ const ContinueReadingCard: React.FC<ContinueReadingCardProps> = ({ book, onOpen 
         onClick={onOpen}
       >
         <div className='bg-base-200 h-24 w-16 shrink-0 overflow-hidden rounded-xl shadow-md sm:h-28 sm:w-20'>
-          <BookCover book={book} coverFit='crop' imageClassName='rounded-xl' />
+          <BookCover book={book} coverFit='crop' imageClassName='rounded-xl' isPreview />
         </div>
         <div className='min-w-0 flex-1'>
           <div className='text-neutral-content mb-1 text-xs font-medium uppercase tracking-[0.18em]'>
