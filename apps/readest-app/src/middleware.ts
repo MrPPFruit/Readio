@@ -17,7 +17,9 @@ const corsOptions = {
 };
 
 const isDisabledApiPath = (pathname: string) => {
-  if (!readioFeatures.ai && pathname.startsWith('/api/ai/')) return true;
+  if (!readioFeatures.ai && pathname.startsWith('/api/ai/')) {
+    return !(readioFeatures.readerAI && pathname === '/api/ai/chat');
+  }
   if (!readioFeatures.tts && pathname.startsWith('/api/tts/')) return true;
   if (!readioFeatures.opds && pathname.startsWith('/api/opds/')) return true;
   if (!readioFeatures.commerce && pathname.startsWith('/api/stripe/')) return true;

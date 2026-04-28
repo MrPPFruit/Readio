@@ -4,7 +4,19 @@ import { chunkSection, extractTextFromDocument } from './utils/chunker';
 import { withRetryAndTimeout, AI_TIMEOUTS, AI_RETRY_CONFIGS } from './utils/retry';
 import { getAIProvider } from './providers';
 import { aiLogger } from './logger';
-import type { AISettings, TextChunk, ScoredChunk, EmbeddingProgress, BookIndexMeta } from './types';
+import type {
+  AISettings,
+  TextChunk,
+  ScoredChunk,
+  EmbeddingProgress,
+  BookIndexMeta,
+  IndexingState,
+} from './types';
+
+type IndexBookJob = {
+  promise: Promise<void>;
+  controller: AbortController;
+};
 
 interface SectionItem {
   id: string;
@@ -26,6 +38,12 @@ export interface BookDocType {
 }
 
 const indexingStates = new Map<string, IndexingState>();
+const indexingJobs = new Map<string, IndexBookJob>();
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw new DOMException('Aborted', 'AbortError');
+}
 
 export async function isBookIndexed(bookHash: string): Promise<boolean> {
   const indexed = await aiStore.isIndexed(bookHash);
@@ -63,7 +81,37 @@ export async function indexBook(
   bookHash: string,
   settings: AISettings,
   onProgress?: (progress: EmbeddingProgress) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
+  throwIfAborted(signal);
+  const existingJob = indexingJobs.get(bookHash);
+  if (existingJob) return existingJob.promise;
+
+  const controller = new AbortController();
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  const promise = runIndexBook(bookDoc, bookHash, settings, onProgress, controller.signal).finally(
+    () => {
+      if (indexingJobs.get(bookHash)?.promise === promise) {
+        indexingJobs.delete(bookHash);
+      }
+    },
+  );
+  indexingJobs.set(bookHash, { promise, controller });
+  return promise;
+}
+
+async function runIndexBook(
+  bookDoc: BookDocType,
+  bookHash: string,
+  settings: AISettings,
+  onProgress?: (progress: EmbeddingProgress) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  throwIfAborted(signal);
   const startTime = Date.now();
   const title = extractTitle(bookDoc.metadata);
 
@@ -71,6 +119,7 @@ export async function indexBook(
     aiLogger.rag.isIndexed(bookHash, true);
     return;
   }
+  throwIfAborted(signal);
 
   aiLogger.rag.indexStart(bookHash, title);
   const provider = getAIProvider(settings);
@@ -94,16 +143,21 @@ export async function indexBook(
     totalChunks: 0,
   };
   indexingStates.set(bookHash, state);
+  let persistenceStarted = false;
+  let persistenceComplete = false;
 
   try {
+    throwIfAborted(signal);
     onProgress?.({ current: 0, total: 1, phase: 'chunking' });
     aiLogger.rag.indexProgress('chunking', 0, sections.length);
     const allChunks: TextChunk[] = [];
 
     for (let i = 0; i < sections.length; i++) {
+      throwIfAborted(signal);
       const section = sections[i]!;
       try {
         const doc = await section.createDocument();
+        throwIfAborted(signal);
         const text = extractTextFromDocument(doc);
         if (text.length < 100) continue;
         const sectionChunks = chunkSection(
@@ -113,13 +167,16 @@ export async function indexBook(
           bookHash,
           cumulativeSizes[i] ?? 0,
         );
+        throwIfAborted(signal);
         aiLogger.chunker.section(i, text.length, sectionChunks.length);
         allChunks.push(...sectionChunks);
       } catch (e) {
+        if ((e as Error).name === 'AbortError' || signal?.aborted) throw e;
         aiLogger.chunker.error(i, (e as Error).message);
       }
     }
 
+    throwIfAborted(signal);
     aiLogger.chunker.complete(bookHash, allChunks.length);
     state.totalChunks = allChunks.length;
 
@@ -130,6 +187,7 @@ export async function indexBook(
       return;
     }
 
+    throwIfAborted(signal);
     onProgress?.({ current: 0, total: allChunks.length, phase: 'embedding' });
     const embeddingModelName =
       settings.provider === 'ollama'
@@ -148,8 +206,10 @@ export async function indexBook(
         AI_TIMEOUTS.EMBEDDING_BATCH,
         AI_RETRY_CONFIGS.EMBEDDING,
       );
+      throwIfAborted(signal);
 
       for (let i = 0; i < allChunks.length; i++) {
+        throwIfAborted(signal);
         allChunks[i]!.embedding = embeddings[i];
         state.chunksProcessed = i + 1;
         state.progress = Math.round(((i + 1) / allChunks.length) * 100);
@@ -161,14 +221,20 @@ export async function indexBook(
       throw e;
     }
 
+    throwIfAborted(signal);
     onProgress?.({ current: 0, total: 2, phase: 'indexing' });
+    throwIfAborted(signal);
+    persistenceStarted = true;
     aiLogger.store.saveChunks(bookHash, allChunks.length);
     await aiStore.saveChunks(allChunks);
 
+    throwIfAborted(signal);
     onProgress?.({ current: 1, total: 2, phase: 'indexing' });
+    throwIfAborted(signal);
     aiLogger.store.saveBM25(bookHash);
     await aiStore.saveBM25Index(bookHash, allChunks);
 
+    throwIfAborted(signal);
     const meta: BookIndexMeta = {
       bookHash,
       bookTitle: title,
@@ -178,14 +244,20 @@ export async function indexBook(
       embeddingModel: embeddingModelName,
       lastUpdated: Date.now(),
     };
+    throwIfAborted(signal);
     aiLogger.store.saveMeta(meta);
     await aiStore.saveMeta(meta);
+    throwIfAborted(signal);
+    persistenceComplete = true;
 
     onProgress?.({ current: 2, total: 2, phase: 'indexing' });
     state.status = 'complete';
     state.progress = 100;
     aiLogger.rag.indexComplete(bookHash, allChunks.length, Date.now() - startTime);
   } catch (error) {
+    if (persistenceStarted && !persistenceComplete) {
+      await aiStore.clearBook(bookHash);
+    }
     state.status = 'error';
     state.error = (error as Error).message;
     aiLogger.rag.indexError(bookHash, (error as Error).message);
@@ -229,14 +301,4 @@ export async function clearBookIndex(bookHash: string): Promise<void> {
   aiLogger.store.clear(bookHash);
   await aiStore.clearBook(bookHash);
   indexingStates.delete(bookHash);
-}
-
-// internal type for indexing state tracking
-interface IndexingState {
-  bookHash: string;
-  status: 'idle' | 'indexing' | 'complete' | 'error';
-  progress: number;
-  chunksProcessed: number;
-  totalChunks: number;
-  error?: string;
 }

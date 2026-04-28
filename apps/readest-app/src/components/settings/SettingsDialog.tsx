@@ -102,7 +102,7 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       tab: 'AI',
       icon: PiRobot,
       label: _('AI Assistant'),
-      disabled: !readioFeatures.ai || process.env.NODE_ENV === 'production',
+      disabled: !readioFeatures.ai && !readioFeatures.readerAI,
     },
     {
       tab: 'Custom',
@@ -399,7 +399,7 @@ const SettingsDialog: React.FC<{ bookKey: string }> = ({ bookKey }) => {
             onRegisterReset={(fn) => registerResetFunction('Language', fn)}
           />
         )}
-        {readioFeatures.ai && activePanel === 'AI' && <AIPanel />}
+        {(readioFeatures.ai || readioFeatures.readerAI) && activePanel === 'AI' && <AIPanel />}
         {readioFeatures.advancedSettings && activePanel === 'Custom' && (
           <MiscPanel
             bookKey={bookKey}

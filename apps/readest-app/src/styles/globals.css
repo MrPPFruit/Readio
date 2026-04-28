@@ -353,8 +353,8 @@ foliate-fxl {
 }
 
 .drag-over {
-  border: 2px dashed #4a90e2 !important;
-  background-color: rgba(74, 144, 226, 0.1) !important;
+  border: 2px dashed theme('colors.primary') !important;
+  background-color: theme('colors.primary / 0.1') !important;
   transition: all 0.2s ease-in-out;
 }
 

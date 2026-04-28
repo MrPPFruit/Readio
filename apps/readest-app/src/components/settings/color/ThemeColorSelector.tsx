@@ -43,7 +43,7 @@ const ThemeColorSelector: React.FC<ThemeColorSelectorProps> = ({
               e.stopPropagation();
             }}
             className={`relative flex cursor-pointer flex-col items-center justify-center rounded-lg px-2 py-4 shadow-md ${
-              themeColor === name ? 'ring-2 ring-indigo-500 ring-offset-2' : ''
+              themeColor === name ? 'ring-primary ring-offset-base-100 ring-2 ring-offset-2' : ''
             }`}
             style={{
               backgroundColor: isDarkMode ? colors.dark['base-100'] : colors.light['base-100'],

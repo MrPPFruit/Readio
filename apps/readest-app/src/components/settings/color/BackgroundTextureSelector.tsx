@@ -52,7 +52,7 @@ const BackgroundTextureSelector: React.FC<BackgroundTextureSelectorProps> = ({
             onClick={() => onTextureSelect(texture.id)}
             className={`bg-base-100 relative flex flex-col items-center justify-center rounded-lg border-2 p-4 shadow-md transition-all ${
               selectedTextureId === texture.id
-                ? 'ring-2 ring-indigo-500 ring-offset-2'
+                ? 'ring-primary ring-offset-base-100 ring-2 ring-offset-2'
                 : 'border-base-300'
             }`}
             style={{
@@ -65,7 +65,7 @@ const BackgroundTextureSelector: React.FC<BackgroundTextureSelectorProps> = ({
             {selectedTextureId === texture.id && (
               <MdRadioButtonChecked
                 size={iconSize24}
-                className='absolute right-2 top-2 rounded-full bg-white text-indigo-500'
+                className='bg-base-100 text-primary absolute right-2 top-2 rounded-full'
               />
             )}
             {texture.animated && (

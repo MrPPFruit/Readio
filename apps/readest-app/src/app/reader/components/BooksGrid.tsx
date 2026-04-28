@@ -7,6 +7,7 @@ import { useReaderStore } from '@/store/readerStore';
 import { useSidebarStore } from '@/store/sidebarStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useTranslation } from '@/hooks/useTranslation';
+import { readioFeatures } from '@/config/features';
 import { getGridTemplate, getInsetEdges } from '@/utils/grid';
 import { getViewInsets } from '@/utils/insets';
 import SearchResultsNav from './sidebar/SearchResultsNav';
@@ -23,6 +24,7 @@ import FootnotePopup from './FootnotePopup';
 import HintInfo from './HintInfo';
 import ReadingRuler from './ReadingRuler';
 import DoubleBorder from './DoubleBorder';
+import ReaderAIAssistant from './ai/ReaderAIAssistant';
 
 interface BooksGridProps {
   bookKeys: string[];
@@ -231,6 +233,9 @@ const BooksGrid: React.FC<BooksGridProps> = ({ bookKeys, onCloseBook, onGoToLibr
               isHoveredAnim={false}
               gridInsets={gridInsets}
             />
+            {readioFeatures.readerAI && (
+              <ReaderAIAssistant bookKey={bookKey} gridInsets={gridInsets} />
+            )}
           </div>
         );
       })}

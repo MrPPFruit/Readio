@@ -8,6 +8,7 @@ import { BsTranslate } from 'react-icons/bs';
 import { TbHexagonLetterD } from 'react-icons/tb';
 import { FaHeadphones } from 'react-icons/fa6';
 import { IoIosBuild } from 'react-icons/io';
+import { LuSparkles } from 'react-icons/lu';
 import { readioFeatures } from '@/config/features';
 import { AnnotationToolType } from '@/types/annotator';
 import { stubTranslation as _ } from '@/utils/misc';
@@ -58,6 +59,12 @@ const allAnnotationToolButtons = createAnnotationToolButtons([
     Icon: BsPencilSquare,
   },
   {
+    type: 'ai',
+    label: _('Ask AI'),
+    tooltip: _('Ask AI about selected text'),
+    Icon: LuSparkles,
+  },
+  {
     type: 'search',
     label: _('Search'),
     tooltip: _('Search text after selection'),
@@ -101,9 +108,12 @@ const allAnnotationToolButtons = createAnnotationToolButtons([
 ]);
 
 const readioSelectionToolTypes = new Set<AnnotationToolType>(['copy', 'highlight', 'annotate']);
+if (readioFeatures.readerAI) readioSelectionToolTypes.add('ai');
 
 export const annotationToolButtons = allAnnotationToolButtons.filter((button) => {
-  if (readioFeatures.translation && readioFeatures.tts && readioFeatures.proofreading) return true;
+  if (readioFeatures.translation && readioFeatures.tts && readioFeatures.proofreading) {
+    return button.type !== 'ai' || readioFeatures.readerAI;
+  }
   return readioSelectionToolTypes.has(button.type);
 });
 

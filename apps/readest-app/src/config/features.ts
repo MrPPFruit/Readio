@@ -3,6 +3,7 @@ export const readioFeatures = {
   cloudSync: false,
   commerce: false,
   ai: false,
+  readerAI: true,
   opds: false,
   tts: false,
   annotations: false,

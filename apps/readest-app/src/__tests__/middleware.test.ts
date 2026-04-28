@@ -16,4 +16,17 @@ describe('middleware', () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({ error: 'Feature disabled' });
   });
+
+  it('allows reader AI chat preflight when readerAI is enabled and AI is disabled', () => {
+    const response = middleware(optionsRequest('/api/ai/chat'));
+
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects embed preflight when AI is disabled even if readerAI is enabled', async () => {
+    const response = middleware(optionsRequest('/api/ai/embed'));
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: 'Feature disabled' });
+  });
 });

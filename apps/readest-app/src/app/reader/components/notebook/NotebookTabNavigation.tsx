@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import React from 'react';
 import { PiNotePencil, PiRobot } from 'react-icons/pi';
 
+import { readioFeatures } from '@/config/features';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
@@ -19,9 +20,10 @@ const NotebookTabNavigation: React.FC<NotebookTabNavigationProps> = ({
   const _ = useTranslation();
   const { appService } = useEnv();
   const { settings } = useSettingsStore();
-  const aiEnabled = settings?.aiSettings?.enabled ?? false;
+  const notebookAIEnabled =
+    readioFeatures.ai && readioFeatures.notebook && (settings?.aiSettings?.enabled ?? false);
 
-  const tabs: NotebookTab[] = aiEnabled ? ['notes', 'ai'] : [];
+  const tabs: NotebookTab[] = notebookAIEnabled ? ['notes', 'ai'] : [];
 
   const getTabLabel = (tab: NotebookTab) => {
     switch (tab) {

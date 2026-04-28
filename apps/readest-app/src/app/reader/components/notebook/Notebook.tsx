@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { readioFeatures } from '@/config/features';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
@@ -247,6 +248,9 @@ const Notebook: React.FC = ({}) => {
 
   const hasSearchResults = filteredAnnotationNotes.length > 0 || filteredExcerptNotes.length > 0;
   const hasAnyNotes = annotationNotes.length > 0 || excerptNotes.length > 0;
+  const notebookAIEnabled =
+    readioFeatures.ai && readioFeatures.notebook && (settings.aiSettings?.enabled ?? false);
+  const activeTab = notebookAIEnabled ? notebookActiveTab : 'notes';
 
   return isNotebookVisible ? (
     <>
@@ -322,13 +326,13 @@ const Notebook: React.FC = ({}) => {
           )}
           <NotebookHeader
             isPinned={isNotebookPinned}
-            isSearchBarVisible={isSearchBarVisible && notebookActiveTab === 'notes'}
+            isSearchBarVisible={isSearchBarVisible && activeTab === 'notes'}
             handleClose={() => setNotebookVisible(false)}
             handleTogglePin={handleTogglePin}
             handleToggleSearchBar={handleToggleSearchBar}
-            showSearchButton={notebookActiveTab === 'notes'}
+            showSearchButton={activeTab === 'notes'}
           />
-          {notebookActiveTab === 'notes' && (
+          {activeTab === 'notes' && (
             <div
               className={clsx('search-bar', {
                 'search-bar-visible': isSearchBarVisible,
@@ -343,7 +347,7 @@ const Notebook: React.FC = ({}) => {
             </div>
           )}
         </div>
-        {notebookActiveTab === 'ai' ? (
+        {activeTab === 'ai' ? (
           <div className='flex min-h-0 flex-1 flex-col'>
             <AIAssistant key={activeConversationId ?? 'new'} bookKey={sideBarBookKey} />
           </div>
@@ -438,7 +442,7 @@ const Notebook: React.FC = ({}) => {
             paddingBottom: `${(safeAreaInsets?.bottom || 0) / 2}px`,
           }}
         >
-          <NotebookTabNavigation activeTab={notebookActiveTab} onTabChange={handleTabChange} />
+          <NotebookTabNavigation activeTab={activeTab} onTabChange={handleTabChange} />
         </div>
       </div>
     </>

@@ -41,6 +41,7 @@ import TranslatorPopup from './TranslatorPopup';
 import useShortcuts from '@/hooks/useShortcuts';
 import ProofreadPopup from './ProofreadPopup';
 import ExportMarkdownDialog from './ExportMarkdownDialog';
+import type { ReaderAIOpenEventPayload } from '@/types/readerAI';
 
 const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   const _ = useTranslation();
@@ -775,6 +776,22 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     setShowDeepLPopup(true);
   };
 
+  const handleAskAI = () => {
+    if (!selection || !selection.text) return;
+    setShowAnnotPopup(false);
+    const payload: ReaderAIOpenEventPayload = {
+      bookKey,
+      source: 'selection',
+      selection: {
+        text: selection.text,
+        cfi: selection.cfi,
+        page: selection.page,
+        index: selection.index,
+      },
+    };
+    eventDispatcher.dispatch('reader-ai-open', payload);
+  };
+
   const handleSpeakText = async (oneTime = false) => {
     if (!selection || !selection.text) return;
     setShowAnnotPopup(false);
@@ -932,6 +949,13 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
           labelText: _(label),
           Icon,
           onClick: handleAnnotate,
+        };
+      case 'ai':
+        return {
+          tooltipText: _(label),
+          labelText: _(label),
+          Icon,
+          onClick: handleAskAI,
         };
       case 'search':
         return {

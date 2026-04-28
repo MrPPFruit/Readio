@@ -33,6 +33,7 @@ const readioFeaturesMock = vi.hoisted(() => ({
     reader: true,
     progress: true,
     basicReaderSettings: true,
+    readerAI: true,
   },
 }));
 
@@ -333,11 +334,12 @@ Object.defineProperty(window, 'innerWidth', {
 afterEach(cleanup);
 
 describe('Readio reader simplification', () => {
-  it('only keeps copy, highlight, and annotate in text-selection tools', () => {
+  it('keeps copy, highlight, annotate, and AI in text-selection tools', () => {
     expect(annotationToolButtons.map((button) => button.type)).toEqual([
       'copy',
       'highlight',
       'annotate',
+      'ai',
     ]);
     expect(annotationToolQuickActions.map((button) => button.type)).toEqual(['copy', 'highlight']);
   });
