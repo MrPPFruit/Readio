@@ -1,35 +1,133 @@
-import type { AISettings } from './types';
+import type { AIProviderCatalogEntry, AIProviderName, AISettings } from './types';
 
-// cheapest popular models as of 2025
-export const GATEWAY_MODELS = {
-  GEMINI_FLASH_LITE: 'google/gemini-2.5-flash-lite',
-  GPT_5_NANO: 'openai/gpt-5-nano',
-  LLAMA_4_SCOUT: 'meta/llama-4-scout',
-  GROK_4_1_FAST: 'xai/grok-4.1-fast-reasoning',
-  DEEPSEEK_V3_2: 'deepseek/deepseek-v3.2',
-  QWEN_3_235B: 'alibaba/qwen-3-235b',
-} as const;
+export const AI_PROVIDER_ORDER = [
+  'openrouter',
+  'openai',
+  'gemini',
+  'deepseek',
+  'dashscope',
+  'kimi',
+  'mimo',
+  'custom-openai-compatible',
+] as const satisfies readonly AIProviderName[];
 
-export const MODEL_PRICING: Record<string, { input: string; output: string }> = {
-  [GATEWAY_MODELS.GEMINI_FLASH_LITE]: { input: '0.1', output: '0.4' },
-  [GATEWAY_MODELS.GPT_5_NANO]: { input: '0.05', output: '0.4' },
-  [GATEWAY_MODELS.LLAMA_4_SCOUT]: { input: '0.08', output: '0.3' },
-  [GATEWAY_MODELS.GROK_4_1_FAST]: { input: '0.2', output: '0.5' },
-  [GATEWAY_MODELS.DEEPSEEK_V3_2]: { input: '0.27', output: '0.4' },
-  [GATEWAY_MODELS.QWEN_3_235B]: { input: '0.07', output: '0.46' },
+export const AI_PROVIDER_CATALOG: Record<AIProviderName, AIProviderCatalogEntry> = {
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    apiKeyUrl: 'https://openrouter.ai/keys',
+    apiKeyPlaceholder: 'sk-or-...',
+    defaultModel: 'google/gemini-2.5-flash-lite',
+    modelPresets: [
+      { id: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+      { id: 'openai/gpt-4o-mini', label: 'GPT-4o mini' },
+      { id: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
+      { id: 'qwen/qwen-2.5-72b-instruct', label: 'Qwen 2.5 72B Instruct' },
+    ],
+  },
+  openai: {
+    id: 'openai',
+    label: 'OpenAI',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
+    apiKeyPlaceholder: 'sk-...',
+    defaultModel: 'gpt-4o-mini',
+    modelPresets: [
+      { id: 'gpt-4o-mini', label: 'GPT-4o mini' },
+      { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
+      { id: 'gpt-4.1-nano', label: 'GPT-4.1 nano' },
+    ],
+  },
+  gemini: {
+    id: 'gemini',
+    label: 'Google Gemini',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    apiKeyUrl: 'https://aistudio.google.com/app/apikey',
+    apiKeyPlaceholder: 'AIza...',
+    defaultModel: 'gemini-2.0-flash-lite',
+    modelPresets: [
+      { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite' },
+      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+    ],
+  },
+  deepseek: {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://api.deepseek.com/v1',
+    apiKeyUrl: 'https://platform.deepseek.com/api_keys',
+    apiKeyPlaceholder: 'sk-...',
+    defaultModel: 'deepseek-chat',
+    modelPresets: [
+      { id: 'deepseek-chat', label: 'DeepSeek Chat' },
+      { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner' },
+    ],
+  },
+  dashscope: {
+    id: 'dashscope',
+    label: 'DashScope / Qwen',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
+    apiKeyPlaceholder: 'sk-...',
+    defaultModel: 'qwen-plus',
+    modelPresets: [
+      { id: 'qwen-plus', label: 'Qwen Plus' },
+      { id: 'qwen-turbo', label: 'Qwen Turbo' },
+      { id: 'qwen-max', label: 'Qwen Max' },
+    ],
+  },
+  kimi: {
+    id: 'kimi',
+    label: 'Kimi / Moonshot',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
+    apiKeyPlaceholder: 'sk-...',
+    defaultModel: 'moonshot-v1-8k',
+    modelPresets: [
+      { id: 'moonshot-v1-8k', label: 'Moonshot v1 8K' },
+      { id: 'moonshot-v1-32k', label: 'Moonshot v1 32K' },
+      { id: 'moonshot-v1-128k', label: 'Moonshot v1 128K' },
+    ],
+  },
+  mimo: {
+    id: 'mimo',
+    label: 'Xiaomi MiMo',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://api.mimodax.com/v1',
+    apiKeyUrl: 'https://platform.mimodax.com',
+    apiKeyPlaceholder: 'sk-...',
+    defaultModel: 'mimo-chat',
+    modelPresets: [
+      { id: 'mimo-chat', label: 'MiMo Chat' },
+      { id: 'mimo-reasoner', label: 'MiMo Reasoner' },
+    ],
+  },
+  'custom-openai-compatible': {
+    id: 'custom-openai-compatible',
+    label: 'Custom OpenAI-compatible',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://api.example.com/v1',
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
+    apiKeyPlaceholder: 'sk-...',
+    defaultModel: 'custom-model',
+    modelPresets: [{ id: 'custom-model', label: 'Custom Model ID' }],
+  },
 };
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
   enabled: false,
-  provider: 'ollama',
-
-  ollamaBaseUrl: 'http://127.0.0.1:11434',
-  ollamaModel: 'llama3.2',
-  ollamaEmbeddingModel: 'nomic-embed-text',
-
-  aiGatewayModel: 'google/gemini-2.5-flash-lite',
-  aiGatewayEmbeddingModel: 'openai/text-embedding-3-small',
-
+  showReaderAIEntrypoints: true,
+  provider: 'openrouter',
+  providerApiKeys: {},
+  providerModels: { openrouter: AI_PROVIDER_CATALOG.openrouter.defaultModel },
+  providerEmbeddingModels: {},
   spoilerProtection: true,
   maxContextChunks: 10,
   indexingMode: 'on-demand',

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
+import { getAIAvailability } from '@/services/ai/availability';
 import { indexBook, isBookIndexed, type BookDocType } from '@/services/ai/ragService';
 import { streamReaderAIAnswer } from '@/services/ai/readerChatService';
 import { useAIChatStore } from '@/store/aiChatStore';
@@ -49,17 +50,52 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
   const [spoilerProtection, setSpoilerProtection] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const [setupSettingsItemId, setSetupSettingsItemId] = useState<string>();
   const abortControllerRef = useRef<AbortController | null>(null);
   const inFlightMessageIdsRef = useRef<{ userId: string; assistantId: string } | null>(null);
+  const { settings } = useSettingsStore();
+
+  const openSetupPanel = (message: string, settingsItemId: string) => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    inFlightMessageIdsRef.current = null;
+    setMessages([createMessage('assistant', message)]);
+    setError(undefined);
+    setLoading(false);
+    setSetupSettingsItemId(settingsItemId);
+    setMode('answer');
+  };
+
+  const openReadyAskBox = (
+    entrySource: ReaderAIEntrySource,
+    entrySelection?: ReaderAISelectionContext,
+  ) => {
+    setSource(entrySource);
+    setSelection(entrySelection);
+    setInitialQuestion(entrySource === 'selection' ? '解释这段' : '');
+    setSetupSettingsItemId(undefined);
+    setMode('ask');
+  };
+
+  const openFromEntryPoint = (
+    entrySource: ReaderAIEntrySource,
+    entrySelection?: ReaderAISelectionContext,
+  ) => {
+    const currentSettings = useSettingsStore.getState().settings.aiSettings;
+    const availability = getAIAvailability(currentSettings);
+    if (availability.status === 'entrypoints-hidden') return;
+    if (availability.status !== 'ready') {
+      openSetupPanel(availability.message, availability.settingsItemId);
+      return;
+    }
+    openReadyAskBox(entrySource, entrySelection);
+  };
 
   useEffect(() => {
     const handleOpen = (event: CustomEvent) => {
       const detail = event.detail as ReaderAIOpenEventPayload;
       if (detail.bookKey !== bookKey) return;
-      setSource(detail.source);
-      setSelection(detail.selection);
-      setInitialQuestion(detail.source === 'selection' ? '解释这段' : '');
-      setMode('ask');
+      openFromEntryPoint(detail.source, detail.selection);
     };
 
     eventDispatcher.on('reader-ai-open', handleOpen);
@@ -75,10 +111,15 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
   }, []);
 
   const openAskBox = () => {
-    setSource('control');
-    setSelection(undefined);
-    setInitialQuestion('');
-    setMode('ask');
+    openFromEntryPoint('control');
+  };
+
+  const openAISettings = (itemId: string) => {
+    const { setActiveSettingsItemId, setSettingsDialogBookKey, setSettingsDialogOpen } =
+      useSettingsStore.getState();
+    setSettingsDialogBookKey(bookKey);
+    setActiveSettingsItemId(itemId);
+    setSettingsDialogOpen(true);
   };
 
   const removeInFlightMessages = () => {
@@ -98,6 +139,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     abortControllerRef.current = null;
     setLoading(false);
     removeInFlightMessages();
+    setSetupSettingsItemId(undefined);
     setMode('closed');
   };
 
@@ -140,15 +182,18 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     setMode('answer');
     setLoading(true);
     setError(undefined);
+    setSetupSettingsItemId(undefined);
 
     const settings = useSettingsStore.getState().settings.aiSettings;
     const requestSettings = { ...settings, spoilerProtection };
-    if (!requestSettings.enabled) {
+    const availability = getAIAvailability(requestSettings);
+    if (availability.status !== 'ready') {
       setMessages([
         ...priorMessages,
         userMessage,
-        { ...assistantMessage, content: '请先在设置中启用 AI' },
+        { ...assistantMessage, content: availability.message },
       ]);
+      setSetupSettingsItemId(availability.settingsItemId);
       inFlightMessageIdsRef.current = null;
       setLoading(false);
       return;
@@ -234,11 +279,14 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
       }
     } catch (streamError) {
       if ((streamError as Error).name !== 'AbortError') {
-        setError('AI 阅读助手暂时不可用，请稍后再试。');
+        const providerFailureMessage =
+          'AI 请求失败，请检查 API Key、额度、模型名称或服务商状态后重试。';
+        setError(providerFailureMessage);
+        setSetupSettingsItemId('settings.ai.apiKey');
         setMessages((currentMessages) =>
           currentMessages.map((message) =>
             message.id === assistantMessage.id
-              ? { ...message, content: 'AI 阅读助手暂时不可用，请稍后再试。' }
+              ? { ...message, content: providerFailureMessage }
               : message,
           ),
         );
@@ -251,9 +299,11 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     }
   };
 
+  const showReaderAIButton = settings.aiSettings.showReaderAIEntrypoints;
+
   return (
     <>
-      <ReaderAIButton bookKey={bookKey} onClick={openAskBox} />
+      {showReaderAIButton && <ReaderAIButton bookKey={bookKey} onClick={openAskBox} />}
       {mode === 'ask' && (
         <ReaderAIAskBox
           source={source}
@@ -271,6 +321,14 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
           gridInsets={gridInsets}
           loading={loading}
           error={error}
+          setupAction={
+            setupSettingsItemId
+              ? {
+                  label: '去设置 AI',
+                  onClick: () => openAISettings(setupSettingsItemId),
+                }
+              : undefined
+          }
           spoilerProtection={spoilerProtection}
           onSpoilerProtectionChange={setSpoilerProtection}
           onSubmit={askAI}

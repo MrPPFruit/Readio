@@ -541,6 +541,12 @@ const languagePanelItems = [
 // ai panel items
 const aiPanelItems = [
   {
+    id: 'settings.ai.showReaderAIEntrypoints',
+    labelKey: _('Show Reader AI Entrypoints'),
+    keywords: ['ai', 'reader', 'entrypoints', 'floating', 'selection'],
+    section: 'AI',
+  },
+  {
     id: 'settings.ai.enableAssistant',
     labelKey: _('Enable AI Assistant'),
     keywords: ['ai', 'assistant', 'enable', 'chatbot', 'llm'],
@@ -549,32 +555,26 @@ const aiPanelItems = [
   {
     id: 'settings.ai.provider',
     labelKey: _('AI Provider'),
-    keywords: ['ai', 'provider', 'ollama', 'gateway', 'service'],
-    section: 'AI',
+    keywords: ['ai', 'provider', 'cloud', 'openrouter', 'openai', 'gemini', 'deepseek', 'qwen'],
+    section: 'Cloud AI',
   },
   {
-    id: 'settings.ai.ollamaUrl',
-    labelKey: _('Ollama URL'),
-    keywords: ['ollama', 'url', 'server', 'endpoint', 'api'],
-    section: 'Ollama',
-  },
-  {
-    id: 'settings.ai.ollamaModel',
-    labelKey: _('Ollama Model'),
-    keywords: ['ollama', 'model', 'llama', 'mistral', 'gemma'],
-    section: 'Ollama',
-  },
-  {
-    id: 'settings.ai.gatewayApiKey',
+    id: 'settings.ai.apiKey',
     labelKey: _('API Key'),
-    keywords: ['api', 'key', 'gateway', 'token', 'secret'],
-    section: 'AI Gateway',
+    keywords: ['api', 'key', 'byok', 'token', 'secret'],
+    section: 'Cloud AI',
   },
   {
-    id: 'settings.ai.gatewayModel',
-    labelKey: _('AI Gateway Model'),
-    keywords: ['gateway', 'model', 'openai', 'gpt', 'claude'],
-    section: 'AI Gateway',
+    id: 'settings.ai.model',
+    labelKey: _('AI Model'),
+    keywords: ['model', 'openai', 'gemini', 'deepseek', 'qwen', 'kimi', 'mimo'],
+    section: 'Cloud AI',
+  },
+  {
+    id: 'settings.ai.customBaseUrl',
+    labelKey: _('Custom Base URL'),
+    keywords: ['custom', 'base', 'url', 'endpoint', 'compatible'],
+    section: 'Cloud AI',
   },
 ];
 
@@ -742,11 +742,9 @@ export const buildCommandRegistry = (options: CommandRegistryOptions): CommandIt
   // add language panel items
   addSettingsItems(languagePanelItems, 'Language');
 
-  // add ai panel items (only in dev, as of now atleast)
-  if (readioFeatures.ai && process.env.NODE_ENV !== 'production') {
-    for (const def of aiPanelItems) {
-      items.push(createSettingsItem(def, 'AI'));
-    }
+  // add ai panel items for reader assistant setup
+  if (readioFeatures.ai || readioFeatures.readerAI) {
+    addSettingsItems(aiPanelItems, 'AI');
   }
 
   // add custom panel items

@@ -1,8 +1,13 @@
+import dns from 'node:dns/promises';
+import { isIP } from 'node:net';
+
 import { readioFeatures } from '@/config/features';
+import { AI_PROVIDER_CATALOG } from '@/services/ai/constants';
+import { createOpenAICompatibleModel } from '@/services/ai/openAICompatibleModel';
 import { buildSystemPrompt } from '@/services/ai/prompts';
-import type { ScoredChunk } from '@/services/ai/types';
+import type { AIProviderName, ScoredChunk } from '@/services/ai/types';
 import { validateUserAndToken } from '@/utils/access';
-import { streamText, createGateway } from 'ai';
+import { streamText } from 'ai';
 import type { ModelMessage } from 'ai';
 
 const MAX_MESSAGES = 40;
@@ -15,7 +20,8 @@ const MAX_READER_AUTHOR_CHARS = 200;
 const MAX_READER_CHUNKS = 8;
 const MAX_READER_CHUNK_TEXT_CHARS = 3000;
 const MAX_READER_CHAPTER_CHARS = 200;
-const DEFAULT_MODEL = 'google/gemini-2.5-flash-lite';
+const MAX_BASE_URL_CHARS = 300;
+const DEFAULT_PROVIDER: AIProviderName = 'openrouter';
 
 const jsonError = (error: string, status: number) =>
   new Response(JSON.stringify({ error }), {
@@ -73,6 +79,70 @@ const boundedString = (value: unknown, maxLength: number): string | null => {
 const boundedOptionalString = (value: unknown, maxLength: number): string | null => {
   if (value === undefined) return '';
   return boundedString(value, maxLength);
+};
+
+const isSupportedProvider = (provider: string): provider is AIProviderName =>
+  provider in AI_PROVIDER_CATALOG;
+
+const isPrivateIPv4 = (address: string) => {
+  const octets = address.split('.').map(Number);
+  if (
+    octets.length !== 4 ||
+    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
+  ) {
+    return true;
+  }
+  const [first, second] = octets as [number, number, number, number];
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    first >= 224
+  );
+};
+
+const isPrivateIPv6 = (address: string) => {
+  const normalized = address.toLowerCase();
+  return (
+    normalized === '::' ||
+    normalized === '::1' ||
+    normalized.startsWith('fc') ||
+    normalized.startsWith('fd') ||
+    normalized.startsWith('fe8') ||
+    normalized.startsWith('fe9') ||
+    normalized.startsWith('fea') ||
+    normalized.startsWith('feb') ||
+    normalized.startsWith('ff') ||
+    normalized.startsWith('::ffff:0:') ||
+    normalized.startsWith('::ffff:127.') ||
+    normalized.startsWith('::ffff:10.') ||
+    normalized.startsWith('::ffff:192.168.') ||
+    /^::ffff:172\.(1[6-9]|2\d|3[01])\./.test(normalized)
+  );
+};
+
+const isPrivateAddress = (address: string) => {
+  const type = isIP(address);
+  if (type === 4) return isPrivateIPv4(address);
+  if (type === 6) return isPrivateIPv6(address);
+  return true;
+};
+
+const isValidCustomBaseUrl = async (baseUrl: string) => {
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol !== 'https:' || url.username || url.password) return false;
+    const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    if (host === 'localhost' || host.endsWith('.localhost')) return false;
+    if (isIP(host)) return !isPrivateAddress(host);
+    const addresses = await dns.lookup(host, { all: true });
+    return addresses.length > 0 && addresses.every(({ address }) => !isPrivateAddress(address));
+  } catch {
+    return false;
+  }
 };
 
 const validateReaderContext = (readerContext: unknown) => {
@@ -152,8 +222,26 @@ export async function POST(req: Request): Promise<Response> {
     if (!isPlainObject(body)) return jsonError('Invalid request body', 400);
 
     const { apiKey, readerContext } = body;
+    const providerValue =
+      boundedOptionalString(body['provider'], MAX_MODEL_CHARS) || DEFAULT_PROVIDER;
+    if (!isSupportedProvider(providerValue)) return jsonError('Unsupported provider', 400);
     const model = boundedOptionalString(body['model'], MAX_MODEL_CHARS);
     if (model === null) return jsonError('Invalid model', 400);
+    const baseUrl = boundedOptionalString(body['baseUrl'], MAX_BASE_URL_CHARS);
+    if (baseUrl === null) return jsonError('Invalid base URL', 400);
+    const effectiveBaseUrl =
+      providerValue === 'custom-openai-compatible'
+        ? baseUrl
+        : AI_PROVIDER_CATALOG[providerValue].baseUrl;
+    if (providerValue === 'custom-openai-compatible' && !effectiveBaseUrl) {
+      return jsonError('Invalid base URL', 400);
+    }
+    if (
+      providerValue === 'custom-openai-compatible' &&
+      !(await isValidCustomBaseUrl(effectiveBaseUrl))
+    ) {
+      return jsonError('Invalid base URL', 400);
+    }
 
     const messages = validateMessages(
       body['messages'],
@@ -166,12 +254,8 @@ export async function POST(req: Request): Promise<Response> {
       return jsonError('Invalid API key', 400);
     }
 
-    const gatewayApiKey = unauthenticatedReaderAI
-      ? apiKey
-      : apiKey || process.env['AI_GATEWAY_API_KEY'];
-    if (!gatewayApiKey) {
-      return jsonError('API key required', 401);
-    }
+    const providerApiKey = unauthenticatedReaderAI ? apiKey : apiKey;
+    if (!providerApiKey) return jsonError('API key required', 401);
 
     let system: string;
     if (unauthenticatedReaderAI) {
@@ -196,8 +280,12 @@ export async function POST(req: Request): Promise<Response> {
       system = providedSystem || 'You are a helpful assistant.';
     }
 
-    const gateway = createGateway({ apiKey: gatewayApiKey });
-    const languageModel = gateway(model || DEFAULT_MODEL);
+    const languageModel = createOpenAICompatibleModel({
+      provider: providerValue,
+      apiKey: providerApiKey,
+      baseUrl: effectiveBaseUrl,
+      model: model || AI_PROVIDER_CATALOG[providerValue].defaultModel,
+    });
 
     const result = streamText({
       model: languageModel,
@@ -206,11 +294,7 @@ export async function POST(req: Request): Promise<Response> {
     });
 
     return result.toTextStreamResponse();
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: `Chat failed: ${errorMessage}` }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  } catch {
+    return jsonError('Provider request failed', 502);
   }
 }

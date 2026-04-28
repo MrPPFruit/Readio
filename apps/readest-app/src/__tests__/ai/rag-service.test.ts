@@ -69,10 +69,11 @@ import { indexBook } from '@/services/ai/ragService';
 
 const settings: AISettings = {
   enabled: true,
-  provider: 'ollama',
-  ollamaBaseUrl: 'http://localhost:11434',
-  ollamaModel: 'llama3',
-  ollamaEmbeddingModel: 'nomic-embed-text',
+  showReaderAIEntrypoints: true,
+  provider: 'openai',
+  providerApiKeys: { openai: 'openai-key' },
+  providerModels: { openai: 'gpt-4o-mini' },
+  providerEmbeddingModels: { openai: 'text-embedding-3-small' },
   spoilerProtection: true,
   maxContextChunks: 3,
   indexingMode: 'on-demand',

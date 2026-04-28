@@ -1,5 +1,6 @@
 import { streamText } from 'ai';
 import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react';
+import { AI_PROVIDER_CATALOG } from '../constants';
 import { getAIProvider } from '../providers';
 import { hybridSearch, isBookIndexed } from '../ragService';
 import { aiLogger } from '../logger';
@@ -36,8 +37,15 @@ async function* streamViaApiRoute(
     body: JSON.stringify({
       messages,
       system: systemPrompt,
-      apiKey: settings.aiGatewayApiKey,
-      model: settings.aiGatewayModel || 'google/gemini-2.5-flash-lite',
+      provider: settings.provider,
+      apiKey: settings.providerApiKeys[settings.provider],
+      baseUrl:
+        settings.provider === 'custom-openai-compatible'
+          ? settings.customProviderBaseUrl
+          : AI_PROVIDER_CATALOG[settings.provider].baseUrl,
+      model:
+        settings.providerModels[settings.provider] ||
+        AI_PROVIDER_CATALOG[settings.provider].defaultModel,
     }),
     signal: abortSignal,
   });
@@ -104,7 +112,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
       }));
 
       try {
-        const useApiRoute = typeof window !== 'undefined' && settings.provider === 'ai-gateway';
+        const useApiRoute = typeof window !== 'undefined';
 
         let text = '';
 

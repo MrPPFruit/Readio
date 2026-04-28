@@ -1,6 +1,32 @@
-import type { LanguageModel, EmbeddingModel } from 'ai';
+import type { EmbeddingModel, LanguageModel } from 'ai';
 
-export type AIProviderName = 'ollama' | 'ai-gateway';
+export type AIProviderName =
+  | 'openrouter'
+  | 'openai'
+  | 'gemini'
+  | 'deepseek'
+  | 'dashscope'
+  | 'kimi'
+  | 'mimo'
+  | 'custom-openai-compatible';
+
+export type AIProviderProtocol = 'openai-compatible';
+
+export interface AIProviderModelPreset {
+  id: string;
+  label: string;
+}
+
+export interface AIProviderCatalogEntry {
+  id: AIProviderName;
+  label: string;
+  protocol: AIProviderProtocol;
+  baseUrl: string;
+  apiKeyUrl: string;
+  apiKeyPlaceholder: string;
+  defaultModel: string;
+  modelPresets: AIProviderModelPreset[];
+}
 
 export interface AIProvider {
   id: AIProviderName;
@@ -16,16 +42,13 @@ export interface AIProvider {
 
 export interface AISettings {
   enabled: boolean;
+  showReaderAIEntrypoints: boolean;
   provider: AIProviderName;
 
-  ollamaBaseUrl: string;
-  ollamaModel: string;
-  ollamaEmbeddingModel: string;
-
-  aiGatewayApiKey?: string;
-  aiGatewayModel?: string;
-  aiGatewayCustomModel?: string;
-  aiGatewayEmbeddingModel?: string;
+  providerApiKeys: Partial<Record<AIProviderName, string>>;
+  providerModels: Partial<Record<AIProviderName, string>>;
+  providerEmbeddingModels?: Partial<Record<AIProviderName, string>>;
+  customProviderBaseUrl?: string;
 
   spoilerProtection: boolean;
   maxContextChunks: number;

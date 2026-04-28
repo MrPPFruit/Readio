@@ -71,7 +71,6 @@ export const AI_TIMEOUTS = {
   EMBEDDING_BATCH: 120_000, // 2min for batch embedding
   CHAT_STREAM: 60_000, // 60s for chat response start
   HEALTH_CHECK: 5_000, // 5s for health check
-  OLLAMA_CONNECT: 5_000, // 5s for ollama connection
 } as const;
 
 // retry configs for different operations

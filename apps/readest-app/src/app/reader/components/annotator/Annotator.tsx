@@ -117,7 +117,10 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   const annotPopupButtonSize = useResponsiveSize(44);
   const annotPopupPadding = useResponsiveSize(16);
   const annotPopupGap = useResponsiveSize(12);
-  const annotPopupButtonCount = annotationToolButtons.length;
+  const activeAnnotationToolButtons = settings.aiSettings?.showReaderAIEntrypoints
+    ? annotationToolButtons
+    : annotationToolButtons.filter((button) => button.type !== 'ai');
+  const annotPopupButtonCount = activeAnnotationToolButtons.length;
   const annotPopupWidth = Math.min(
     annotPopupButtonCount * annotPopupButtonSize +
       annotPopupPadding +
@@ -932,7 +935,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   };
 
   const selectionAnnotated = selection?.annotated;
-  const toolButtons = annotationToolButtons.map(({ type, label, Icon }) => {
+  const toolButtons = activeAnnotationToolButtons.map(({ type, label, Icon }) => {
     switch (type) {
       case 'copy':
         return { tooltipText: _(label), labelText: _(label), Icon, onClick: handleCopy };

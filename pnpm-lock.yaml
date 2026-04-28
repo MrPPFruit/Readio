@@ -213,9 +213,6 @@ importers:
       ai:
         specifier: ^6.0.47
         version: 6.0.49(zod@4.3.6)
-      ai-sdk-ollama:
-        specifier: ^3.2.0
-        version: 3.3.0(ai@6.0.49(zod@4.3.6))(zod@4.3.6)
       app-store-server-api:
         specifier: ^0.17.1
         version: 0.17.3
@@ -4169,12 +4166,6 @@ packages:
     resolution: {integrity: sha512-kja8j7PjmncONqaTsB8fQ+wE2mSU2DJ9D4XKoJ5PFWIdRMa6SLSN1ff4mOr4jCbfRSsxR4keIiySJU0N9T5hIQ==}
     engines: {node: '>= 8.0.0'}
 
-  ai-sdk-ollama@3.3.0:
-    resolution: {integrity: sha512-NIsy1HdxRCIKV4zzMteeAlNxGj+Ipt0DweEgrRO513Fa7dN7cKpsJrRFGQurA9SdCjWmT8e8tSPwZoCkXyYwKQ==}
-    engines: {node: '>=22'}
-    peerDependencies:
-      ai: ^6.0.48
-
   ai@5.0.123:
     resolution: {integrity: sha512-V3Imb0tg0pHCa6a/VsoW/FZpT07mwUw/4Hj6nexJC1Nvf1eyKQJyaYVkl+YTLnA8cKQSUkoarKhXWbFy4CSgjw==}
     engines: {node: '>=18'}
@@ -6802,9 +6793,6 @@ packages:
   obug@2.1.1:
     resolution: {integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==}
 
-  ollama@0.6.3:
-    resolution: {integrity: sha512-KEWEhIqE5wtfzEIZbDCLH51VFZ6Z3ZSa6sIOg/E/tBV8S51flyqBOXi+bRxlOYKDf8i327zG9eSTb8IJxvm3Zg==}
-
   on-finished@2.4.1:
     resolution: {integrity: sha512-oVlzkg3ENAhCk2zdv7IJwd/QUD4z2RxRwpkcGY8psCVcCYZNq4wYnVWALHM+brtuJjePWiYF/ClmuDr8Ch5+kg==}
     engines: {node: '>= 0.8'}
@@ -8571,9 +8559,6 @@ packages:
   whatwg-encoding@3.1.1:
     resolution: {integrity: sha512-6qN4hJdMwfYBtE3YBTTHhoeuUrDBPZmbQaxWAqSALV/MeEnR5z1xd8UKud2RAkFoPkmB+hli1TZSnyi84xz1vQ==}
     engines: {node: '>=18'}
-
-  whatwg-fetch@3.6.20:
-    resolution: {integrity: sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg==}
 
   whatwg-mimetype@4.0.0:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
@@ -13073,15 +13058,6 @@ snapshots:
     dependencies:
       humanize-ms: 1.2.1
 
-  ai-sdk-ollama@3.3.0(ai@6.0.49(zod@4.3.6))(zod@4.3.6):
-    dependencies:
-      '@ai-sdk/provider': 3.0.5
-      '@ai-sdk/provider-utils': 4.0.8(patch_hash=c3995b156b800cc8c981771d26b6d62a5dd870939257c6c1bf3b593bc9d5eb9e)(zod@4.3.6)
-      ai: 6.0.49(zod@4.3.6)
-      ollama: 0.6.3
-    transitivePeerDependencies:
-      - zod
-
   ai@5.0.123(zod@4.3.6):
     dependencies:
       '@ai-sdk/gateway': 2.0.29(zod@4.3.6)
@@ -16129,10 +16105,6 @@ snapshots:
 
   obug@2.1.1: {}
 
-  ollama@0.6.3:
-    dependencies:
-      whatwg-fetch: 3.6.20
-
   on-finished@2.4.1:
     dependencies:
       ee-first: 1.1.1
@@ -18138,8 +18110,6 @@ snapshots:
   whatwg-encoding@3.1.1:
     dependencies:
       iconv-lite: 0.6.3
-
-  whatwg-fetch@3.6.20: {}
 
   whatwg-mimetype@4.0.0: {}
 

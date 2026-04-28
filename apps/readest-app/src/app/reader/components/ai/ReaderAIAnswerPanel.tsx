@@ -14,6 +14,10 @@ interface ReaderAIAnswerPanelProps {
   gridInsets?: Insets;
   loading?: boolean;
   error?: string;
+  setupAction?: {
+    label: string;
+    onClick: () => void;
+  };
   spoilerProtection?: boolean;
   onSpoilerProtectionChange?: (enabled: boolean) => void;
   onSubmit: (question: string) => void;
@@ -27,6 +31,7 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
   gridInsets,
   loading = false,
   error,
+  setupAction,
   spoilerProtection = true,
   onSpoilerProtectionChange,
   onSubmit,
@@ -183,6 +188,15 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
           >
             {error}
           </div>
+        )}
+        {setupAction && !loading && (
+          <button
+            type='button'
+            className='btn btn-outline border-base-content/15 text-base-content hover:border-primary/40 hover:bg-base-200 h-11 min-h-11 rounded-2xl px-4'
+            onClick={setupAction.onClick}
+          >
+            {setupAction.label}
+          </button>
         )}
 
         {!loading && (

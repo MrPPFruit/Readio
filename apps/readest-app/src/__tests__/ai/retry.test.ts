@@ -81,7 +81,6 @@ describe('AI_TIMEOUTS', () => {
     expect(AI_TIMEOUTS.EMBEDDING_BATCH).toBe(120_000);
     expect(AI_TIMEOUTS.CHAT_STREAM).toBe(60_000);
     expect(AI_TIMEOUTS.HEALTH_CHECK).toBe(5_000);
-    expect(AI_TIMEOUTS.OLLAMA_CONNECT).toBe(5_000);
   });
 });
 

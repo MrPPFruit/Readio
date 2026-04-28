@@ -192,6 +192,22 @@ describe('Reader AI panels', () => {
     ).toBe(true);
   });
 
+  it('shows an AI setup action in the answer panel', () => {
+    const onClick = vi.fn();
+    render(
+      <ReaderAIAnswerPanel
+        messages={messages}
+        setupAction={{ label: '去设置 AI', onClick }}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '去设置 AI' }));
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
   it('submits ask box questions through the unified composer', () => {
     const onSubmit = vi.fn();
     render(<ReaderAIAskBox source='control' onSubmit={onSubmit} onClose={vi.fn()} />);

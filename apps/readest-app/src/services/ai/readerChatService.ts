@@ -1,9 +1,10 @@
 import { streamText, type ModelMessage } from 'ai';
 
+import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { buildSystemPrompt } from './prompts';
 import { hybridSearch } from './ragService';
-import type { AISettings, ScoredChunk } from './types';
+import type { AIProviderName, AISettings, ScoredChunk } from './types';
 
 export interface ReaderChatMessage {
   role: 'user' | 'assistant';
@@ -23,6 +24,9 @@ export interface StreamReaderAIAnswerOptions {
 }
 
 const highRiskSpoilerPattern = /结局|谁是凶手|后面|最后|后来|最终|死了没|会死|真相|剧透/;
+
+const isSupportedProvider = (provider: string): provider is AIProviderName =>
+  provider in AI_PROVIDER_CATALOG;
 
 function buildQuestion(question: string, selectionText?: string): string {
   if (!selectionText?.trim()) return question;
@@ -47,15 +51,25 @@ async function* streamViaApiRoute(
     body: JSON.stringify({
       messages,
       readerContext,
-      apiKey: settings.aiGatewayApiKey,
-      model: settings.aiGatewayModel || 'google/gemini-2.5-flash-lite',
+      provider: settings.provider,
+      apiKey: settings.providerApiKeys[settings.provider],
+      baseUrl:
+        settings.provider === 'custom-openai-compatible'
+          ? settings.customProviderBaseUrl
+          : AI_PROVIDER_CATALOG[settings.provider].baseUrl,
+      model:
+        settings.providerModels[settings.provider] ||
+        AI_PROVIDER_CATALOG[settings.provider].defaultModel,
     }),
     signal,
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `Chat failed: ${response.status}`);
+    if ([401, 403].includes(response.status)) throw new Error('provider-auth-failed');
+    if ([402, 429].includes(response.status)) throw new Error('provider-quota-failed');
+    if (response.status === 404) throw new Error('provider-model-failed');
+    if (response.status >= 500) throw new Error('provider-failed');
+    throw new Error(`provider-request-failed:${response.status}`);
   }
 
   const reader = response.body?.getReader();
@@ -115,7 +129,9 @@ export async function* streamReaderAIAnswer({
     { role: 'user', content: query },
   ];
 
-  if (typeof window !== 'undefined' && settings.provider === 'ai-gateway') {
+  if (!isSupportedProvider(settings.provider)) throw new Error('Unsupported provider');
+
+  if (typeof window !== 'undefined') {
     yield* streamViaApiRoute(
       aiMessages,
       { bookTitle, authorName, currentPage, spoilerProtection: settings.spoilerProtection, chunks },

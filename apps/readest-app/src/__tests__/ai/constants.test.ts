@@ -1,102 +1,107 @@
-import { describe, test, expect, vi } from 'vitest';
+import { describe, expect, test } from 'vitest';
 
-// mock stores and dependencies before imports
-vi.mock('@/store/settingsStore', () => {
-  const mockState = {
-    settings: {
-      aiSettings: {
-        enabled: true,
-        provider: 'ollama',
-        ollamaBaseUrl: 'http://127.0.0.1:11434',
-        ollamaModel: 'llama3.2',
-        ollamaEmbeddingModel: 'nomic-embed-text',
-        spoilerProtection: true,
-        maxContextChunks: 5,
-        indexingMode: 'on-demand',
-      },
-    },
-    setSettings: vi.fn(),
-    saveSettings: vi.fn(),
-  };
-
-  const fn = vi.fn(() => mockState) as unknown as {
-    (): typeof mockState;
-    getState: () => typeof mockState;
-    setState: (partial: Partial<typeof mockState>) => void;
-    subscribe: (listener: () => void) => () => void;
-    destroy: () => void;
-  };
-  fn.getState = () => mockState;
-  fn.setState = vi.fn();
-  fn.subscribe = vi.fn();
-  fn.destroy = vi.fn();
-
-  return { useSettingsStore: fn };
-});
-
+import * as aiConstants from '@/services/ai/constants';
 import type { AISettings } from '@/services/ai/types';
-import { DEFAULT_AI_SETTINGS, GATEWAY_MODELS } from '@/services/ai/constants';
+
+const constants = aiConstants as unknown as Record<string, unknown>;
+const providerIds = [
+  'openrouter',
+  'openai',
+  'gemini',
+  'deepseek',
+  'dashscope',
+  'kimi',
+  'mimo',
+  'custom-openai-compatible',
+] as const;
+
+type ProviderCatalogEntry = {
+  id: string;
+  label: string;
+  protocol: string;
+  baseUrl: string;
+  apiKeyUrl: string;
+  defaultModel: string;
+  modelPresets: { id: string; label: string }[];
+  apiKeyPlaceholder: string;
+};
 
 describe('DEFAULT_AI_SETTINGS', () => {
-  test('should have enabled set to false by default', () => {
-    expect(DEFAULT_AI_SETTINGS.enabled).toBe(false);
+  test('defaults to disabled OpenRouter BYOK cloud AI with visible reader entry points', () => {
+    expect(aiConstants.DEFAULT_AI_SETTINGS.enabled).toBe(false);
+    expect(aiConstants.DEFAULT_AI_SETTINGS.showReaderAIEntrypoints).toBe(true);
+    expect(aiConstants.DEFAULT_AI_SETTINGS.provider).toBe('openrouter');
+    expect(aiConstants.DEFAULT_AI_SETTINGS.spoilerProtection).toBe(true);
+    expect(aiConstants.DEFAULT_AI_SETTINGS.maxContextChunks).toBe(10);
+    expect(aiConstants.DEFAULT_AI_SETTINGS.indexingMode).toBe('on-demand');
   });
 
-  test('should have ollama as default provider', () => {
-    expect(DEFAULT_AI_SETTINGS.provider).toBe('ollama');
-  });
+  test('does not include Vercel AI Gateway or Ollama product defaults', () => {
+    const defaults = aiConstants.DEFAULT_AI_SETTINGS as unknown as Record<string, unknown>;
 
-  test('should have valid ollama defaults', () => {
-    expect(DEFAULT_AI_SETTINGS.ollamaBaseUrl).toBe('http://127.0.0.1:11434');
-    expect(DEFAULT_AI_SETTINGS.ollamaModel).toBe('llama3.2');
-    expect(DEFAULT_AI_SETTINGS.ollamaEmbeddingModel).toBe('nomic-embed-text');
-  });
-
-  test('should have spoiler protection enabled by default', () => {
-    expect(DEFAULT_AI_SETTINGS.spoilerProtection).toBe(true);
+    expect(defaults['aiGatewayApiKey']).toBeUndefined();
+    expect(defaults['aiGatewayModel']).toBeUndefined();
+    expect(defaults['aiGatewayEmbeddingModel']).toBeUndefined();
+    expect(defaults['ollamaBaseUrl']).toBeUndefined();
+    expect(defaults['ollamaModel']).toBeUndefined();
+    expect(defaults['ollamaEmbeddingModel']).toBeUndefined();
   });
 });
 
-describe('Model constants', () => {
-  test('GATEWAY_MODELS should have expected models', () => {
-    expect(GATEWAY_MODELS.GEMINI_FLASH_LITE).toBeDefined();
-    expect(GATEWAY_MODELS.GPT_5_NANO).toBeDefined();
-    expect(GATEWAY_MODELS.LLAMA_4_SCOUT).toBeDefined();
-    expect(GATEWAY_MODELS.GROK_4_1_FAST).toBeDefined();
-    expect(GATEWAY_MODELS.DEEPSEEK_V3_2).toBeDefined();
-    expect(GATEWAY_MODELS.QWEN_3_235B).toBeDefined();
+describe('BYOK provider catalog', () => {
+  test('contains the alpha.9 cloud provider list in display order', () => {
+    const providerOrder = constants['AI_PROVIDER_ORDER'] as string[];
+    const catalog = constants['AI_PROVIDER_CATALOG'] as Record<string, ProviderCatalogEntry>;
+
+    expect(providerOrder).toEqual([...providerIds]);
+    expect(Object.keys(catalog)).toEqual([...providerIds]);
+  });
+
+  test('defines labels, API key links, model presets, and base URLs for every provider', () => {
+    const catalog = constants['AI_PROVIDER_CATALOG'] as Record<string, ProviderCatalogEntry>;
+
+    for (const id of providerIds) {
+      const provider = catalog[id]!;
+      expect(provider.id).toBe(id);
+      expect(provider.label).toBeTruthy();
+      expect(provider.protocol).toBeTruthy();
+      expect(provider.baseUrl).toBeTruthy();
+      expect(provider.apiKeyUrl).toMatch(/^https:\/\//);
+      expect(provider.defaultModel).toBeTruthy();
+      expect(provider.modelPresets.length).toBeGreaterThan(0);
+      expect(provider.modelPresets.map((model) => model.id)).toContain(provider.defaultModel);
+      expect(provider.apiKeyPlaceholder).toBeTruthy();
+    }
+  });
+
+  test('uses OpenAI-compatible protocol for aggregator and direct compatible vendors', () => {
+    const catalog = constants['AI_PROVIDER_CATALOG'] as Record<string, ProviderCatalogEntry>;
+
+    expect(catalog['openrouter']!.protocol).toBe('openai-compatible');
+    expect(catalog['openai']!.protocol).toBe('openai-compatible');
+    expect(catalog['deepseek']!.protocol).toBe('openai-compatible');
+    expect(catalog['dashscope']!.protocol).toBe('openai-compatible');
+    expect(catalog['kimi']!.protocol).toBe('openai-compatible');
+    expect(catalog['mimo']!.protocol).toBe('openai-compatible');
+    expect(catalog['custom-openai-compatible']!.protocol).toBe('openai-compatible');
   });
 });
 
 describe('AISettings Type', () => {
-  test('should allow creating valid settings object', () => {
+  test('supports provider-scoped API keys and models without gateway or local fields', () => {
     const settings: AISettings = {
       enabled: true,
-      provider: 'ollama',
-      ollamaBaseUrl: 'http://localhost:11434',
-      ollamaModel: 'mistral',
-      ollamaEmbeddingModel: 'nomic-embed-text',
+      showReaderAIEntrypoints: true,
+      provider: 'openrouter',
+      providerApiKeys: { openrouter: 'sk-or-test' },
+      providerModels: { openrouter: 'google/gemini-2.5-flash-lite' },
       spoilerProtection: false,
       maxContextChunks: 10,
       indexingMode: 'background',
     };
 
-    expect(settings.enabled).toBe(true);
-    expect(settings.provider).toBe('ollama');
-    expect(settings.indexingMode).toBe('background');
-  });
-
-  test('should support ai-gateway provider', () => {
-    const settings: AISettings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      provider: 'ai-gateway',
-      aiGatewayApiKey: 'test-key',
-      aiGatewayModel: 'openai/gpt-5.2',
-      aiGatewayEmbeddingModel: 'openai/text-embedding-3-small',
-    };
-
-    expect(settings.provider).toBe('ai-gateway');
-    expect(settings.aiGatewayApiKey).toBe('test-key');
+    expect(settings.provider).toBe('openrouter');
+    expect(settings.providerApiKeys.openrouter).toBe('sk-or-test');
+    expect(settings.providerModels.openrouter).toBe('google/gemini-2.5-flash-lite');
   });
 });

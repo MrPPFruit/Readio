@@ -174,10 +174,10 @@ describe('buildCommandRegistry', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('should hide AI panel items when AI is disabled', () => {
+  it('should expose AI panel items for Readio reader AI', () => {
     const items = buildCommandRegistry(createMockOptions());
     const aiItems = items.filter((i) => i.panel === 'AI');
-    expect(aiItems.length).toBe(0);
+    expect(aiItems.length).toBeGreaterThan(0);
   });
 
   it('does not expose scroll-mode commands in Readio', () => {
@@ -198,6 +198,27 @@ describe('buildCommandRegistry', () => {
     expect(ids).not.toContain('settings.control.pagingAnimation');
     expect(ids).not.toContain('settings.control.einkMode');
     expect(ids).not.toContain('settings.control.colorEinkMode');
+    expect(ids).not.toContain('settings.ai.ollamaUrl');
+    expect(ids).not.toContain('settings.ai.ollamaModel');
+    expect(ids).not.toContain('settings.ai.gatewayApiKey');
+    expect(ids).not.toContain('settings.ai.gatewayModel');
+  });
+
+  it('exposes provider-neutral AI BYOK settings when reader AI is enabled', () => {
+    const items = buildCommandRegistry(createMockOptions());
+    const ids = items.map((item) => item.id);
+
+    expect(ids).toContain('settings.ai.showReaderAIEntrypoints');
+    expect(ids).toContain('settings.ai.enableAssistant');
+    expect(ids).toContain('settings.ai.provider');
+    expect(ids).toContain('settings.ai.apiKey');
+    expect(ids).toContain('settings.ai.model');
+    expect(ids).toContain('settings.ai.customBaseUrl');
+
+    const aiKeywords = items
+      .filter((item) => item.panel === 'AI')
+      .flatMap((item) => item.keywords.concat(item.section ?? '', item.labelKey));
+    expect(aiKeywords.join(' ')).not.toMatch(/ollama|gateway|vercel/i);
   });
 
   it('should give each settings item keywords and section', () => {

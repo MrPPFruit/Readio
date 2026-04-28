@@ -1,10 +1,8 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-// mock fetch for provider tests
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// mock logger
 vi.mock('@/services/ai/logger', () => ({
   aiLogger: {
     provider: {
@@ -14,180 +12,127 @@ vi.mock('@/services/ai/logger', () => ({
   },
 }));
 
-// mock ai-sdk-ollama
-vi.mock('ai-sdk-ollama', () => ({
-  createOllama: vi.fn(() => {
-    const ollamaFn = Object.assign(vi.fn(), {
-      embeddingModel: vi.fn(),
-    });
-    return ollamaFn;
-  }),
+vi.mock('@/services/ai/openAICompatibleModel', () => ({
+  createOpenAICompatibleModel: vi.fn((config) => ({ kind: 'chat-model', config })),
+  createOpenAICompatibleEmbeddingModel: vi.fn((config) => ({ kind: 'embedding-model', config })),
 }));
 
-import { OllamaProvider } from '@/services/ai/providers/OllamaProvider';
-import { AIGatewayProvider } from '@/services/ai/providers/AIGatewayProvider';
+import { AI_PROVIDER_CATALOG, DEFAULT_AI_SETTINGS } from '@/services/ai/constants';
 import { getAIProvider } from '@/services/ai/providers';
-import type { AISettings } from '@/services/ai/types';
-import { DEFAULT_AI_SETTINGS } from '@/services/ai/constants';
+import {
+  createOpenAICompatibleEmbeddingModel,
+  createOpenAICompatibleModel,
+} from '@/services/ai/openAICompatibleModel';
+import type { AIProviderName, AISettings } from '@/services/ai/types';
 
-describe('OllamaProvider', () => {
+const settingsFor = (
+  provider: AIProviderName,
+  overrides: Partial<AISettings> = {},
+): AISettings => ({
+  ...DEFAULT_AI_SETTINGS,
+  enabled: true,
+  provider,
+  providerApiKeys: { [provider]: `${provider}-key` },
+  providerModels: { [provider]: AI_PROVIDER_CATALOG[provider].defaultModel },
+  ...overrides,
+});
+
+describe('BYOK provider factory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  test('should create provider with default settings', () => {
-    const settings: AISettings = { ...DEFAULT_AI_SETTINGS, enabled: true };
-    const provider = new OllamaProvider(settings);
+  test('creates configured OpenAI-compatible providers for every catalog provider', async () => {
+    for (const providerId of Object.keys(AI_PROVIDER_CATALOG) as AIProviderName[]) {
+      const provider = getAIProvider(settingsFor(providerId));
+      const catalogEntry = AI_PROVIDER_CATALOG[providerId];
 
-    expect(provider.id).toBe('ollama');
-    expect(provider.name).toBe('Ollama (Local)');
-    expect(provider.requiresAuth).toBe(false);
+      expect(provider.id).toBe(providerId);
+      expect(provider.name).toBe(catalogEntry.label);
+      expect(provider.requiresAuth).toBe(true);
+      await expect(provider.isAvailable()).resolves.toBe(true);
+
+      provider.getModel();
+      expect(createOpenAICompatibleModel).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          provider: providerId,
+          apiKey: `${providerId}-key`,
+          baseUrl: catalogEntry.baseUrl,
+          model: catalogEntry.defaultModel,
+        }),
+      );
+    }
   });
 
-  test('isAvailable should return true when Ollama responds', async () => {
+  test('uses custom base URL and custom model for OpenAI-compatible custom provider', () => {
+    const provider = getAIProvider(
+      settingsFor('custom-openai-compatible', {
+        customProviderBaseUrl: 'https://llm.example.test/v1',
+        providerModels: { 'custom-openai-compatible': 'vendor/custom-model' },
+      }),
+    );
+
+    provider.getModel();
+
+    expect(createOpenAICompatibleModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        provider: 'custom-openai-compatible',
+        apiKey: 'custom-openai-compatible-key',
+        baseUrl: 'https://llm.example.test/v1',
+        model: 'vendor/custom-model',
+      }),
+    );
+  });
+
+  test('throws provider-specific setup error when API key is missing', () => {
+    expect(() =>
+      getAIProvider(
+        settingsFor('openai', {
+          providerApiKeys: { openai: '' },
+        }),
+      ),
+    ).toThrow('API key required for OpenAI');
+  });
+
+  test('rejects legacy Vercel AI Gateway and Ollama providers', () => {
+    expect(() =>
+      getAIProvider({ ...DEFAULT_AI_SETTINGS, provider: 'ai-gateway' as AIProviderName }),
+    ).toThrow('Unsupported provider');
+    expect(() =>
+      getAIProvider({ ...DEFAULT_AI_SETTINGS, provider: 'ollama' as AIProviderName }),
+    ).toThrow('Unsupported provider');
+  });
+
+  test('healthCheck sends provider, model, base URL, and key through the app route', async () => {
     mockFetch.mockResolvedValueOnce({ ok: true });
-    const settings: AISettings = { ...DEFAULT_AI_SETTINGS, enabled: true };
-    const provider = new OllamaProvider(settings);
+    const provider = getAIProvider(settingsFor('deepseek'));
 
-    const result = await provider.isAvailable();
-    expect(result).toBe(true);
+    await expect(provider.healthCheck()).resolves.toBe(true);
+
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body as string) as Record<string, unknown>;
+    expect(mockFetch.mock.calls[0]![0]).toBe('/api/ai/chat');
+    expect(body['provider']).toBe('deepseek');
+    expect(body['apiKey']).toBe('deepseek-key');
+    expect(body['model']).toBe(AI_PROVIDER_CATALOG.deepseek.defaultModel);
+    expect(body['baseUrl']).toBe(AI_PROVIDER_CATALOG.deepseek.baseUrl);
   });
 
-  test('isAvailable should return false when Ollama not running', async () => {
-    mockFetch.mockRejectedValueOnce(new Error('Connection refused'));
-    const settings: AISettings = { ...DEFAULT_AI_SETTINGS, enabled: true };
-    const provider = new OllamaProvider(settings);
+  test('embedding model is optional and uses provider embedding config only when configured', () => {
+    const provider = getAIProvider(
+      settingsFor('openai', {
+        providerEmbeddingModels: { openai: 'text-embedding-3-small' },
+      }),
+    );
 
-    const result = await provider.isAvailable();
-    expect(result).toBe(false);
-  });
+    provider.getEmbeddingModel();
 
-  test('healthCheck should verify model exists', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({ models: [{ name: 'llama3.2:latest' }, { name: 'nomic-embed:latest' }] }),
-    });
-    const settings: AISettings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      ollamaModel: 'llama3.2',
-      ollamaEmbeddingModel: 'nomic-embed',
-    };
-    const provider = new OllamaProvider(settings);
-
-    const result = await provider.healthCheck();
-    expect(result).toBe(true);
-  });
-
-  test('healthCheck should return false if model not found', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({ models: [{ name: 'other-model' }, { name: 'nomic-embed:latest' }] }),
-    });
-    const settings: AISettings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      ollamaModel: 'llama3.2',
-      ollamaEmbeddingModel: 'nomic-embed',
-    };
-    const provider = new OllamaProvider(settings);
-
-    const result = await provider.healthCheck();
-    expect(result).toBe(false);
-  });
-});
-
-describe('AIGatewayProvider', () => {
-  test('should throw if no API key', () => {
-    const settings: AISettings = { ...DEFAULT_AI_SETTINGS, enabled: true, provider: 'ai-gateway' };
-
-    expect(() => new AIGatewayProvider(settings)).toThrow('API key required');
-  });
-
-  test('should create provider with API key', () => {
-    const settings: AISettings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      provider: 'ai-gateway',
-      aiGatewayApiKey: 'test-key',
-    };
-    const provider = new AIGatewayProvider(settings);
-
-    expect(provider.id).toBe('ai-gateway');
-    expect(provider.name).toBe('AI Gateway (Cloud)');
-    expect(provider.requiresAuth).toBe(true);
-  });
-
-  test('isAvailable should return true if key exists', async () => {
-    const settings: AISettings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      provider: 'ai-gateway',
-      aiGatewayApiKey: 'test-key',
-    };
-    const provider = new AIGatewayProvider(settings);
-
-    const result = await provider.isAvailable();
-    expect(result).toBe(true);
-  });
-
-  test('isAvailable should return false if key does not exist', async () => {
-    const settings: AISettings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      provider: 'ai-gateway',
-      aiGatewayApiKey: '',
-    };
-
-    // provider throws on construction if no key, so we test via getAIProvider fallback
-    expect(() => new AIGatewayProvider(settings)).toThrow('API key required');
-  });
-
-  test('healthCheck should return false if key does not exist', async () => {
-    const settings: AISettings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      provider: 'ai-gateway',
-      aiGatewayApiKey: 'valid-key',
-    };
-    const provider = new AIGatewayProvider(settings);
-
-    // override key after construction to simulate missing key check in healthCheck
-    (provider as unknown as { settings: AISettings }).settings.aiGatewayApiKey = '';
-    const result = await provider.healthCheck();
-    expect(result).toBe(false);
-  });
-});
-
-describe('getAIProvider', () => {
-  test('should return OllamaProvider for ollama', () => {
-    const settings: AISettings = { ...DEFAULT_AI_SETTINGS, enabled: true, provider: 'ollama' };
-    const provider = getAIProvider(settings);
-
-    expect(provider.id).toBe('ollama');
-  });
-
-  test('should return AIGatewayProvider for ai-gateway', () => {
-    const settings: AISettings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      provider: 'ai-gateway',
-      aiGatewayApiKey: 'test-key',
-    };
-    const provider = getAIProvider(settings);
-
-    expect(provider.id).toBe('ai-gateway');
-  });
-
-  test('should throw for unknown provider', () => {
-    const settings = {
-      ...DEFAULT_AI_SETTINGS,
-      enabled: true,
-      provider: 'unknown' as unknown,
-    } as AISettings;
-
-    expect(() => getAIProvider(settings)).toThrow('Unknown provider');
+    expect(createOpenAICompatibleEmbeddingModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        provider: 'openai',
+        apiKey: 'openai-key',
+        baseUrl: AI_PROVIDER_CATALOG.openai.baseUrl,
+        model: 'text-embedding-3-small',
+      }),
+    );
   });
 });

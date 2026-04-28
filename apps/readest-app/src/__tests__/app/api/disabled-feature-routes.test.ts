@@ -25,10 +25,14 @@ const accessMocks = vi.hoisted(() => ({
 }));
 
 const aiMocks = vi.hoisted(() => ({
-  createGateway: vi.fn(() => vi.fn(() => 'gateway-model')),
+  createOpenAICompatibleModel: vi.fn((config) => ({ kind: 'chat-model', config })),
   streamText: vi.fn(() => ({
     toTextStreamResponse: vi.fn(() => new Response('ok')),
   })),
+}));
+
+const dnsMocks = vi.hoisted(() => ({
+  lookup: vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]),
 }));
 
 vi.mock('@/utils/access', () => ({
@@ -36,10 +40,21 @@ vi.mock('@/utils/access', () => ({
 }));
 
 vi.mock('ai', () => ({
-  createGateway: aiMocks.createGateway,
   embed: vi.fn(),
   embedMany: vi.fn(),
+  createGateway: vi.fn(() => {
+    throw new Error('Gateway must not be used by Readio AI routes');
+  }),
   streamText: aiMocks.streamText,
+}));
+
+vi.mock('node:dns/promises', () => ({
+  default: { lookup: dnsMocks.lookup },
+  lookup: dnsMocks.lookup,
+}));
+
+vi.mock('@/services/ai/openAICompatibleModel', () => ({
+  createOpenAICompatibleModel: aiMocks.createOpenAICompatibleModel,
 }));
 
 vi.mock('@/libs/edgeTTS', () => ({
@@ -112,8 +127,9 @@ const expectDisabledJson = async (response: Response) => {
 describe('disabled feature API routes', () => {
   beforeEach(() => {
     accessMocks.validateUserAndToken.mockClear();
-    aiMocks.createGateway.mockClear();
+    aiMocks.createOpenAICompatibleModel.mockClear();
     aiMocks.streamText.mockClear();
+    dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
   });
 
   it('requires BYOK for unauthenticated reader AI chat while rejecting AI routes that reader AI does not use', async () => {
@@ -125,7 +141,7 @@ describe('disabled feature API routes', () => {
     await expect(response.json()).resolves.toEqual({ error: 'API key required' });
     expect(accessMocks.validateUserAndToken).not.toHaveBeenCalled();
     expect(aiMocks.streamText).not.toHaveBeenCalled();
-    await expectDisabledJson(await aiEmbedPost(postRequest('/api/ai/embed', { texts: ['hello'] })));
+    await expectDisabledJson(await aiEmbedPost());
   });
 
   it('ignores caller-controlled system prompts for unauthenticated reader AI chat', async () => {
@@ -133,7 +149,9 @@ describe('disabled feature API routes', () => {
       postRequest(
         '/api/ai/chat',
         {
+          provider: 'openrouter',
           apiKey: 'byok-key',
+          baseUrl: 'https://openrouter.ai/api/v1',
           model: 'google/gemini-2.5-flash-lite',
           readerContext: {
             bookTitle: 'Safe Book',
@@ -151,7 +169,14 @@ describe('disabled feature API routes', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(aiMocks.createGateway).toHaveBeenCalledWith({ apiKey: 'byok-key' });
+    expect(aiMocks.createOpenAICompatibleModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openrouter',
+        apiKey: 'byok-key',
+        baseUrl: 'https://openrouter.ai/api/v1',
+        model: 'google/gemini-2.5-flash-lite',
+      }),
+    );
     expect(aiMocks.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
         system: expect.stringContaining(
@@ -210,7 +235,7 @@ describe('disabled feature API routes', () => {
     expect(aiMocks.streamText).not.toHaveBeenCalled();
   });
 
-  it('rejects oversized or array-content unauthenticated reader AI requests before gateway creation', async () => {
+  it('rejects oversized or array-content unauthenticated reader AI requests before provider creation', async () => {
     const baseBody = {
       apiKey: 'byok-key',
       readerContext: { bookTitle: 'Book', currentPage: 1, chunks: [] },
@@ -239,7 +264,7 @@ describe('disabled feature API routes', () => {
       const response = await aiChatPost(postRequest('/api/ai/chat', body, {}));
       expect(response.status).toBe(400);
     }
-    expect(aiMocks.createGateway).not.toHaveBeenCalled();
+    expect(aiMocks.createOpenAICompatibleModel).not.toHaveBeenCalled();
     expect(aiMocks.streamText).not.toHaveBeenCalled();
   });
 

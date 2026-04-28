@@ -7,6 +7,7 @@
 - APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.8-android-arm64-release.apk`。
 - APK SHA-256：`d44b5a1976445fec70e0cd5301a251e6e913c2ec4c8eff2f487a5bcba2a4fa21`。
 - GitHub 默认分支已于 2026-04-28 切换为 `readio/restart-readest-base`；该分支是 Readio 后续主线。旧默认分支 `feature/m0-spikes` 保留为 M0 spike 历史归档，不再作为 PR/release 基准。
+- GitHub 仓库已于 2026-04-28 从 private 切为 public：`https://github.com/MrPPFruit/Readio`。公开前已做最小敏感信息检查：未发现明显私钥/访问令牌；`.env.tauri` 中存在的 PostHog/Supabase anon/Stripe publishable 属于前端公开类配置。
 - GitHub PR 曾失败：旧默认分支 `feature/m0-spikes` 与 `readio/restart-readest-base` 没有共同历史，GitHub 拒绝跨 unrelated histories 创建 PR。以后不要静默执行 `--allow-unrelated-histories` 合并；新工作应从 `readio/restart-readest-base` 拉分支。
 - 验证证据：AI UI/assistant targeted tests 2 files / 27 tests passed；release APK 构建成功；已安装到 `emulator-5554` 并 smoke-test 首页、阅读器、AI FAB、Ask Sheet、建议选择、Answer Panel、关闭/遮罩关闭。
 - 当前本地工作树只剩 `HANDOFF.md` 修改未提交；AI 助手代码提交已推送到 `origin/readio/restart-readest-base`。

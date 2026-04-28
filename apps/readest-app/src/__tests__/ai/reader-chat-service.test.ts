@@ -25,13 +25,23 @@ vi.mock('ai', () => ({
 
 const settings: AISettings = {
   enabled: true,
-  provider: 'ollama',
-  ollamaBaseUrl: 'http://localhost:11434',
-  ollamaModel: 'llama3',
-  ollamaEmbeddingModel: 'nomic-embed-text',
+  showReaderAIEntrypoints: true,
+  provider: 'openrouter',
+  providerApiKeys: { openrouter: 'openrouter-key' },
+  providerModels: { openrouter: 'google/gemini-2.5-flash-lite' },
   spoilerProtection: true,
   maxContextChunks: 3,
   indexingMode: 'on-demand',
+};
+
+const runWithoutWindow = async (fn: () => Promise<void>) => {
+  const originalWindow = globalThis.window;
+  Object.defineProperty(globalThis, 'window', { value: undefined, configurable: true });
+  try {
+    await fn();
+  } finally {
+    Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
+  }
 };
 
 describe('streamReaderAIAnswer', () => {
@@ -46,49 +56,59 @@ describe('streamReaderAIAnswer', () => {
   });
 
   it('passes currentPage to hybridSearch when spoiler protection is enabled', async () => {
-    const chunks: string[] = [];
+    await runWithoutWindow(async () => {
+      const chunks: string[] = [];
 
-    for await (const chunk of streamReaderAIAnswer({
-      settings,
-      bookHash: 'book-hash',
-      bookTitle: 'Book',
-      authorName: 'Author',
-      currentPage: 42,
-      messages: [],
-      question: '前面发生了什么？',
-    })) {
-      chunks.push(chunk);
-    }
+      for await (const chunk of streamReaderAIAnswer({
+        settings,
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 42,
+        messages: [],
+        question: '前面发生了什么？',
+      })) {
+        chunks.push(chunk);
+      }
 
-    expect(chunks).toEqual(['ok']);
-    expect(hybridSearchMock).toHaveBeenCalledWith('book-hash', '前面发生了什么？', settings, 3, 42);
+      expect(chunks).toEqual(['ok']);
+      expect(hybridSearchMock).toHaveBeenCalledWith(
+        'book-hash',
+        '前面发生了什么？',
+        settings,
+        3,
+        42,
+      );
+    });
   });
 
   it('does not pass currentPage as a search boundary when spoiler protection is disabled', async () => {
-    const chunks: string[] = [];
-    const unprotectedSettings = { ...settings, spoilerProtection: false };
+    await runWithoutWindow(async () => {
+      const chunks: string[] = [];
+      const unprotectedSettings = { ...settings, spoilerProtection: false };
 
-    for await (const chunk of streamReaderAIAnswer({
-      settings: unprotectedSettings,
-      bookHash: 'book-hash',
-      bookTitle: 'Book',
-      authorName: 'Author',
-      currentPage: 42,
-      messages: [],
-      question: '最后谁是凶手？',
-    })) {
-      chunks.push(chunk);
-    }
+      for await (const chunk of streamReaderAIAnswer({
+        settings: unprotectedSettings,
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 42,
+        messages: [],
+        question: '最后谁是凶手？',
+      })) {
+        chunks.push(chunk);
+      }
 
-    expect(chunks).toEqual(['ok']);
-    expect(hybridSearchMock).toHaveBeenCalledWith(
-      'book-hash',
-      '最后谁是凶手？',
-      unprotectedSettings,
-      3,
-      undefined,
-    );
-    expect(streamTextMock).toHaveBeenCalled();
+      expect(chunks).toEqual(['ok']);
+      expect(hybridSearchMock).toHaveBeenCalledWith(
+        'book-hash',
+        '最后谁是凶手？',
+        unprotectedSettings,
+        3,
+        undefined,
+      );
+      expect(streamTextMock).toHaveBeenCalled();
+    });
   });
 
   it('sends bounded readerContext instead of raw system when using the browser API route', async () => {
@@ -112,7 +132,7 @@ describe('streamReaderAIAnswer', () => {
     try {
       const chunks: string[] = [];
       for await (const chunk of streamReaderAIAnswer({
-        settings: { ...settings, provider: 'ai-gateway', aiGatewayApiKey: 'byok-key' },
+        settings,
         bookHash: 'book-hash',
         bookTitle: 'Book',
         authorName: 'Author',
@@ -128,6 +148,9 @@ describe('streamReaderAIAnswer', () => {
       expect(requestInit?.body).toBeDefined();
       const body = JSON.parse(requestInit?.body as string);
       expect(body.system).toBeUndefined();
+      expect(body.provider).toBe('openrouter');
+      expect(body.apiKey).toBe('openrouter-key');
+      expect(body.model).toBe('google/gemini-2.5-flash-lite');
       expect(body.readerContext).toMatchObject({
         bookTitle: 'Book',
         authorName: 'Author',
@@ -135,6 +158,31 @@ describe('streamReaderAIAnswer', () => {
         spoilerProtection: true,
         chunks: [{ text: 'A relevant passage.', chapterTitle: 'Chapter 1', pageNumber: 4 }],
       });
+    } finally {
+      Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
+    }
+  });
+
+  it('classifies browser API route provider failures for actionable recovery', async () => {
+    const originalWindow = globalThis.window;
+    const fetchMock = vi.fn(async () =>
+      Response.json({ error: 'Provider request failed' }, { status: 502 }),
+    );
+    Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
+    Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });
+
+    try {
+      await expect(async () => {
+        for await (const _chunk of streamReaderAIAnswer({
+          settings,
+          bookHash: 'book-hash',
+          bookTitle: 'Book',
+          currentPage: 42,
+          messages: [],
+          question: '发生了什么？',
+        })) {
+        }
+      }).rejects.toThrow('provider-failed');
     } finally {
       Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
     }
