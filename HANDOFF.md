@@ -1,5 +1,16 @@
 # HANDOFF
 
+## 2026-04-28 最新状态
+
+- alpha.8 AI 助手批次已完成并发布为 GitHub prerelease：`https://github.com/MrPPFruit/Readio/releases/tag/v0.1.0-alpha.8`。
+- 发布目标分支：`readio/restart-readest-base`；提交：`d11cc862 feat: add reader AI assistant`。
+- APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.8-android-arm64-release.apk`。
+- APK SHA-256：`d44b5a1976445fec70e0cd5301a251e6e913c2ec4c8eff2f487a5bcba2a4fa21`。
+- GitHub 默认分支已于 2026-04-28 切换为 `readio/restart-readest-base`；该分支是 Readio 后续主线。旧默认分支 `feature/m0-spikes` 保留为 M0 spike 历史归档，不再作为 PR/release 基准。
+- GitHub PR 曾失败：旧默认分支 `feature/m0-spikes` 与 `readio/restart-readest-base` 没有共同历史，GitHub 拒绝跨 unrelated histories 创建 PR。以后不要静默执行 `--allow-unrelated-histories` 合并；新工作应从 `readio/restart-readest-base` 拉分支。
+- 验证证据：AI UI/assistant targeted tests 2 files / 27 tests passed；release APK 构建成功；已安装到 `emulator-5554` 并 smoke-test 首页、阅读器、AI FAB、Ask Sheet、建议选择、Answer Panel、关闭/遮罩关闭。
+- 当前本地工作树只剩 `HANDOFF.md` 修改未提交；AI 助手代码提交已推送到 `origin/readio/restart-readest-base`。
+
 ## 当前目标与进度
 
 - Readio 主线已迁移到 Readest-based 独立工作区：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest`。
@@ -15,10 +26,12 @@
 - Phase 7 第一批小步修复已完成：Android package id/namespace/Tauri identifier 从上游 `com.bilingify.readest` 切换为 `com.ppg.readio`，可与原 Readest 共存安装；空书库首屏 Readio 本地导入引导补齐 zh-CN/zh-TW 翻译；已生成签名 release APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/readio-phase7-package-i18n-release-signed.apk`，大小 52.6 MB。
 - 导入图书后的首页 polish 已完成：当 `readioFeatures.cloudSync=false` 时，书籍卡片不再显示上传/下载云图标与传输进度入口；右上角菜单的 `Always Show Status Bar` 已收进 `advancedSettings`，Readio MVP 默认隐藏，避免用户在书库页看到无明显效果的状态栏开关。
 - 阅读模式第一批减法已完成：隐藏已禁用的 KOReader/Readwise/Hardcover Sync、Proofread、Export Annotations、Parallel Read 菜单项；阅读页顶部隐藏翻译/语言按钮与画笔/快捷动作按钮；长按选中文本弹出的工具仅保留复制、划线、笔记，隐藏搜索、词典、百科、翻译、朗读。已通过 TDD、lint、代码审查、cleaned-env Next build、Android debug APK 构建、模拟器安装与截图验证。
-- 版本与 APK 产物规则已建立：当前 Readio 版本为 `0.1.0-alpha.3`，Android `versionCode=1001003`；后续默认用 `pnpm --filter @readest/readest-app build-readio-apk` 构建签名 release 小包，统一输出到 `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/`。
+- 版本与 APK 产物规则已建立：当前 Readio 版本为 `0.1.0-alpha.4`，Android `versionCode=1001004`；后续默认用 `pnpm --filter @readest/readest-app build-readio-apk` 构建签名 release 小包，统一输出到 `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/`。
+- 版本更新规则：每个可给用户安装/真机测试的 APK 都必须递增 `apps/readest-app/package.json` 的 prerelease 号与 `apps/readest-app/src-tauri/tauri.conf.json` 的 Android `versionCode`；开发中小改可累计在当前 alpha，不必每次提交都 bump；一旦 APK 已发给用户或完成模拟器验收并准备进入下一批功能，下一包必须升到下一个 alpha；`versionCode` 使用 `major*1000000 + minor*10000 + patch*1000 + alphaN`，例如 `0.1.0-alpha.4` 对应 `1001004`。
+- Readio UI 设计规范已落地到 `READIO_UI_DESIGN.md`。后续 UI 必须优先使用现有 DaisyUI/主题 token（`base-*`、`primary`、`text-base-content/*`、`border-base-content/10`、`ring-primary` 等），禁止普通 UI 定死色调；阅读器正文使用 `--theme-bg-color` / `--theme-fg-color` / `--theme-primary-color`，React 外壳使用 `data-theme` 下的 DaisyUI class。AI 助手必须按阅读器内底部 sheet / 完整面板方向实现，不得退回通用聊天页或系统弹窗风格。
 - 已生成并安装验证小包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.1-android-arm64-release.apk`，大小 52.6 MB；APK 元信息为 `package=com.ppg.readio`、`versionName=0.1.0-alpha.1`、`versionCode=1001001`，签名 v2/v3 验证通过，模拟器 `adb install -r` 成功。
 - M1.1 阅读器精简收口 + 翻页唯一化已完成：`scrolled` / `noContinuousScroll` 在 serializer、settings store、reader store、book data store、settings service、viewer renderer 与 command registry/UI 测试中被锁定为分页模式；模拟器从书库继续阅读进入阅读页后，右侧点击翻到下一页，行为设置页只显示“翻页/点击翻页/点击两侧翻页”等分页项，无滚动模式入口。本批还包含前序阅读 UI 精简延续改动，提交/交付时不要描述成纯滚动模式修复。
-- 2026-04-26 alpha.2 已冻结为可交付测试包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.2-android-arm64-release.apk`。签名 v2/v3 验证通过，模拟器安装/启动通过，书架渲染、继续阅读进入正文、本地 EPUB 导入、导入后打开阅读均通过。当前分支 `readio/restart-readest-base` 工作区干净，后续新功能/深度剥离应进入 alpha.3 批次。
+- 2026-04-26 alpha.2 已冻结为可交付测试包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.2-android-arm64-release.apk`。签名 v2/v3 验证通过，模拟器安装/启动通过，书架渲染、继续阅读进入正文、本地 EPUB 导入、导入后打开阅读均通过。
 - 2026-04-27 alpha.3 TXT 导入 + 文件过滤批次已实现并验证：本地导入 Android picker 传入 `SUPPORTED_BOOK_EXTS`，TXT 文件先经 `convertTxtToEpubWithFallback` 转 EPUB 再进入 `DocumentLoader`；Android `content://.../document/msf%3A42` 这类 URI 由原生 bridge 查询 `OpenableColumns.DISPLAY_NAME` 获取真实文件名（如 `sample.txt`），避免被 URI 尾段 `msf:42` 误判为非 TXT 后提示“文件已损坏”。版本已 bump 到 `0.1.0-alpha.3` / Android `versionCode=1001003`。已构建签名 release APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.3-android-arm64-release.apk`，签名 v2/v3 通过，模拟器安装/启动通过，书库可见真实 TXT 导入书 `雪中悍刀行`。
 
 ## 已尝试路径
@@ -59,10 +72,10 @@
 
 ## 下一步可执行动作
 
-1. `0.1.0-alpha.2` 已作为可交付测试包冻结；优先让用户真机试读，不再把已完成的 M1.1 精简项当作下一步重复做。
-2. 若进入 `0.1.0-alpha.3`，优先按用户实测反馈做阅读模式用户视角 polish；可重点看笔记/书签入口优先级、阅读设置文案、更多菜单信息密度，以及更接近多看的阅读控制布局。
-3. 可选深化：继续检查 auth/sync/telemetry providers 和支付/AI/TTS 依赖是否需要更硬的 no-op/移除，以减少包体与运行期表面积。
-4. alpha.3 TXT 导入 + 文件过滤已完成；签名 APK 已安装到模拟器并通过最小验收。下一步让用户真机复验 TXT 导入。
+1. `0.1.0-alpha.4` 是当前下一测试批次版本号；进入新功能/体验 polish 时继续在此版本上迭代，出包前按版本规则确认是否需要再 bump。
+2. alpha.3 TXT 导入 + 文件过滤已完成；签名 APK 已安装到模拟器并通过最小验收。下一步让用户真机复验 TXT 导入。
+3. 优先按用户实测反馈做阅读模式用户视角 polish；可重点看笔记/书签入口优先级、阅读设置文案、更多菜单信息密度，以及更接近多看的阅读控制布局。
+4. 可选深化：继续检查 auth/sync/telemetry providers 和支付/AI/TTS 依赖是否需要更硬的 no-op/移除，以减少包体与运行期表面积。
 5. 后续独立批次：如需要更正式发布命名，可从当前 `com.ppg.readio` 迁移到 `io.readio.app`，并重新验证安装/启动/文件关联。
 
 ## 关键文件路径
