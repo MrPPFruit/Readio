@@ -238,6 +238,7 @@ describe('ReaderAIAssistant integration safeguards', () => {
     expect(mocks.setSettingsDialogBookKey).toHaveBeenCalledWith('current-book-instance');
     expect(mocks.setActiveSettingsItemId).toHaveBeenCalledWith('settings.ai.enableAssistant');
     expect(mocks.setSettingsDialogOpen).toHaveBeenCalledWith(true);
+    expect(screen.queryByTestId('answer-panel')).toBeNull();
   });
 
   it('shows a custom endpoint setup action from the entry point without a custom base URL', async () => {

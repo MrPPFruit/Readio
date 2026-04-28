@@ -120,6 +120,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     setSettingsDialogBookKey(bookKey);
     setActiveSettingsItemId(itemId);
     setSettingsDialogOpen(true);
+    closeAssistant();
   };
 
   const removeInFlightMessages = () => {
