@@ -5,6 +5,7 @@ import { withRetryAndTimeout, AI_TIMEOUTS, AI_RETRY_CONFIGS } from './utils/retr
 import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { aiLogger } from './logger';
+import { getCurrentPageContextChunks } from './search/bm25';
 import type {
   AISettings,
   TextChunk,
@@ -268,6 +269,15 @@ async function runIndexBook(
     aiLogger.rag.indexError(bookHash, (error as Error).message);
     throw error;
   }
+}
+
+export async function getCurrentSectionContextChunks(
+  bookHash: string,
+  currentPage: number,
+  topK = 2,
+): Promise<ScoredChunk[]> {
+  const chunks = await aiStore.getChunks(bookHash);
+  return getCurrentPageContextChunks(chunks, currentPage, topK);
 }
 
 export async function hybridSearch(

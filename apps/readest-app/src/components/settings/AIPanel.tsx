@@ -4,6 +4,7 @@ import { PiCheckCircle, PiWarningCircle } from 'react-icons/pi';
 
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getAIAvailability } from '@/services/ai/availability';
 import {
   AI_PROVIDER_CATALOG,
   AI_PROVIDER_ORDER,
@@ -155,15 +156,24 @@ const AIPanel: React.FC = () => {
     setErrorMessage('');
 
     try {
-      const aiProvider = getAIProvider({
+      const testSettings: AISettings = {
         ...aiSettings,
+        showReaderAIEntrypoints: true,
         provider,
         providerApiKeys: { ...aiSettings.providerApiKeys, [provider]: apiKey },
         providerModels: { ...aiSettings.providerModels, [provider]: model },
         customProviderBaseUrl:
           provider === 'custom-openai-compatible' ? baseUrl : aiSettings.customProviderBaseUrl,
         allowUnsafeCustomProviderBaseUrl,
-      });
+      };
+      const availability = getAIAvailability(testSettings);
+      if (availability.status !== 'ready') {
+        setConnectionStatus('error');
+        setErrorMessage(availability.message);
+        return;
+      }
+
+      const aiProvider = getAIProvider(testSettings);
       const isHealthy = await aiProvider.healthCheck();
       setConnectionStatus(isHealthy ? 'success' : 'error');
       if (!isHealthy) setErrorMessage(_('Invalid API key or connection failed'));

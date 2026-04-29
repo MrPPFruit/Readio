@@ -1,0 +1,123 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AI_PROVIDER_CATALOG, DEFAULT_AI_SETTINGS } from '@/services/ai/constants';
+import type { AISettings } from '@/services/ai/types';
+
+const { generateTextMock, getAIProviderMock, hybridSearchMock, isBookIndexedMock } = vi.hoisted(
+  () => ({
+    generateTextMock: vi.fn(),
+    getAIProviderMock: vi.fn(),
+    hybridSearchMock: vi.fn(),
+    isBookIndexedMock: vi.fn(),
+  }),
+);
+
+vi.mock('ai', () => ({
+  generateText: generateTextMock,
+}));
+
+vi.mock('@/services/ai/providers', () => ({
+  getAIProvider: getAIProviderMock,
+}));
+
+vi.mock('@/services/ai/ragService', () => ({
+  hybridSearch: hybridSearchMock,
+  isBookIndexed: isBookIndexedMock,
+}));
+
+vi.mock('@/services/ai/logger', () => ({
+  aiLogger: {
+    chat: {
+      send: vi.fn(),
+      context: vi.fn(),
+      complete: vi.fn(),
+      error: vi.fn(),
+    },
+  },
+}));
+
+import { createTauriAdapter } from '@/services/ai/adapters/TauriChatAdapter';
+import type { ChatModelRunResult } from '@assistant-ui/react';
+
+const settings: AISettings = {
+  ...DEFAULT_AI_SETTINGS,
+  enabled: true,
+  showReaderAIEntrypoints: true,
+  provider: 'openrouter',
+  providerApiKeys: { openrouter: 'openrouter-key' },
+  providerModels: { openrouter: AI_PROVIDER_CATALOG.openrouter.defaultModel },
+};
+
+const runWithAppPlatform = async (platform: string | undefined, fn: () => Promise<void>) => {
+  const originalPlatform = process.env['NEXT_PUBLIC_APP_PLATFORM'];
+  if (platform) {
+    process.env['NEXT_PUBLIC_APP_PLATFORM'] = platform;
+  } else {
+    delete process.env['NEXT_PUBLIC_APP_PLATFORM'];
+  }
+  try {
+    await fn();
+  } finally {
+    if (originalPlatform) {
+      process.env['NEXT_PUBLIC_APP_PLATFORM'] = originalPlatform;
+    } else {
+      delete process.env['NEXT_PUBLIC_APP_PLATFORM'];
+    }
+  }
+};
+
+describe('createTauriAdapter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    generateTextMock.mockResolvedValue({ text: 'adapter-ok' });
+    getAIProviderMock.mockReturnValue({ getModel: () => 'mock-model' });
+    isBookIndexedMock.mockResolvedValue(false);
+    hybridSearchMock.mockResolvedValue([]);
+  });
+
+  it('uses direct provider generation in the Tauri app even when window exists', async () => {
+    await runWithAppPlatform('tauri', async () => {
+      const originalWindow = globalThis.window;
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn(async () => new Response('<!DOCTYPE html>'));
+      Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
+      Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });
+
+      try {
+        const adapter = createTauriAdapter(() => ({
+          settings,
+          bookHash: 'book-hash',
+          bookTitle: 'Book',
+          authorName: 'Author',
+          currentPage: 42,
+        }));
+        const chunks: ChatModelRunResult[] = [];
+        const result = adapter.run({
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: '发生了什么？' }],
+            },
+          ],
+        } as never) as AsyncGenerator<ChatModelRunResult>;
+
+        for await (const chunk of result) {
+          chunks.push(chunk);
+        }
+
+        expect(chunks.at(-1)).toEqual({ content: [{ type: 'text', text: 'adapter-ok' }] });
+        expect(JSON.stringify(chunks)).not.toContain('<!DOCTYPE html>');
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(generateTextMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: 'mock-model',
+            messages: [{ role: 'user', content: '发生了什么？' }],
+          }),
+        );
+      } finally {
+        Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
+        Object.defineProperty(globalThis, 'fetch', { value: originalFetch, configurable: true });
+      }
+    });
+  });
+});

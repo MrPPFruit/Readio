@@ -1,3 +1,5 @@
+import { generateText } from 'ai';
+import { isWebAppPlatform } from '@/services/environment';
 import { getCustomBaseUrlSafety } from '../availability';
 import { AI_PROVIDER_CATALOG } from '../constants';
 import {
@@ -63,19 +65,31 @@ class BYOKProvider implements AIProvider {
   }
 
   async healthCheck(): Promise<boolean> {
-    const response = await fetch('/api/ai/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: this.id,
-        apiKey: this.apiKey,
-        baseUrl: this.baseUrl,
-        model: this.model,
-        readerContext: { bookTitle: 'Connection Test', currentPage: 1, chunks: [] },
-        messages: [{ role: 'user', content: 'hi' }],
-      }),
-    });
-    return response.ok;
+    try {
+      if (isWebAppPlatform()) {
+        const response = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: this.id,
+            apiKey: this.apiKey,
+            baseUrl: this.baseUrl,
+            model: this.model,
+            readerContext: { bookTitle: 'Connection Test', currentPage: 1, chunks: [] },
+            messages: [{ role: 'user', content: 'hi' }],
+          }),
+        });
+        return response.ok;
+      }
+
+      await generateText({
+        model: this.getModel(),
+        prompt: 'hi',
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

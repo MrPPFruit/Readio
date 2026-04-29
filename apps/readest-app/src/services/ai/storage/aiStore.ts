@@ -1,5 +1,6 @@
 import { TextChunk, ScoredChunk, BookIndexMeta, AIConversation, AIMessage } from '../types';
 import { aiLogger } from '../logger';
+import { createBM25Index, searchBM25Index } from '../search/bm25';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const lunr = require('lunr') as typeof import('lunr');
@@ -172,15 +173,7 @@ class AIStore {
   }
 
   async saveBM25Index(bookHash: string, chunks: TextChunk[]): Promise<void> {
-    const index = lunr(function (this: lunr.Builder) {
-      this.ref('id');
-      this.field('text');
-      this.field('chapterTitle');
-      this.pipeline.remove(lunr.stemmer);
-      this.searchPipeline.remove(lunr.stemmer);
-      for (const chunk of chunks)
-        this.add({ id: chunk.id, text: chunk.text, chapterTitle: chunk.chapterTitle });
-    });
+    const index = createBM25Index(chunks);
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(BM25_STORE, 'readwrite');
@@ -254,17 +247,8 @@ class AIStore {
     const index = await this.loadBM25Index(bookHash);
     if (!index) return [];
     const chunks = await this.getChunks(bookHash);
-    const chunkMap = new Map(chunks.map((c) => [c.id, c]));
     try {
-      const results = index.search(query);
-      const scored: ScoredChunk[] = [];
-      for (const result of results) {
-        const chunk = chunkMap.get(result.ref);
-        if (!chunk) continue;
-        if (maxPage !== undefined && chunk.pageNumber > maxPage) continue;
-        scored.push({ ...chunk, score: result.score, searchMethod: 'bm25' });
-        if (scored.length >= topK) break;
-      }
+      const scored = searchBM25Index(index, chunks, query, topK, maxPage);
       if (scored.length > 0) aiLogger.search.bm25Results(scored.length, scored[0]!.score);
       return scored;
     } catch {

@@ -1,4 +1,6 @@
+import { isTauriAppPlatform } from '@/services/environment';
 import type { EmbeddingModel, LanguageModel } from 'ai';
+import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 
 export interface OpenAICompatibleModelConfig {
   provider: string;
@@ -61,6 +63,9 @@ const requestHeaders = (apiKey: string, headers?: Record<string, string | undefi
   ...Object.fromEntries(Object.entries(headers ?? {}).filter(([, value]) => value !== undefined)),
 });
 
+const providerFetch = (input: string, init: RequestInit) =>
+  isTauriAppPlatform() ? tauriFetch(input, init) : fetch(input, init);
+
 const assertOk = async (response: Response) => {
   if (response.ok) return;
   const text = await response.text().catch(() => '');
@@ -85,7 +90,7 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
         messages: messagesFromPrompt(options.prompt),
         stream: false,
       };
-      const response = await fetch(`${baseUrl}/chat/completions`, {
+      const response = await providerFetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: requestHeaders(config.apiKey, options.headers),
         body: JSON.stringify(body),
@@ -122,7 +127,7 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
         messages: messagesFromPrompt(options.prompt),
         stream: true,
       };
-      const response = await fetch(`${baseUrl}/chat/completions`, {
+      const response = await providerFetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: requestHeaders(config.apiKey, options.headers),
         body: JSON.stringify(body),
@@ -136,7 +141,6 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
           const textId = 'text-0';
           controller.enqueue({ type: 'stream-start', warnings: [] });
           controller.enqueue({ type: 'text-start', id: textId });
-
           const reader = response.body?.getReader();
           if (!reader) {
             controller.enqueue({ type: 'text-end', id: textId });
@@ -153,7 +157,6 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
           let buffer = '';
           let usage: Usage | undefined;
           let finishReason = 'stop';
-
           const processLine = (line: string) => {
             if (!line.startsWith('data:')) return;
             const data = line.slice(5).trim();
@@ -224,7 +227,7 @@ export function createOpenAICompatibleEmbeddingModel(
       abortSignal?: AbortSignal;
       headers?: Record<string, string | undefined>;
     }) {
-      const response = await fetch(`${baseUrl}/embeddings`, {
+      const response = await providerFetch(`${baseUrl}/embeddings`, {
         method: 'POST',
         headers: requestHeaders(config.apiKey, options.headers),
         body: JSON.stringify({ model: config.model, input: options.values }),

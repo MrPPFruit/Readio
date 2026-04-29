@@ -32,6 +32,7 @@ vi.mock('@/services/ai/providers', () => ({
 
 import AIPanel from '@/components/settings/AIPanel';
 import { AI_PROVIDER_ORDER, AI_PROVIDER_CATALOG } from '@/services/ai/constants';
+import { getAIProvider } from '@/services/ai/providers';
 
 describe('AIPanel', () => {
   beforeEach(() => {
@@ -188,5 +189,54 @@ describe('AIPanel', () => {
         }),
       }),
     );
+  });
+
+  it('tests provider connection when reader AI entrypoints are hidden', async () => {
+    vi.mocked(getAIProvider).mockReturnValue({
+      healthCheck: vi.fn().mockResolvedValue(true),
+    } as never);
+    mocks.settings = {
+      aiSettings: {
+        ...DEFAULT_AI_SETTINGS,
+        enabled: true,
+        showReaderAIEntrypoints: false,
+        provider: 'openrouter',
+        providerApiKeys: { openrouter: 'openrouter-key' },
+        providerModels: { openrouter: AI_PROVIDER_CATALOG.openrouter.defaultModel },
+      },
+    } as SystemSettings;
+
+    render(<AIPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test Connection' }));
+
+    expect(await screen.findByText('Connected')).toBeTruthy();
+    expect(getAIProvider).toHaveBeenCalled();
+    expect(screen.queryByText('阅读器 AI 入口已隐藏，可在设置中重新显示。')).toBeNull();
+  });
+
+  it('validates custom base URL safety before testing the connection', async () => {
+    mocks.settings = {
+      aiSettings: {
+        ...DEFAULT_AI_SETTINGS,
+        enabled: true,
+        provider: 'custom-openai-compatible',
+        providerApiKeys: { 'custom-openai-compatible': 'custom-key' },
+        providerModels: { 'custom-openai-compatible': 'custom-model' },
+        customProviderBaseUrl: 'http://192.168.5.205:8317/v1',
+        allowUnsafeCustomProviderBaseUrl: false,
+      },
+    } as SystemSettings;
+
+    render(<AIPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test Connection' }));
+
+    expect(
+      await screen.findByText(
+        '自定义基础 URL 必须是有效的 HTTPS 公网地址，或开启测试用本地/局域网代理。',
+      ),
+    ).toBeTruthy();
+    expect(getAIProvider).not.toHaveBeenCalled();
   });
 });

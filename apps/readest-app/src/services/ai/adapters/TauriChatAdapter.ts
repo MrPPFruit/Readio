@@ -1,5 +1,6 @@
-import { streamText } from 'ai';
+import { generateText } from 'ai';
 import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react';
+import { isWebAppPlatform } from '@/services/environment';
 import { AI_PROVIDER_CATALOG } from '../constants';
 import { getAIProvider } from '../providers';
 import { hybridSearch, isBookIndexed } from '../ragService';
@@ -112,7 +113,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
       }));
 
       try {
-        const useApiRoute = typeof window !== 'undefined';
+        const useApiRoute = isWebAppPlatform();
 
         let text = '';
 
@@ -127,17 +128,15 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
             yield { content: [{ type: 'text', text }] };
           }
         } else {
-          const result = streamText({
+          const result = await generateText({
             model: provider.getModel(),
             system: systemPrompt,
             messages: aiMessages,
             abortSignal,
           });
 
-          for await (const chunk of result.textStream) {
-            text += chunk;
-            yield { content: [{ type: 'text', text }] };
-          }
+          text = result.text;
+          if (text) yield { content: [{ type: 'text', text }] };
         }
 
         aiLogger.chat.complete(text.length);

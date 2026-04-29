@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+const { generateTextMock } = vi.hoisted(() => ({
+  generateTextMock: vi.fn(async () => ({ text: 'ok' })),
+}));
+
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
+
+vi.mock('ai', () => ({
+  generateText: generateTextMock,
+}));
 
 vi.mock('@/services/ai/logger', () => ({
   aiLogger: {
@@ -13,7 +21,11 @@ vi.mock('@/services/ai/logger', () => ({
 }));
 
 vi.mock('@/services/ai/openAICompatibleModel', () => ({
-  createOpenAICompatibleModel: vi.fn((config) => ({ kind: 'chat-model', config })),
+  createOpenAICompatibleModel: vi.fn((config) => ({
+    kind: 'chat-model',
+    config,
+    doGenerate: vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] })),
+  })),
   createOpenAICompatibleEmbeddingModel: vi.fn((config) => ({ kind: 'embedding-model', config })),
 }));
 
@@ -36,6 +48,24 @@ const settingsFor = (
   providerModels: { [provider]: AI_PROVIDER_CATALOG[provider].defaultModel },
   ...overrides,
 });
+
+const runWithAppPlatform = async (platform: string | undefined, fn: () => Promise<void>) => {
+  const originalPlatform = process.env['NEXT_PUBLIC_APP_PLATFORM'];
+  if (platform) {
+    process.env['NEXT_PUBLIC_APP_PLATFORM'] = platform;
+  } else {
+    delete process.env['NEXT_PUBLIC_APP_PLATFORM'];
+  }
+  try {
+    await fn();
+  } finally {
+    if (originalPlatform) {
+      process.env['NEXT_PUBLIC_APP_PLATFORM'] = originalPlatform;
+    } else {
+      delete process.env['NEXT_PUBLIC_APP_PLATFORM'];
+    }
+  }
+};
 
 describe('BYOK provider factory', () => {
   beforeEach(() => {
@@ -138,18 +168,59 @@ describe('BYOK provider factory', () => {
     ).toThrow('Unsupported provider');
   });
 
-  test('healthCheck sends provider, model, base URL, and key through the app route', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true });
-    const provider = getAIProvider(settingsFor('deepseek'));
+  test('healthCheck uses the browser API route on the web platform', async () => {
+    await runWithAppPlatform('web', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      const provider = getAIProvider(settingsFor('deepseek'));
 
-    await expect(provider.healthCheck()).resolves.toBe(true);
+      await expect(provider.healthCheck()).resolves.toBe(true);
 
-    const body = JSON.parse(mockFetch.mock.calls[0]![1].body as string) as Record<string, unknown>;
-    expect(mockFetch.mock.calls[0]![0]).toBe('/api/ai/chat');
-    expect(body['provider']).toBe('deepseek');
-    expect(body['apiKey']).toBe('deepseek-key');
-    expect(body['model']).toBe(AI_PROVIDER_CATALOG.deepseek.defaultModel);
-    expect(body['baseUrl']).toBe(AI_PROVIDER_CATALOG.deepseek.baseUrl);
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/ai/chat',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+      const requestInit = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+      expect(requestInit?.body).toBeDefined();
+      const body = JSON.parse(requestInit?.body as string);
+      expect(body).toMatchObject({
+        provider: 'deepseek',
+        apiKey: 'deepseek-key',
+        baseUrl: AI_PROVIDER_CATALOG.deepseek.baseUrl,
+        model: AI_PROVIDER_CATALOG.deepseek.defaultModel,
+        readerContext: { bookTitle: 'Connection Test', currentPage: 1, chunks: [] },
+        messages: [{ role: 'user', content: 'hi' }],
+      });
+      expect(createOpenAICompatibleModel).not.toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'deepseek' }),
+      );
+    });
+  });
+
+  test('healthCheck verifies the provider directly in the Tauri app', async () => {
+    await runWithAppPlatform('tauri', async () => {
+      const provider = getAIProvider(settingsFor('deepseek'));
+
+      await expect(provider.healthCheck()).resolves.toBe(true);
+
+      expect(createOpenAICompatibleModel).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          provider: 'deepseek',
+          apiKey: 'deepseek-key',
+          baseUrl: AI_PROVIDER_CATALOG.deepseek.baseUrl,
+          model: AI_PROVIDER_CATALOG.deepseek.defaultModel,
+        }),
+      );
+      expect(generateTextMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: expect.objectContaining({ kind: 'chat-model' }),
+          prompt: 'hi',
+        }),
+      );
+      expect(mockFetch).not.toHaveBeenCalledWith('/api/ai/chat', expect.anything());
+    });
   });
 
   test('embedding model is optional and uses provider embedding config only when configured', () => {

@@ -74,6 +74,16 @@ describe('BYOK provider catalog', () => {
     }
   });
 
+  test('configures Xiaomi MiMo with the token-plan OpenAI-compatible endpoint and best chat model', () => {
+    const catalog = constants['AI_PROVIDER_CATALOG'] as Record<string, ProviderCatalogEntry>;
+
+    expect(catalog['mimo']).toMatchObject({
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+      defaultModel: 'mimo-v2.5-pro',
+    });
+    expect(catalog['mimo']!.modelPresets.map((model) => model.id)).toContain('mimo-v2.5-pro');
+  });
+
   test('uses OpenAI-compatible protocol for aggregator and direct compatible vendors', () => {
     const catalog = constants['AI_PROVIDER_CATALOG'] as Record<string, ProviderCatalogEntry>;
 
