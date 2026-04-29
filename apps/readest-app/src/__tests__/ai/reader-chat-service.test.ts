@@ -2,15 +2,19 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import type { AISettings } from '@/services/ai/types';
 import { buildSystemPrompt } from '@/services/ai/prompts';
-import { streamReaderAIAnswer } from '@/services/ai/readerChatService';
+import { generateReaderAISuggestions, streamReaderAIAnswer } from '@/services/ai/readerChatService';
 
-const { hybridSearchMock, streamTextMock } = vi.hoisted(() => ({
-  hybridSearchMock: vi.fn(),
-  streamTextMock: vi.fn(),
-}));
+const { hybridSearchMock, getCurrentSectionContextChunksMock, streamTextMock, generateTextMock } =
+  vi.hoisted(() => ({
+    hybridSearchMock: vi.fn(),
+    getCurrentSectionContextChunksMock: vi.fn(),
+    streamTextMock: vi.fn(),
+    generateTextMock: vi.fn(),
+  }));
 
 vi.mock('@/services/ai/ragService', () => ({
   hybridSearch: hybridSearchMock,
+  getCurrentSectionContextChunks: getCurrentSectionContextChunksMock,
 }));
 
 vi.mock('@/services/ai/providers', () => ({
@@ -20,6 +24,7 @@ vi.mock('@/services/ai/providers', () => ({
 }));
 
 vi.mock('ai', () => ({
+  generateText: generateTextMock,
   streamText: streamTextMock,
 }));
 
@@ -44,15 +49,107 @@ const runWithoutWindow = async (fn: () => Promise<void>) => {
   }
 };
 
+const runWithAppPlatform = async (platform: string | undefined, fn: () => Promise<void>) => {
+  const originalPlatform = process.env['NEXT_PUBLIC_APP_PLATFORM'];
+  if (platform) {
+    process.env['NEXT_PUBLIC_APP_PLATFORM'] = platform;
+  } else {
+    delete process.env['NEXT_PUBLIC_APP_PLATFORM'];
+  }
+  try {
+    await fn();
+  } finally {
+    if (originalPlatform) {
+      process.env['NEXT_PUBLIC_APP_PLATFORM'] = originalPlatform;
+    } else {
+      delete process.env['NEXT_PUBLIC_APP_PLATFORM'];
+    }
+  }
+};
+
+describe('generateReaderAISuggestions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'chunk-1',
+        bookHash: 'book-hash',
+        sectionIndex: 1,
+        chapterTitle: '第一章',
+        text: '克莱恩在灰雾之上看见塔罗会成员讨论新的线索。',
+        pageNumber: 7,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+    getCurrentSectionContextChunksMock.mockResolvedValue([]);
+    generateTextMock.mockResolvedValue({ text: '灰雾是什么？\n线索指向谁？\n塔罗会有什么关系？' });
+  });
+
+  it('uses selected text as the suggestion context when a passage is selected', async () => {
+    const suggestions = await generateReaderAISuggestions({
+      settings,
+      bookHash: 'book-hash',
+      bookTitle: 'Book',
+      currentPage: 7,
+      source: 'selection',
+      selectionText: '克莱恩在灰雾之上看见新的线索。',
+      messages: [],
+    });
+
+    expect(suggestions).toEqual(['灰雾是什么？', '线索指向谁？', '塔罗会有什么关系？']);
+    expect(hybridSearchMock).not.toHaveBeenCalled();
+    expect(generateTextMock.mock.calls[0]![0].prompt).toContain('选中文本');
+    expect(generateTextMock.mock.calls[0]![0].prompt).toContain('克莱恩在灰雾之上看见新的线索。');
+  });
+
+  it('uses current page content when no text is selected', async () => {
+    const suggestions = await generateReaderAISuggestions({
+      settings,
+      bookHash: 'book-hash',
+      bookTitle: 'Book',
+      currentPage: 7,
+      source: 'initial',
+      messages: [],
+    });
+
+    expect(suggestions).toHaveLength(3);
+    expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 7, 3);
+    expect(generateTextMock.mock.calls[0]![0].prompt).toContain('当前页面内容');
+    expect(generateTextMock.mock.calls[0]![0].prompt).toContain('灰雾之上');
+  });
+
+  it('uses the previous answer as context for follow-up suggestions', async () => {
+    const suggestions = await generateReaderAISuggestions({
+      settings,
+      bookHash: 'book-hash',
+      bookTitle: 'Book',
+      currentPage: 7,
+      source: 'follow-up',
+      messages: [
+        { role: 'user', content: '前面发生了什么？' },
+        { role: 'assistant', content: '克莱恩发现灰雾和线索有关。' },
+      ],
+    });
+
+    expect(suggestions).toHaveLength(3);
+    expect(hybridSearchMock).not.toHaveBeenCalled();
+    expect(generateTextMock.mock.calls[0]![0].prompt).toContain('先前回答');
+    expect(generateTextMock.mock.calls[0]![0].prompt).toContain('克莱恩发现灰雾和线索有关。');
+  });
+});
+
 describe('streamReaderAIAnswer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hybridSearchMock.mockResolvedValue([]);
+    getCurrentSectionContextChunksMock.mockResolvedValue([]);
     streamTextMock.mockReturnValue({
       textStream: (async function* () {
         yield 'ok';
       })(),
     });
+    generateTextMock.mockResolvedValue({ text: 'ok' });
   });
 
   it('passes currentPage to hybridSearch when spoiler protection is enabled', async () => {
@@ -107,85 +204,175 @@ describe('streamReaderAIAnswer', () => {
         3,
         undefined,
       );
-      expect(streamTextMock).toHaveBeenCalled();
+      expect(generateTextMock).toHaveBeenCalled();
     });
   });
 
-  it('sends bounded readerContext instead of raw system when using the browser API route', async () => {
-    const originalWindow = globalThis.window;
-    const fetchMock = vi.fn(async (_input: string, _init: RequestInit) => new Response('ok'));
-    Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
-    Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });
+  it('adds current-page context before search results for generic recap questions', async () => {
+    getCurrentSectionContextChunksMock.mockResolvedValue([
+      {
+        id: 'current-page-1',
+        bookHash: 'book-hash',
+        sectionIndex: 546,
+        chapterTitle: '第五十八章 压制',
+        text: '白银城，伯格家。戴里克点亮蜡烛，准备起献祭仪式。',
+        pageNumber: 4052,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
     hybridSearchMock.mockResolvedValue([
       {
-        id: 'chunk-1',
+        id: 'older-search-1',
         bookHash: 'book-hash',
-        sectionIndex: 1,
-        chapterTitle: 'Chapter 1',
-        text: 'A relevant passage.',
-        pageNumber: 4,
-        score: 0.9,
-        searchMethod: 'hybrid',
+        sectionIndex: 544,
+        chapterTitle: '第五十六章 驱散',
+        text: '班西港的气氛越来越不对劲。',
+        pageNumber: 4037,
+        score: 22,
+        searchMethod: 'bm25',
       },
     ]);
 
-    try {
-      const chunks: string[] = [];
-      for await (const chunk of streamReaderAIAnswer({
+    await runWithAppPlatform('tauri', async () => {
+      for await (const _chunk of streamReaderAIAnswer({
         settings,
         bookHash: 'book-hash',
         bookTitle: 'Book',
         authorName: 'Author',
-        currentPage: 42,
+        currentPage: 4054,
         messages: [],
-        question: '发生了什么？',
+        question: '前面发生了什么？',
       })) {
-        chunks.push(chunk);
       }
+    });
 
-      expect(chunks).toEqual(['ok']);
-      const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
-      expect(requestInit?.body).toBeDefined();
-      const body = JSON.parse(requestInit?.body as string);
-      expect(body.system).toBeUndefined();
-      expect(body.provider).toBe('openrouter');
-      expect(body.apiKey).toBe('openrouter-key');
-      expect(body.model).toBe('google/gemini-2.5-flash-lite');
-      expect(body.readerContext).toMatchObject({
-        bookTitle: 'Book',
-        authorName: 'Author',
-        currentPage: 42,
-        spoilerProtection: true,
-        chunks: [{ text: 'A relevant passage.', chapterTitle: 'Chapter 1', pageNumber: 4 }],
-      });
-    } finally {
-      Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
-    }
+    const call = generateTextMock.mock.calls[0]?.[0];
+    expect(call.system.indexOf('白银城，伯格家')).toBeLessThan(
+      call.system.indexOf('班西港的气氛越来越不对劲'),
+    );
+    expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 4054, 4);
   });
 
-  it('classifies browser API route provider failures for actionable recovery', async () => {
-    const originalWindow = globalThis.window;
-    const fetchMock = vi.fn(async () =>
-      Response.json({ error: 'Provider request failed' }, { status: 502 }),
-    );
-    Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
-    Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });
+  it('uses direct provider generation in the Tauri app even when window exists', async () => {
+    await runWithAppPlatform('tauri', async () => {
+      const originalWindow = globalThis.window;
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn(
+        async (_input: string, _init: RequestInit) => new Response('<!DOCTYPE html>'),
+      );
+      Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
+      Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });
 
-    try {
-      await expect(async () => {
-        for await (const _chunk of streamReaderAIAnswer({
+      try {
+        const chunks: string[] = [];
+        for await (const chunk of streamReaderAIAnswer({
           settings,
           bookHash: 'book-hash',
           bookTitle: 'Book',
+          authorName: 'Author',
           currentPage: 42,
           messages: [],
           question: '发生了什么？',
         })) {
+          chunks.push(chunk);
         }
-      }).rejects.toThrow('provider-failed');
-    } finally {
-      Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
-    }
+
+        expect(chunks).toEqual(['ok']);
+        expect(generateTextMock).toHaveBeenCalled();
+        expect(streamTextMock).not.toHaveBeenCalled();
+        expect(fetchMock).not.toHaveBeenCalled();
+      } finally {
+        Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
+        Object.defineProperty(globalThis, 'fetch', { value: originalFetch, configurable: true });
+      }
+    });
+  });
+
+  it('sends bounded readerContext instead of raw system when using the web browser API route', async () => {
+    await runWithAppPlatform('web', async () => {
+      const originalWindow = globalThis.window;
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn(async (_input: string, _init: RequestInit) => new Response('ok'));
+      Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
+      Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });
+      hybridSearchMock.mockResolvedValue([
+        {
+          id: 'chunk-1',
+          bookHash: 'book-hash',
+          sectionIndex: 1,
+          chapterTitle: 'Chapter 1',
+          text: 'A relevant passage.',
+          pageNumber: 4,
+          score: 0.9,
+          searchMethod: 'hybrid',
+        },
+      ]);
+
+      try {
+        const chunks: string[] = [];
+        for await (const chunk of streamReaderAIAnswer({
+          settings,
+          bookHash: 'book-hash',
+          bookTitle: 'Book',
+          authorName: 'Author',
+          currentPage: 42,
+          messages: [],
+          question: '发生了什么？',
+        })) {
+          chunks.push(chunk);
+        }
+
+        expect(chunks).toEqual(['ok']);
+        const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+        expect(requestInit?.body).toBeDefined();
+        const body = JSON.parse(requestInit?.body as string);
+        expect(body.system).toBeUndefined();
+        expect(body.provider).toBe('openrouter');
+        expect(body.apiKey).toBe('openrouter-key');
+        expect(body.model).toBe('google/gemini-2.5-flash-lite');
+        expect(body.readerContext).toMatchObject({
+          bookTitle: 'Book',
+          authorName: 'Author',
+          currentPage: 42,
+          spoilerProtection: true,
+          chunks: [{ text: 'A relevant passage.', chapterTitle: 'Chapter 1', pageNumber: 4 }],
+        });
+      } finally {
+        Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
+        Object.defineProperty(globalThis, 'fetch', { value: originalFetch, configurable: true });
+      }
+    });
+  });
+
+  it('classifies browser API route provider failures for actionable recovery', async () => {
+    await runWithAppPlatform('web', async () => {
+      const originalWindow = globalThis.window;
+      const originalFetch = globalThis.fetch;
+      const fetchMock = vi.fn(async () =>
+        Response.json({ error: 'Provider request failed' }, { status: 502 }),
+      );
+      Object.defineProperty(globalThis, 'window', { value: {}, configurable: true });
+      Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });
+
+      try {
+        await expect(async () => {
+          for await (const _chunk of streamReaderAIAnswer({
+            settings,
+            bookHash: 'book-hash',
+            bookTitle: 'Book',
+            currentPage: 42,
+            messages: [],
+            question: '发生了什么？',
+          })) {
+          }
+        }).rejects.toThrow('provider-failed');
+        expect(fetchMock).toHaveBeenCalledWith('/api/ai/chat', expect.anything());
+      } finally {
+        Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
+        Object.defineProperty(globalThis, 'fetch', { value: originalFetch, configurable: true });
+      }
+    });
   });
 
   it('builds an unprotected prompt when spoiler protection is disabled', async () => {

@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
 import { getAIAvailability } from '@/services/ai/availability';
 import { indexBook, isBookIndexed, type BookDocType } from '@/services/ai/ragService';
-import { streamReaderAIAnswer } from '@/services/ai/readerChatService';
+import { generateReaderAISuggestions, streamReaderAIAnswer } from '@/services/ai/readerChatService';
 import { useAIChatStore } from '@/store/aiChatStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
@@ -47,6 +47,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
   const [selection, setSelection] = useState<ReaderAISelectionContext | undefined>();
   const [initialQuestion, setInitialQuestion] = useState('');
   const [messages, setMessages] = useState<ReaderAIMessage[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [spoilerProtection, setSpoilerProtection] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
@@ -60,10 +61,45 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     abortControllerRef.current = null;
     inFlightMessageIdsRef.current = null;
     setMessages([createMessage('assistant', message)]);
+    setSuggestions([]);
     setError(undefined);
     setLoading(false);
     setSetupSettingsItemId(settingsItemId);
     setMode('answer');
+  };
+
+  const refreshSuggestions = async (
+    suggestionSource: 'selection' | 'initial' | 'follow-up',
+    nextMessages: ReaderAIMessage[] = messages,
+    entrySelection = selection,
+  ) => {
+    const currentSettings = useSettingsStore.getState().settings.aiSettings;
+    if (getAIAvailability(currentSettings).status !== 'ready') return;
+
+    const bookHash = bookKey.split('-')[0]!;
+    const bookData = useBookDataStore.getState().getBookData(bookKey);
+    const progress = useReaderStore.getState().getProgress(bookKey);
+    const bookTitle =
+      bookData?.book?.title || formatTitle(bookData?.bookDoc?.metadata.title || '') || '当前书籍';
+    const authorName =
+      bookData?.book?.author ||
+      (bookData?.bookDoc?.metadata.author ? formatAuthors(bookData.bookDoc.metadata.author) : '');
+
+    try {
+      const generatedSuggestions = await generateReaderAISuggestions({
+        settings: { ...currentSettings, spoilerProtection },
+        bookHash,
+        bookTitle,
+        authorName,
+        currentPage: entrySelection?.page || progress?.page || 1,
+        source: suggestionSource,
+        selectionText: entrySelection?.text,
+        messages: nextMessages.map(({ role, content }) => ({ role, content })),
+      });
+      setSuggestions(generatedSuggestions);
+    } catch {
+      setSuggestions([]);
+    }
   };
 
   const openReadyAskBox = (
@@ -73,8 +109,14 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     setSource(entrySource);
     setSelection(entrySelection);
     setInitialQuestion(entrySource === 'selection' ? '解释这段' : '');
+    setSuggestions([]);
     setSetupSettingsItemId(undefined);
     setMode('ask');
+    void refreshSuggestions(
+      entrySource === 'selection' ? 'selection' : 'initial',
+      [],
+      entrySelection,
+    );
   };
 
   const openFromEntryPoint = (
@@ -140,6 +182,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     abortControllerRef.current = null;
     setLoading(false);
     removeInFlightMessages();
+    setSuggestions([]);
     setSetupSettingsItemId(undefined);
     setMode('closed');
   };
@@ -277,6 +320,11 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
       if (!controller.signal.aborted) {
         await persistCompletedExchange(question, answer, bookHash);
         inFlightMessageIdsRef.current = null;
+        void refreshSuggestions('follow-up', [
+          ...priorMessages,
+          userMessage,
+          { ...assistantMessage, content: answer },
+        ]);
       }
     } catch (streamError) {
       if ((streamError as Error).name !== 'AbortError') {
@@ -310,6 +358,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
           source={source}
           gridInsets={gridInsets}
           initialQuestion={initialQuestion}
+          suggestions={suggestions}
           spoilerProtection={spoilerProtection}
           onSpoilerProtectionChange={setSpoilerProtection}
           onSubmit={askAI}
@@ -331,6 +380,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
               : undefined
           }
           spoilerProtection={spoilerProtection}
+          suggestions={suggestions}
           onSpoilerProtectionChange={setSpoilerProtection}
           onSubmit={askAI}
           onClose={closeAssistant}

@@ -1,9 +1,10 @@
-import { streamText, type ModelMessage } from 'ai';
+import { generateText, type ModelMessage } from 'ai';
 
+import { isWebAppPlatform } from '@/services/environment';
 import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { buildSystemPrompt } from './prompts';
-import { hybridSearch } from './ragService';
+import { getCurrentSectionContextChunks, hybridSearch } from './ragService';
 import type { AIProviderName, AISettings, ScoredChunk } from './types';
 
 export interface ReaderChatMessage {
@@ -23,7 +24,19 @@ export interface StreamReaderAIAnswerOptions {
   signal?: AbortSignal;
 }
 
+export interface GenerateReaderAISuggestionsOptions {
+  settings: AISettings;
+  bookHash: string;
+  bookTitle: string;
+  authorName?: string;
+  currentPage: number;
+  source: 'selection' | 'initial' | 'follow-up';
+  selectionText?: string;
+  messages: ReaderChatMessage[];
+}
+
 const highRiskSpoilerPattern = /结局|谁是凶手|后面|最后|后来|最终|死了没|会死|真相|剧透/;
+const currentContextQuestionPattern = /前面|发生了什么|本章|这里|当前|刚才|这段|上一段/;
 
 const isSupportedProvider = (provider: string): provider is AIProviderName =>
   provider in AI_PROVIDER_CATALOG;
@@ -31,6 +44,72 @@ const isSupportedProvider = (provider: string): provider is AIProviderName =>
 function buildQuestion(question: string, selectionText?: string): string {
   if (!selectionText?.trim()) return question;
   return `选中文本：\n${selectionText.trim()}\n\n问题：${question}`;
+}
+
+function parseSuggestions(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => line.replace(/^[-*\d.、\s]+/, '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+function chunksToText(chunks: ScoredChunk[]): string {
+  return chunks
+    .map((chunk) => chunk.text.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function buildSuggestionContext({
+  settings,
+  bookHash,
+  currentPage,
+  source,
+  selectionText,
+  messages,
+}: GenerateReaderAISuggestionsOptions): Promise<{ label: string; content: string }> {
+  if (source === 'selection' && selectionText?.trim()) {
+    return { label: '选中文本', content: selectionText.trim() };
+  }
+
+  if (source === 'follow-up') {
+    const previousAnswer = [...messages].reverse().find((message) => message.role === 'assistant');
+    if (previousAnswer?.content.trim()) {
+      return { label: '先前回答', content: previousAnswer.content.trim() };
+    }
+  }
+
+  const currentChunks = await getCurrentSectionContextChunks(bookHash, currentPage, 3);
+  const currentPageText = chunksToText(currentChunks);
+  if (currentPageText) return { label: '当前页面内容', content: currentPageText };
+
+  const searchChunks = await hybridSearch(
+    bookHash,
+    '当前页面可提问的问题',
+    settings,
+    3,
+    settings.spoilerProtection ? currentPage : undefined,
+  );
+  return { label: '当前页面内容', content: chunksToText(searchChunks) };
+}
+
+export async function generateReaderAISuggestions(
+  options: GenerateReaderAISuggestionsOptions,
+): Promise<string[]> {
+  const { settings, bookTitle, authorName = '', currentPage, source } = options;
+  if (!isSupportedProvider(settings.provider)) return [];
+
+  const context = await buildSuggestionContext(options);
+  if (!context.content) return [];
+
+  const provider = getAIProvider(settings);
+  const result = await generateText({
+    model: provider.getModel(),
+    prompt: `你是阅读 AI 助手。请基于${context.label}，为读者生成 3 个适合继续提问的简短中文问题。\n\n书名：${bookTitle}\n作者：${authorName || '未知'}\n当前页：${currentPage}\n建议来源：${source}\n防剧透：${settings.spoilerProtection ? '开启，只能基于当前进度' : '关闭'}\n\n${context.label}：\n${context.content}\n\n要求：\n- 只输出 3 行，每行一个问题\n- 不要编号以外的解释\n- 不要包含未读后文剧透`,
+  });
+
+  return parseSuggestions(result.text);
 }
 
 async function* streamViaApiRoute(
@@ -110,6 +189,14 @@ export async function* streamReaderAIAnswer({
       settings.maxContextChunks || 5,
       settings.spoilerProtection ? currentPage : undefined,
     );
+    if (settings.spoilerProtection && currentContextQuestionPattern.test(question)) {
+      const currentChunks = await getCurrentSectionContextChunks(bookHash, currentPage, 4);
+      const seen = new Set(currentChunks.map((chunk) => chunk.id));
+      chunks = [...currentChunks, ...chunks.filter((chunk) => !seen.has(chunk.id))].slice(
+        0,
+        settings.maxContextChunks || 5,
+      );
+    }
   } catch {
     chunks = [];
   }
@@ -131,7 +218,7 @@ export async function* streamReaderAIAnswer({
 
   if (!isSupportedProvider(settings.provider)) throw new Error('Unsupported provider');
 
-  if (typeof window !== 'undefined') {
+  if (isWebAppPlatform()) {
     yield* streamViaApiRoute(
       aiMessages,
       { bookTitle, authorName, currentPage, spoilerProtection: settings.spoilerProtection, chunks },
@@ -142,14 +229,12 @@ export async function* streamReaderAIAnswer({
   }
 
   const provider = getAIProvider(settings);
-  const result = streamText({
+  const result = await generateText({
     model: provider.getModel(),
     system: systemPrompt,
     messages: aiMessages,
     abortSignal: signal,
   });
 
-  for await (const chunk of result.textStream) {
-    yield chunk;
-  }
+  if (result.text) yield result.text;
 }

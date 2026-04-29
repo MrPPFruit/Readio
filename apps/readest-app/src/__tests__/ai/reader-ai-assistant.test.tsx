@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   indexBook: vi.fn(),
   isBookIndexed: vi.fn(),
   streamReaderAIAnswer: vi.fn(),
+  generateReaderAISuggestions: vi.fn(),
   createConversation: vi.fn(),
   addMessage: vi.fn(),
   getBookData: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock('@/services/ai/ragService', () => ({
 
 vi.mock('@/services/ai/readerChatService', () => ({
   streamReaderAIAnswer: mocks.streamReaderAIAnswer,
+  generateReaderAISuggestions: mocks.generateReaderAISuggestions,
 }));
 
 vi.mock('@/store/aiChatStore', () => ({
@@ -93,17 +95,20 @@ vi.mock('@/app/reader/components/ai/ReaderAIButton', () => ({
 vi.mock('@/app/reader/components/ai/ReaderAIAskBox', () => ({
   default: ({
     spoilerProtection,
+    suggestions,
     onSpoilerProtectionChange,
     onSubmit,
     onClose,
   }: {
     spoilerProtection: boolean;
+    suggestions: string[];
     onSpoilerProtectionChange: (enabled: boolean) => void;
     onSubmit: (question: string) => void;
     onClose: () => void;
   }) => (
     <div>
       <div data-testid='ask-spoiler-state'>{spoilerProtection ? 'protected' : 'unprotected'}</div>
+      <div data-testid='ask-suggestions'>{suggestions.join('|')}</div>
       <button onClick={() => onSpoilerProtectionChange(false)}>allow-spoilers</button>
       <button onClick={() => onSubmit('question')}>ask-question</button>
       <button onClick={onClose}>close-ask</button>
@@ -117,6 +122,7 @@ vi.mock('@/app/reader/components/ai/ReaderAIAnswerPanel', () => ({
     loading,
     spoilerProtection,
     onSpoilerProtectionChange,
+    suggestions,
     onSubmit,
     onClose,
     setupAction,
@@ -124,6 +130,7 @@ vi.mock('@/app/reader/components/ai/ReaderAIAnswerPanel', () => ({
     messages: { role: string; content: string }[];
     loading: boolean;
     spoilerProtection: boolean;
+    suggestions: string[];
     onSpoilerProtectionChange: (enabled: boolean) => void;
     onSubmit: (question: string) => void;
     onClose: () => void;
@@ -133,6 +140,7 @@ vi.mock('@/app/reader/components/ai/ReaderAIAnswerPanel', () => ({
       <div data-testid='answer-spoiler-state'>
         {spoilerProtection ? 'protected' : 'unprotected'}
       </div>
+      <div data-testid='answer-suggestions'>{suggestions.join('|')}</div>
       <button onClick={() => onSpoilerProtectionChange(false)}>allow-spoilers-answer</button>
       <div data-testid='messages'>
         {messages.map((message) => `${message.role}:${message.content}`).join('|')}
@@ -181,6 +189,7 @@ beforeEach(() => {
   mocks.indexBook.mockResolvedValue(undefined);
   mocks.isBookIndexed.mockResolvedValue(true);
   mocks.streamReaderAIAnswer.mockReturnValue(streamChunks(['answer']));
+  mocks.generateReaderAISuggestions.mockResolvedValue(['生成建议一', '生成建议二', '生成建议三']);
   mocks.createConversation.mockResolvedValue('new-conversation');
   mocks.addMessage.mockResolvedValue(undefined);
   mocks.getBookData.mockReturnValue({
@@ -296,6 +305,66 @@ describe('ReaderAIAssistant integration safeguards', () => {
     );
     expect(screen.queryByText('ask-question')).toBeNull();
     expect(mocks.streamReaderAIAnswer).not.toHaveBeenCalled();
+  });
+
+  it('generates ask-box suggestions from selected text context', async () => {
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+
+    await import('@/utils/event').then(({ eventDispatcher }) =>
+      eventDispatcher.dispatch('reader-ai-open', {
+        bookKey: 'current-book-instance',
+        source: 'selection',
+        selection: { text: '克莱恩看见灰雾之上出现新的线索', page: 7 },
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.generateReaderAISuggestions).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'selection',
+          selectionText: '克莱恩看见灰雾之上出现新的线索',
+          messages: [],
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('ask-suggestions').textContent).toBe(
+        '生成建议一|生成建议二|生成建议三',
+      ),
+    );
+  });
+
+  it('generates follow-up suggestions from the previous answer after streaming completes', async () => {
+    mocks.streamReaderAIAnswer.mockReturnValue(streamChunks(['这段回答提到了灰雾和线索']));
+    mocks.generateReaderAISuggestions.mockResolvedValueOnce([
+      '初始建议一',
+      '初始建议二',
+      '初始建议三',
+    ]);
+    mocks.generateReaderAISuggestions.mockResolvedValueOnce([
+      '可以追问灰雾吗？',
+      '线索指向谁？',
+      '和前文关系？',
+    ]);
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('answer-suggestions').textContent).toBe(
+        '可以追问灰雾吗？|线索指向谁？|和前文关系？',
+      ),
+    );
+    expect(mocks.generateReaderAISuggestions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        source: 'follow-up',
+        messages: [
+          { role: 'user', content: 'question' },
+          { role: 'assistant', content: '这段回答提到了灰雾和线索' },
+        ],
+      }),
+    );
   });
 
   it('passes spoiler protection state to answer streaming and defaults to protected mode', async () => {

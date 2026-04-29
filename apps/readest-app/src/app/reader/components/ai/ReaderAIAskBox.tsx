@@ -14,6 +14,7 @@ interface ReaderAIAskBoxProps {
   source: ReaderAIEntrySource;
   gridInsets?: Insets;
   initialQuestion?: string;
+  suggestions?: string[];
   spoilerProtection?: boolean;
   onSpoilerProtectionChange?: (enabled: boolean) => void;
   onSubmit: (question: string) => void;
@@ -27,6 +28,7 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
   source,
   gridInsets,
   initialQuestion = '',
+  suggestions: generatedSuggestions,
   spoilerProtection = true,
   onSpoilerProtectionChange,
   onSubmit,
@@ -36,8 +38,13 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const suggestions = useMemo(
-    () => (source === 'selection' ? selectionSuggestions : controlSuggestions),
-    [source],
+    () =>
+      generatedSuggestions?.length
+        ? generatedSuggestions
+        : source === 'selection'
+          ? selectionSuggestions
+          : controlSuggestions,
+    [generatedSuggestions, source],
   );
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ReaderAIAnswerPanel from '@/app/reader/components/ai/ReaderAIAnswerPanel';
@@ -168,6 +168,31 @@ describe('Reader AI panels', () => {
     unmount();
 
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('keeps the original question visible and shows follow-up turns inline', () => {
+    render(
+      <ReaderAIAnswerPanel
+        messages={[
+          { id: 'user-1', role: 'user', content: '前面发生了什么？', createdAt: 1 },
+          { id: 'assistant-1', role: 'assistant', content: '第一次回答', createdAt: 2 },
+          { id: 'user-2', role: 'user', content: '再解释简单一点', createdAt: 3 },
+          { id: 'assistant-2', role: 'assistant', content: '第二次回答', createdAt: 4 },
+        ]}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const originalQuestion = screen.getByRole('region', { name: '原始问题' });
+    expect(within(originalQuestion).getByText('前面发生了什么？')).toBeTruthy();
+    expect(within(originalQuestion).queryByText('再解释简单一点')).toBeNull();
+
+    const conversationHistory = screen.getByRole('region', { name: 'AI 对话历史' });
+    expect(within(conversationHistory).getByText('第一次回答')).toBeTruthy();
+    expect(within(conversationHistory).getByText('追问')).toBeTruthy();
+    expect(within(conversationHistory).getByText('再解释简单一点')).toBeTruthy();
+    expect(within(conversationHistory).getByText('第二次回答')).toBeTruthy();
   });
 
   it('submits answer panel follow-up questions through the unified composer', () => {

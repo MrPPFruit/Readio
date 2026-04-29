@@ -19,6 +19,7 @@ interface ReaderAIAnswerPanelProps {
     onClick: () => void;
   };
   spoilerProtection?: boolean;
+  suggestions?: string[];
   onSpoilerProtectionChange?: (enabled: boolean) => void;
   onSubmit: (question: string) => void;
   onClose: () => void;
@@ -33,6 +34,7 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
   error,
   setupAction,
   spoilerProtection = true,
+  suggestions = followUpSuggestions,
   onSpoilerProtectionChange,
   onSubmit,
   onClose,
@@ -85,8 +87,10 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
     }
   };
 
-  const latestQuestion = [...messages].reverse().find((message) => message.role === 'user');
-  const assistantMessages = messages.filter((message) => message.role === 'assistant');
+  const initialQuestion = messages.find((message) => message.role === 'user');
+  const conversationMessages = initialQuestion
+    ? messages.filter((message) => message.id !== initialQuestion.id)
+    : messages;
 
   return (
     <section
@@ -149,29 +153,36 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
           paddingLeft: 16 + (gridInsets?.left ?? 0),
         }}
       >
-        {latestQuestion && (
-          <section className='border-primary/20 bg-primary/10 text-base-content rounded-2xl border px-4 py-3'>
+        {initialQuestion && (
+          <section
+            className='border-primary/20 bg-primary/10 text-base-content rounded-2xl border px-4 py-3'
+            aria-label='原始问题'
+          >
             <div className='text-primary/80 mb-1 text-[11px] font-semibold uppercase tracking-wide'>
               你的问题
             </div>
-            <p className='text-sm leading-6'>{latestQuestion.content}</p>
+            <p className='text-sm leading-6'>{initialQuestion.content}</p>
           </section>
         )}
 
-        <div className='space-y-3'>
-          {assistantMessages.map((message) => (
+        <section className='space-y-3' aria-label='AI 对话历史'>
+          {conversationMessages.map((message) => (
             <article
               key={message.id}
-              className='border-base-content/10 bg-base-100 text-base-content eink:shadow-none rounded-[1.25rem] border px-4 py-4 shadow-sm'
+              className={
+                message.role === 'user'
+                  ? 'border-primary/15 bg-primary/5 text-base-content rounded-[1.25rem] border px-4 py-3'
+                  : 'border-base-content/10 bg-base-100 text-base-content eink:shadow-none rounded-[1.25rem] border px-4 py-4 shadow-sm'
+              }
             >
               <div className='text-base-content/55 mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide'>
                 <span className='bg-primary h-2 w-2 rounded-full' aria-hidden='true' />
-                AI 回答
+                {message.role === 'user' ? '追问' : 'AI 回答'}
               </div>
               <div className='whitespace-pre-wrap text-sm leading-7'>{message.content}</div>
             </article>
           ))}
-        </div>
+        </section>
 
         {loading && (
           <div
@@ -201,7 +212,7 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
 
         {!loading && (
           <ReaderAISuggestionRail
-            suggestions={followUpSuggestions}
+            suggestions={suggestions}
             selectedValue={question}
             ariaLabel='追问建议'
             onSelect={setQuestion}
