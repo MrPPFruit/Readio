@@ -94,6 +94,50 @@ describe('AIPanel', () => {
     expect(screen.getByText('Base URL')).toBeTruthy();
     expect(screen.getByPlaceholderText('https://api.example.com/v1')).toBeTruthy();
     expect(screen.getByText('Custom Model ID')).toBeTruthy();
+    expect(screen.getByText('Enable local/LAN testing proxy')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Only for development. Allows HTTP localhost or private LAN endpoints such as CLIProxyAPI; reading context may be sent over your local network without HTTPS.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('saves local/LAN testing proxy mode only for custom OpenAI-compatible providers', () => {
+    mocks.settings = {
+      aiSettings: {
+        ...DEFAULT_AI_SETTINGS,
+        enabled: true,
+        provider: 'custom-openai-compatible',
+        providerApiKeys: {},
+      },
+    } as SystemSettings;
+
+    render(<AIPanel />);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Enable local\/LAN testing proxy/ }));
+
+    expect(mocks.setSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiSettings: expect.objectContaining({
+          provider: 'custom-openai-compatible',
+          allowUnsafeCustomProviderBaseUrl: true,
+        }),
+      }),
+    );
+  });
+
+  it('does not show local/LAN testing proxy controls for normal cloud providers', () => {
+    mocks.settings = {
+      aiSettings: {
+        ...DEFAULT_AI_SETTINGS,
+        enabled: true,
+        provider: 'openrouter',
+      },
+    } as SystemSettings;
+
+    render(<AIPanel />);
+
+    expect(screen.queryByText('Enable local/LAN testing proxy')).toBeNull();
   });
 
   it('saves reader AI entry visibility separately from assistant availability', () => {

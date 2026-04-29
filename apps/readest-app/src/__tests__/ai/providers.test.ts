@@ -84,6 +84,41 @@ describe('BYOK provider factory', () => {
     );
   });
 
+  test('allows custom local/LAN testing proxy without an API key', () => {
+    const provider = getAIProvider(
+      settingsFor('custom-openai-compatible', {
+        allowUnsafeCustomProviderBaseUrl: true,
+        providerApiKeys: {},
+        customProviderBaseUrl: 'http://192.168.5.205:8317/v1',
+        providerModels: { 'custom-openai-compatible': 'gpt-4o-mini' },
+      }),
+    );
+
+    provider.getModel();
+
+    expect(createOpenAICompatibleModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        provider: 'custom-openai-compatible',
+        apiKey: '',
+        baseUrl: 'http://192.168.5.205:8317/v1',
+        model: 'gpt-4o-mini',
+      }),
+    );
+  });
+
+  test('rejects non-local HTTP custom testing proxy without an API key', () => {
+    expect(() =>
+      getAIProvider(
+        settingsFor('custom-openai-compatible', {
+          allowUnsafeCustomProviderBaseUrl: true,
+          providerApiKeys: {},
+          customProviderBaseUrl: 'http://api.example.test/v1',
+          providerModels: { 'custom-openai-compatible': 'custom-model' },
+        }),
+      ),
+    ).toThrow('API key required for Custom OpenAI-compatible');
+  });
+
   test('throws provider-specific setup error when API key is missing', () => {
     expect(() =>
       getAIProvider(

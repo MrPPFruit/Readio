@@ -33,19 +33,31 @@ const privateIpPatterns = [
   /^\[?::1\]?$/,
 ];
 
-const isSafeCustomBaseUrl = (baseUrl: string) => {
+const isPrivateHost = (hostname: string) =>
+  privateIpPatterns.some((pattern) => pattern.test(hostname));
+
+export const getCustomBaseUrlSafety = (baseUrl: string, allowUnsafeLocalProxy?: boolean) => {
   try {
     const url = new URL(baseUrl);
-    return (
-      url.protocol === 'https:' &&
-      !url.username &&
-      !url.password &&
-      !privateIpPatterns.some((pattern) => pattern.test(url.hostname))
-    );
+    if (url.username || url.password) return 'invalid';
+    if (url.protocol === 'https:' && !isPrivateHost(url.hostname)) return 'safe';
+    if (allowUnsafeLocalProxy && url.protocol === 'http:' && isPrivateHost(url.hostname)) {
+      return 'unsafe-local-proxy';
+    }
+    if (allowUnsafeLocalProxy && url.protocol === 'http:' && !isPrivateHost(url.hostname)) {
+      return 'invalid-non-local-http';
+    }
+    return 'invalid';
   } catch {
-    return false;
+    return 'invalid';
   }
 };
+
+const isCustomLocalTestingProxy = (settings: AISettings) =>
+  settings.provider === 'custom-openai-compatible' &&
+  settings.allowUnsafeCustomProviderBaseUrl === true &&
+  getCustomBaseUrlSafety(settings.customProviderBaseUrl?.trim() ?? '', true) ===
+    'unsafe-local-proxy';
 
 export const getAIAvailability = (settings: AISettings): AIAvailability => {
   if (!settings.showReaderAIEntrypoints) {
@@ -72,14 +84,6 @@ export const getAIAvailability = (settings: AISettings): AIAvailability => {
     };
   }
 
-  if (!settings.providerApiKeys?.[settings.provider]?.trim()) {
-    return {
-      status: 'missing-api-key',
-      settingsItemId: 'settings.ai.apiKey',
-      message: `需要填写 ${AI_PROVIDER_CATALOG[settings.provider].label} API Key。Readio 不提供内置模型服务。`,
-    };
-  }
-
   if (settings.provider === 'custom-openai-compatible') {
     const customBaseUrl = settings.customProviderBaseUrl?.trim();
     if (!customBaseUrl) {
@@ -89,13 +93,32 @@ export const getAIAvailability = (settings: AISettings): AIAvailability => {
         message: '需要填写自定义基础 URL。',
       };
     }
-    if (!isSafeCustomBaseUrl(customBaseUrl)) {
+    const safety = getCustomBaseUrlSafety(customBaseUrl, settings.allowUnsafeCustomProviderBaseUrl);
+    if (safety === 'invalid-non-local-http') {
       return {
         status: 'invalid-custom-base-url',
         settingsItemId: 'settings.ai.customBaseUrl',
-        message: '自定义基础 URL 必须是有效的 HTTPS 公网地址。',
+        message: '测试用本地/局域网代理只允许 localhost、127.0.0.1 或私有局域网地址。',
       };
     }
+    if (safety === 'invalid') {
+      return {
+        status: 'invalid-custom-base-url',
+        settingsItemId: 'settings.ai.customBaseUrl',
+        message: '自定义基础 URL 必须是有效的 HTTPS 公网地址，或开启测试用本地/局域网代理。',
+      };
+    }
+  }
+
+  if (
+    !settings.providerApiKeys?.[settings.provider]?.trim() &&
+    !isCustomLocalTestingProxy(settings)
+  ) {
+    return {
+      status: 'missing-api-key',
+      settingsItemId: 'settings.ai.apiKey',
+      message: `需要填写 ${AI_PROVIDER_CATALOG[settings.provider].label} API Key。Readio 不提供内置模型服务。`,
+    };
   }
 
   if (!settings.providerModels?.[settings.provider]?.trim()) {

@@ -1,3 +1,4 @@
+import { getCustomBaseUrlSafety } from '../availability';
 import { AI_PROVIDER_CATALOG } from '../constants';
 import {
   createOpenAICompatibleEmbeddingModel,
@@ -82,7 +83,12 @@ export function getAIProvider(settings: AISettings): AIProvider {
   if (!isSupportedProvider(settings.provider)) throw new Error('Unsupported provider');
 
   const apiKey = settings.providerApiKeys[settings.provider]?.trim();
-  if (!apiKey)
+  const isCustomLocalTestingProxy =
+    settings.provider === 'custom-openai-compatible' &&
+    settings.allowUnsafeCustomProviderBaseUrl === true &&
+    getCustomBaseUrlSafety(settings.customProviderBaseUrl?.trim() ?? '', true) ===
+      'unsafe-local-proxy';
+  if (!apiKey && !isCustomLocalTestingProxy)
     throw new Error(`API key required for ${AI_PROVIDER_CATALOG[settings.provider].label}`);
 
   return new BYOKProvider(settings);

@@ -53,7 +53,7 @@ describe('getAIAvailability', () => {
     });
   });
 
-  test('requires custom OpenAI-compatible providers to use a safe HTTPS base URL', () => {
+  test('requires custom OpenAI-compatible providers to use a safe HTTPS base URL by default', () => {
     expect(
       getAIAvailability({
         ...readySettings,
@@ -65,7 +65,37 @@ describe('getAIAvailability', () => {
     ).toEqual({
       status: 'invalid-custom-base-url',
       settingsItemId: 'settings.ai.customBaseUrl',
-      message: '自定义基础 URL 必须是有效的 HTTPS 公网地址。',
+      message: '自定义基础 URL 必须是有效的 HTTPS 公网地址，或开启测试用本地/局域网代理。',
+    });
+  });
+
+  test('allows an HTTP LAN custom OpenAI-compatible proxy only when explicitly enabled for testing', () => {
+    expect(
+      getAIAvailability({
+        ...readySettings,
+        provider: 'custom-openai-compatible',
+        allowUnsafeCustomProviderBaseUrl: true,
+        providerApiKeys: {},
+        providerModels: { 'custom-openai-compatible': 'gpt-4o-mini' },
+        customProviderBaseUrl: 'http://192.168.5.205:8317/v1',
+      }),
+    ).toEqual({ status: 'ready' });
+  });
+
+  test('still rejects non-local HTTP custom OpenAI-compatible URLs when testing proxy mode is enabled', () => {
+    expect(
+      getAIAvailability({
+        ...readySettings,
+        provider: 'custom-openai-compatible',
+        allowUnsafeCustomProviderBaseUrl: true,
+        providerApiKeys: {},
+        providerModels: { 'custom-openai-compatible': 'custom-model' },
+        customProviderBaseUrl: 'http://api.example.test/v1',
+      }),
+    ).toEqual({
+      status: 'invalid-custom-base-url',
+      settingsItemId: 'settings.ai.customBaseUrl',
+      message: '测试用本地/局域网代理只允许 localhost、127.0.0.1 或私有局域网地址。',
     });
   });
 

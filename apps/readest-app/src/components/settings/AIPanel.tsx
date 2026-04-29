@@ -46,6 +46,9 @@ const AIPanel: React.FC = () => {
   const [apiKey, setApiKey] = useState(initialProviderSettings.apiKey);
   const [model, setModel] = useState(initialProviderSettings.model);
   const [baseUrl, setBaseUrl] = useState(initialProviderSettings.baseUrl);
+  const [allowUnsafeCustomProviderBaseUrl, setAllowUnsafeCustomProviderBaseUrl] = useState(
+    aiSettings.allowUnsafeCustomProviderBaseUrl ?? false,
+  );
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -62,6 +65,7 @@ const AIPanel: React.FC = () => {
     setApiKey(providerSettings.apiKey);
     setModel(providerSettings.model);
     setBaseUrl(providerSettings.baseUrl);
+    setAllowUnsafeCustomProviderBaseUrl(aiSettings.allowUnsafeCustomProviderBaseUrl ?? false);
   }, [aiSettings]);
 
   const saveAiSettings = useCallback(
@@ -139,6 +143,12 @@ const AIPanel: React.FC = () => {
     updateAiSettings((current) => ({ ...current, customProviderBaseUrl: value }));
   };
 
+  const handleUnsafeBaseUrlChange = (checked: boolean) => {
+    setAllowUnsafeCustomProviderBaseUrl(checked);
+    setConnectionStatus('idle');
+    updateAiSettings((current) => ({ ...current, allowUnsafeCustomProviderBaseUrl: checked }));
+  };
+
   const handleTestConnection = async () => {
     if (!enabled) return;
     setConnectionStatus('testing');
@@ -152,6 +162,7 @@ const AIPanel: React.FC = () => {
         providerModels: { ...aiSettings.providerModels, [provider]: model },
         customProviderBaseUrl:
           provider === 'custom-openai-compatible' ? baseUrl : aiSettings.customProviderBaseUrl,
+        allowUnsafeCustomProviderBaseUrl,
       });
       const isHealthy = await aiProvider.healthCheck();
       setConnectionStatus(isHealthy ? 'success' : 'error');
@@ -273,21 +284,47 @@ const AIPanel: React.FC = () => {
             </div>
 
             {isCustomProvider && (
-              <label
-                className='config-item !h-auto flex-col !items-start gap-2 py-3'
-                data-setting-id='settings.ai.customBaseUrl'
-              >
-                <span>{_('Base URL')}</span>
-                <input
-                  aria-label='Base URL'
-                  type='url'
-                  className='input input-bordered input-sm min-h-11 w-full'
-                  value={baseUrl}
-                  onChange={(event) => handleBaseUrlChange(event.target.value)}
-                  placeholder='https://api.example.com/v1'
-                  disabled={!enabled}
-                />
-              </label>
+              <>
+                <label
+                  className='config-item !h-auto flex-col !items-start gap-2 py-3'
+                  data-setting-id='settings.ai.customBaseUrl'
+                >
+                  <span>{_('Base URL')}</span>
+                  <input
+                    aria-label='Base URL'
+                    type='url'
+                    className='input input-bordered input-sm min-h-11 w-full'
+                    value={baseUrl}
+                    onChange={(event) => handleBaseUrlChange(event.target.value)}
+                    placeholder='https://api.example.com/v1'
+                    disabled={!enabled}
+                  />
+                </label>
+                <label
+                  className='config-item !h-auto cursor-pointer items-start gap-3 py-3'
+                  data-setting-id='settings.ai.allowUnsafeCustomProviderBaseUrl'
+                >
+                  <span className='flex min-w-0 flex-col gap-1'>
+                    <span>{_('Enable local/LAN testing proxy')}</span>
+                    <span
+                      id='settings-ai-local-proxy-help'
+                      className='text-warning text-xs leading-5'
+                    >
+                      {_(
+                        'Only for development. Allows HTTP localhost or private LAN endpoints such as CLIProxyAPI; reading context may be sent over your local network without HTTPS.',
+                      )}
+                    </span>
+                  </span>
+                  <input
+                    type='checkbox'
+                    className='toggle toggle-warning'
+                    checked={allowUnsafeCustomProviderBaseUrl}
+                    onChange={(event) => handleUnsafeBaseUrlChange(event.target.checked)}
+                    disabled={!enabled}
+                    aria-describedby='settings-ai-local-proxy-help'
+                  />
+                </label>
+              </>
             )}
 
             <label

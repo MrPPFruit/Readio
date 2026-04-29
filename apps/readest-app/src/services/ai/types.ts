@@ -49,6 +49,7 @@ export interface AISettings {
   providerModels: Partial<Record<AIProviderName, string>>;
   providerEmbeddingModels?: Partial<Record<AIProviderName, string>>;
   customProviderBaseUrl?: string;
+  allowUnsafeCustomProviderBaseUrl?: boolean;
 
   spoilerProtection: boolean;
   maxContextChunks: number;
