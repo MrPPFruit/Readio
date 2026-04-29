@@ -47,8 +47,11 @@ interface ReaderStore {
   viewStates: { [key: string]: ViewState };
   bookKeys: string[];
   hoveredBookKey: string | null;
+  footerActionTabs: { [key: string]: string };
   setBookKeys: (keys: string[]) => void;
   setHoveredBookKey: (key: string | null) => void;
+  setFooterActionTab: (key: string, tab: string) => void;
+  getFooterActionTab: (key: string) => string;
   setBookmarkRibbonVisibility: (key: string, visible: boolean) => void;
   setTTSEnabled: (key: string, enabled: boolean) => void;
   setIsLoading: (key: string, loading: boolean) => void;
@@ -89,8 +92,12 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
   viewStates: {},
   bookKeys: [],
   hoveredBookKey: null,
+  footerActionTabs: {},
   setBookKeys: (keys: string[]) => set({ bookKeys: keys }),
   setHoveredBookKey: (key: string | null) => set({ hoveredBookKey: key }),
+  setFooterActionTab: (key: string, tab: string) =>
+    set((state) => ({ footerActionTabs: { ...state.footerActionTabs, [key]: tab } })),
+  getFooterActionTab: (key: string) => get().footerActionTabs[key] || '',
   getView: (key: string | null) => (key && get().viewStates[key]?.view) || null,
   setView: (key: string, view) =>
     set((state) => ({

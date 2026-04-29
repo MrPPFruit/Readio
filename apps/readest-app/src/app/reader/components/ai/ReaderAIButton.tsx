@@ -10,24 +10,39 @@ interface ReaderAIButtonProps {
   onClick: () => void;
 }
 
+const READER_AI_BUTTON_BOTTOM_OFFSET = {
+  default: 64,
+  progress: 184,
+  font: 210,
+  color: 280,
+} as const;
+
 const ReaderAIButton: React.FC<ReaderAIButtonProps> = ({ bookKey, onClick }) => {
   const { appService } = useEnv();
-  const { hoveredBookKey, getViewSettings } = useReaderStore();
+  const { hoveredBookKey, getFooterActionTab, getViewSettings } = useReaderStore();
   const viewSettings = getViewSettings(bookKey);
+  const footerActionTab = getFooterActionTab(bookKey);
+  const isMobileFooter =
+    appService?.isMobile || window.innerWidth < 640 || window.innerHeight < 640;
+  const bottomOffset =
+    isMobileFooter && footerActionTab in READER_AI_BUTTON_BOTTOM_OFFSET
+      ? READER_AI_BUTTON_BOTTOM_OFFSET[
+          footerActionTab as keyof typeof READER_AI_BUTTON_BOTTOM_OFFSET
+        ]
+      : READER_AI_BUTTON_BOTTOM_OFFSET.default;
 
   if (hoveredBookKey !== bookKey) return null;
 
   return (
     <div
       className={clsx(
-        'absolute z-40 h-12 w-12 sm:h-12 sm:w-12',
+        'absolute z-40 h-12 w-12 transition-[bottom] duration-300 sm:h-12 sm:w-12',
         viewSettings?.rtl ? 'left-4 sm:left-5' : 'right-4 sm:right-5',
-        !appService?.hasSafeAreaInset && 'bottom-16 sm:bottom-[4.5rem]',
       )}
       style={{
         bottom: appService?.hasSafeAreaInset
-          ? `calc(env(safe-area-inset-bottom, 0px) * ${appService?.isIOSApp ? 0.33 : 1} + 56px)`
-          : undefined,
+          ? `calc(env(safe-area-inset-bottom, 0px) * ${appService?.isIOSApp ? 0.33 : 1} + ${bottomOffset}px)`
+          : `${bottomOffset}px`,
       }}
     >
       <button

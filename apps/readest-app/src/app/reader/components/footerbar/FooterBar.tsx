@@ -28,7 +28,7 @@ const FooterBar: React.FC<FooterBarProps> = ({
   const _ = useTranslation();
   const { appService } = useEnv();
   const { getConfig, setConfig, getBookData } = useBookDataStore();
-  const { hoveredBookKey, setHoveredBookKey } = useReaderStore();
+  const { hoveredBookKey, setHoveredBookKey, setFooterActionTab } = useReaderStore();
   const { getView, getViewState, getProgress, getViewSettings } = useReaderStore();
   const { isSideBarVisible, setSideBarVisible } = useSidebarStore();
   const { acquireBackKeyInterception, releaseBackKeyInterception } = useDeviceControlStore();
@@ -43,6 +43,10 @@ const FooterBar: React.FC<FooterBarProps> = ({
   const [userSelectedTab, setUserSelectedTab] = useState('');
   const actionTab = hoveredBookKey === bookKey ? userSelectedTab : '';
   const isVisible = hoveredBookKey === bookKey;
+
+  useEffect(() => {
+    setFooterActionTab(bookKey, actionTab);
+  }, [actionTab, bookKey, setFooterActionTab]);
 
   const docs = view?.renderer.getContents() ?? [];
   const pointerInDoc = docs.some(({ doc }) => doc?.body?.style.cursor === 'pointer');
