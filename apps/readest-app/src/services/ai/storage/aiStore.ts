@@ -13,6 +13,18 @@ const BM25_STORE = 'bm25Indices';
 const CONVERSATIONS_STORE = 'conversations';
 const MESSAGES_STORE = 'messages';
 
+interface GetConversationsOptions {
+  includeArchived?: boolean;
+}
+
+export function sortConversations(conversations: AIConversation[]): AIConversation[] {
+  return conversations.sort((a, b) => {
+    const favoriteDelta = Number(Boolean(b.favoritedAt)) - Number(Boolean(a.favoritedAt));
+    if (favoriteDelta !== 0) return favoriteDelta;
+    return b.updatedAt - a.updatedAt;
+  });
+}
+
 function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) return 0;
   let dot = 0,
@@ -33,6 +45,7 @@ class AIStore {
   private indexCache = new Map<string, lunr.Index>();
   private metaCache = new Map<string, BookIndexMeta>();
   private conversationCache = new Map<string, AIConversation[]>();
+  private archivedConversationCache = new Map<string, AIConversation[]>();
 
   async recoverFromError(): Promise<void> {
     if (this.db) {
@@ -47,6 +60,7 @@ class AIStore {
     this.indexCache.clear();
     this.metaCache.clear();
     this.conversationCache.clear();
+    this.archivedConversationCache.clear();
     await this.openDB();
   }
 
@@ -320,6 +334,7 @@ class AIStore {
       tx.objectStore(CONVERSATIONS_STORE).put(conversation);
       tx.oncomplete = () => {
         this.conversationCache.delete(conversation.bookHash);
+        this.archivedConversationCache.delete(conversation.bookHash);
         resolve();
       };
       tx.onerror = () => {
@@ -329,9 +344,13 @@ class AIStore {
     });
   }
 
-  async getConversations(bookHash: string): Promise<AIConversation[]> {
-    if (this.conversationCache.has(bookHash)) {
-      return this.conversationCache.get(bookHash)!;
+  async getConversations(
+    bookHash: string,
+    options: GetConversationsOptions = {},
+  ): Promise<AIConversation[]> {
+    const cache = options.includeArchived ? this.archivedConversationCache : this.conversationCache;
+    if (cache.has(bookHash)) {
+      return cache.get(bookHash)!;
     }
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
@@ -341,10 +360,12 @@ class AIStore {
         .index('bookHash')
         .getAll(bookHash);
       req.onsuccess = () => {
-        const conversations = (req.result as AIConversation[]).sort(
-          (a, b) => b.updatedAt - a.updatedAt,
+        const conversations = sortConversations(
+          (req.result as AIConversation[]).filter(
+            (conversation) => options.includeArchived || !conversation.archivedAt,
+          ),
         );
-        this.conversationCache.set(bookHash, conversations);
+        cache.set(bookHash, conversations);
         resolve(conversations);
       };
       req.onerror = () => reject(req.error);
@@ -371,6 +392,7 @@ class AIStore {
 
       tx.oncomplete = () => {
         this.conversationCache.clear();
+        this.archivedConversationCache.clear();
         resolve();
       };
       tx.onerror = () => {
@@ -396,10 +418,62 @@ class AIStore {
       };
       tx.oncomplete = () => {
         this.conversationCache.clear();
+        this.archivedConversationCache.clear();
         resolve();
       };
       tx.onerror = () => {
         aiLogger.store.error('updateConversationTitle', tx.error?.message || 'TX error');
+        reject(tx.error);
+      };
+    });
+  }
+
+  async updateConversationFavorite(id: string, favoritedAt?: number): Promise<void> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(CONVERSATIONS_STORE, 'readwrite');
+      const store = tx.objectStore(CONVERSATIONS_STORE);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        const conversation = req.result as AIConversation | undefined;
+        if (conversation) {
+          conversation.favoritedAt = favoritedAt;
+          store.put(conversation);
+        }
+      };
+      tx.oncomplete = () => {
+        this.conversationCache.clear();
+        this.archivedConversationCache.clear();
+        resolve();
+      };
+      tx.onerror = () => {
+        aiLogger.store.error('updateConversationFavorite', tx.error?.message || 'TX error');
+        reject(tx.error);
+      };
+    });
+  }
+
+  async updateConversationArchived(id: string, archivedAt?: number): Promise<void> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(CONVERSATIONS_STORE, 'readwrite');
+      const store = tx.objectStore(CONVERSATIONS_STORE);
+      const req = store.get(id);
+      req.onsuccess = () => {
+        const conversation = req.result as AIConversation | undefined;
+        if (conversation) {
+          conversation.archivedAt = archivedAt;
+          conversation.updatedAt = Date.now();
+          store.put(conversation);
+        }
+      };
+      tx.oncomplete = () => {
+        this.conversationCache.clear();
+        this.archivedConversationCache.clear();
+        resolve();
+      };
+      tx.onerror = () => {
+        aiLogger.store.error('updateConversationArchived', tx.error?.message || 'TX error');
         reject(tx.error);
       };
     });

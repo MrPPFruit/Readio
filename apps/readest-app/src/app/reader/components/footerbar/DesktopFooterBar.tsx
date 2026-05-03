@@ -40,8 +40,24 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
 
   const { section, pageinfo } = progress || {};
   const template = progressStyle === 'fraction' ? '{current} / {total}' : '{percent}%';
-  const pageInfo = bookData?.isFixedLayout ? section : pageinfo;
-  const progressInfo = formatProgress(pageInfo?.current, pageInfo?.total, template, false, 'en', 0);
+  const relocatedPageInfo = bookData?.isFixedLayout ? section : pageinfo;
+  const pageInfo = viewState?.paginationRecalculating
+    ? null
+    : (viewState?.pendingPageInfo ?? relocatedPageInfo);
+  const progressInfo = viewState?.paginationRecalculating
+    ? ''
+    : formatProgress(pageInfo?.current, pageInfo?.total, template, false, 'en', 0);
+  const pageLabel = pageInfo
+    ? _('Page {{current}} of {{total}}', {
+        current: pageInfo.current + 1,
+        total: pageInfo.total,
+      })
+    : '';
+  const progressAriaLabel = pageLabel
+    ? `${_('Reading Progress')}: ${pageLabel}`
+    : `${_('Reading Progress')}: ${Math.round(progressFraction * 100)}%`;
+  const previousPageLabel = pageLabel ? `${_('Previous Page')}, ${pageLabel}` : _('Previous Page');
+  const nextPageLabel = pageLabel ? `${_('Next Page')}, ${pageLabel}` : _('Next Page');
 
   const rangeInputRef = useRef<HTMLInputElement>(null);
 
@@ -99,7 +115,7 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
         <Button
           icon={getNavigationIcon(viewSettings?.rtl, <RiArrowLeftSLine />, <RiArrowRightSLine />)}
           onClick={navigationHandlers.onPrevPage}
-          label={_('Previous Page')}
+          label={previousPageLabel}
         />
       )}
       <Button
@@ -114,10 +130,10 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
         label={_('Go Forward')}
         disabled={!view?.history.canGoForward}
       />
-      {progressValid && (
+      {progressValid && progressInfo && (
         <span
           title={_('Reading Progress')}
-          aria-label={`${_('Reading Progress')}: ${Math.round(progressFraction * 100)}%`}
+          aria-label={progressAriaLabel}
           className='mx-2 text-nowrap text-center text-sm'
         >
           <span aria-hidden='true'>{progressInfo}</span>
@@ -158,7 +174,7 @@ const DesktopFooterBar: React.FC<FooterBarChildProps> = ({
         <Button
           icon={getNavigationIcon(viewSettings?.rtl, <RiArrowRightSLine />, <RiArrowLeftSLine />)}
           onClick={navigationHandlers.onNextPage}
-          label={_('Next Page')}
+          label={nextPageLabel}
         />
       )}
       {!viewSettings?.showPaginationButtons && (

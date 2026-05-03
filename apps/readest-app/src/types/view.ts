@@ -102,6 +102,9 @@ export interface FoliateView extends HTMLElement {
   book: BookDoc;
   tts: TTS | null;
   isFixedLayout: boolean;
+  lastLocation?: {
+    range?: Range;
+  };
   language: {
     locale?: LocaleWithTextInfo;
     isCJK?: boolean;

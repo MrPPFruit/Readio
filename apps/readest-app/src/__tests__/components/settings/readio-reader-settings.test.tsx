@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ControlPanel from '@/components/settings/ControlPanel';
@@ -58,6 +58,10 @@ const customFontStoreMock = vi.hoisted(() => {
 
 const settingsStoreMock = vi.hoisted(() => ({
   setFontPanelView: vi.fn(),
+}));
+
+const resetSettingsMock = vi.hoisted(() => ({
+  resetToDefaults: vi.fn(),
 }));
 
 const viewSettings = {
@@ -218,7 +222,7 @@ vi.mock('@/helpers/settings', () => ({
 }));
 
 vi.mock('@/hooks/useResetSettings', () => ({
-  useResetViewSettings: () => vi.fn(),
+  useResetViewSettings: () => resetSettingsMock.resetToDefaults,
 }));
 
 vi.mock('@/utils/style', () => ({
@@ -347,5 +351,30 @@ describe('Readio reader settings', () => {
     expect(screen.queryByText('Show Remaining Time')).toBeNull();
     expect(screen.queryByText('Show Remaining Pages')).toBeNull();
     expect(screen.queryByText('Show Current Time')).toBeNull();
+  });
+
+  it('removes the forced Android page animation attribute when eink mode is enabled', async () => {
+    viewSettings.animated = false;
+    viewSettings.isEink = false;
+    resetSettingsMock.resetToDefaults.mockImplementation((setters) => {
+      setters.isEink(true);
+    });
+    let resetHandler: (() => void) | undefined;
+    render(
+      <ControlPanel
+        bookKey='book-1'
+        onRegisterReset={(handler) => {
+          resetHandler = handler;
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(renderer.setAttribute).toHaveBeenCalledWith('animated', ''));
+
+    act(() => {
+      resetHandler?.();
+    });
+
+    await waitFor(() => expect(renderer.removeAttribute).toHaveBeenCalledWith('animated'));
   });
 });

@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useResetViewSettings } from '@/hooks/useResetSettings';
 import { useEinkMode } from '@/hooks/useEinkMode';
 import { saveSysSettings, saveViewSettings } from '@/helpers/settings';
+import { shouldEnablePageTurnAnimation } from '@/utils/pageAnimation';
 import { SettingsPanelPanelProp } from './SettingsDialog';
 import { annotationToolQuickActions } from '@/app/reader/components/annotator/AnnotationTools';
 import { readioFeatures } from '@/config/features';
@@ -114,13 +115,18 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
 
   useEffect(() => {
     saveViewSettings(envConfig, bookKey, 'animated', animated, false, false);
-    if (animated) {
+    const pageTurnAnimated = shouldEnablePageTurnAnimation({
+      animated,
+      isEink,
+      isAndroidApp: !!appService?.isAndroidApp,
+    });
+    if (pageTurnAnimated) {
       getView(bookKey)?.renderer.setAttribute('animated', '');
     } else {
       getView(bookKey)?.renderer.removeAttribute('animated');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [animated]);
+  }, [animated, isEink]);
 
   useEffect(() => {
     saveViewSettings(envConfig, bookKey, 'isEink', isEink);

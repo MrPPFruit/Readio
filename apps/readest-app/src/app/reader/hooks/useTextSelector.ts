@@ -8,6 +8,27 @@ import { eventDispatcher } from '@/utils/event';
 import { isPointerInsideSelection, Point, TextSelection } from '@/utils/sel';
 import { useInstantAnnotation } from './useInstantAnnotation';
 
+const SELECTION_INPUT_GRACE_MS = 1_200;
+
+export const shouldHandleSelectionChange = ({
+  osPlatform,
+  isAndroidApp,
+  lastPointerType,
+  now,
+  lastSelectionInputAt,
+}: {
+  osPlatform: string;
+  isAndroidApp?: boolean;
+  lastPointerType: string;
+  now: number;
+  lastSelectionInputAt: number;
+}) => {
+  const isRecentSelectionInput = now - lastSelectionInputAt <= SELECTION_INPUT_GRACE_MS;
+  const isTouchInput = lastPointerType === 'touch' || lastPointerType === 'pen';
+  const isAndroid = osPlatform === 'android' && isAndroidApp;
+  return isRecentSelectionInput && (isAndroid || isTouchInput);
+};
+
 export const useTextSelector = (
   bookKey: string,
   setSelection: React.Dispatch<React.SetStateAction<TextSelection | null>>,
@@ -29,6 +50,7 @@ export const useTextSelector = (
   const isTouchStarted = useRef(false);
   const selectionPosition = useRef<number | null>(null);
   const lastPointerType = useRef<string>('mouse');
+  const lastSelectionInputAt = useRef(0);
   const isInstantAnnotating = useRef(false);
   const isInstantAnnotated = useRef(false);
   const annotationStartPoint = useRef<Point | null>(null);
@@ -108,6 +130,9 @@ export const useTextSelector = (
 
   const handlePointerDown = (doc: Document, index: number, ev: PointerEvent) => {
     lastPointerType.current = ev.pointerType;
+    if (ev.pointerType === 'touch' || ev.pointerType === 'pen') {
+      lastSelectionInputAt.current = Date.now();
+    }
 
     if (isInstantAnnotationEnabled()) {
       const handled = handleInstantAnnotationPointerDown(doc, index, ev);
@@ -189,6 +214,8 @@ export const useTextSelector = (
   };
   const handleTouchStart = () => {
     isTouchStarted.current = true;
+    lastPointerType.current = 'touch';
+    lastSelectionInputAt.current = Date.now();
   };
   const handleTouchMove = (ev: TouchEvent) => {
     if (isInstantAnnotating.current) {
@@ -204,9 +231,17 @@ export const useTextSelector = (
     // On web with touch/pen in scroll mode, pointerup never fires (pointercancel
     // fires instead when browser takes over for scrolling), so we also handle
     // selectionchange for touch/pen input to pick up native text selections.
-    const isAndroid = osPlatform === 'android' && appService?.isAndroidApp;
-    const isTouchInput = lastPointerType.current === 'touch' || lastPointerType.current === 'pen';
-    if (!isAndroid && !isTouchInput) return;
+    if (
+      !shouldHandleSelectionChange({
+        osPlatform,
+        isAndroidApp: appService?.isAndroidApp,
+        lastPointerType: lastPointerType.current,
+        now: Date.now(),
+        lastSelectionInputAt: lastSelectionInputAt.current,
+      })
+    ) {
+      return;
+    }
 
     const sel = doc.getSelection() as Selection;
     if (isValidSelection(sel)) {

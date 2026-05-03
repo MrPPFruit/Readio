@@ -60,23 +60,20 @@ export const FontLayoutPanel: React.FC<FontLayoutPanelProps> = ({
 
   const handleMarginChange = useCallback(
     (value: number) => {
-      const currentViewSettings = getViewSettings(bookKey);
-      if (!currentViewSettings) return;
-
       const { MAX_MARGIN_PX, MAX_GAP_PERCENT } = MARGIN_CONSTANTS;
       const marginPx = Math.round((value / 100) * MAX_MARGIN_PX);
+      const sideMarginPx = marginPx / 2;
       const gapPercent = Math.round((value / 100) * MAX_GAP_PERCENT);
 
-      currentViewSettings.marginTopPx = marginPx;
-      currentViewSettings.marginBottomPx = marginPx / 2;
-      currentViewSettings.marginLeftPx = marginPx / 2;
-      currentViewSettings.marginRightPx = marginPx / 2;
-
+      saveViewSettings(envConfig, bookKey, 'marginTopPx', marginPx, false, false);
+      saveViewSettings(envConfig, bookKey, 'marginBottomPx', sideMarginPx, false, false);
+      saveViewSettings(envConfig, bookKey, 'marginLeftPx', sideMarginPx, false, false);
+      saveViewSettings(envConfig, bookKey, 'marginRightPx', sideMarginPx, false, false);
       saveViewSettings(envConfig, bookKey, 'gapPercent', gapPercent, false, false);
       view?.renderer.setAttribute('margin', `${marginPx}px`);
       view?.renderer.setAttribute('gap', `${gapPercent}%`);
     },
-    [envConfig, bookKey, view, getViewSettings],
+    [envConfig, bookKey, view],
   );
 
   const handleLineHeightChange = useCallback(

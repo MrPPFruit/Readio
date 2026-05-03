@@ -23,7 +23,14 @@ interface UseBookShortcutsProps {
 }
 
 const useBookShortcuts = ({ sideBarBookKey, bookKeys }: UseBookShortcutsProps) => {
-  const { getView, getViewState, getViewSettings, setViewSettings } = useReaderStore();
+  const {
+    getProgress,
+    getView,
+    getViewState,
+    getViewSettings,
+    setPendingPageInfo,
+    setViewSettings,
+  } = useReaderStore();
   const { toggleSideBar, setSideBarBookKey } = useSidebarStore();
   const { setSettingsDialogOpen } = useSettingsStore();
   const { getBookData } = useBookDataStore();
@@ -35,6 +42,22 @@ const useBookShortcuts = ({ sideBarBookKey, bookKeys }: UseBookShortcutsProps) =
   const fontSize = viewSettings?.defaultFontSize ?? 16;
   const lineHeight = viewSettings?.lineHeight ?? 1.6;
   const distance = fontSize * lineHeight * 3;
+
+  const pendingPageOptions = sideBarBookKey
+    ? {
+        getCurrentPageInfo: () => {
+          const progress = getProgress(sideBarBookKey);
+          const viewState = getViewState(sideBarBookKey);
+          if (viewState?.paginationRecalculating) return null;
+          const relocatedPageInfo = getBookData(sideBarBookKey)?.isFixedLayout
+            ? progress?.section
+            : progress?.pageinfo;
+          return viewState?.pendingPageInfo ?? relocatedPageInfo;
+        },
+        onPendingPageInfo: (pageInfo: { current: number; total: number }) =>
+          setPendingPageInfo(sideBarBookKey, pageInfo),
+      }
+    : undefined;
 
   const moveReadingRuler = (side: 'left' | 'right' | 'up' | 'down') => {
     if (!sideBarBookKey) return false;
@@ -63,7 +86,14 @@ const useBookShortcuts = ({ sideBarBookKey, bookKeys }: UseBookShortcutsProps) =
       return;
     }
     if (moveReadingRuler('left')) return;
-    viewPagination(getView(sideBarBookKey), viewSettings, 'left', 'pan', distance);
+    viewPagination(
+      getView(sideBarBookKey),
+      viewSettings,
+      'left',
+      'pan',
+      distance,
+      pendingPageOptions,
+    );
   };
 
   const goRight = () => {
@@ -77,7 +107,14 @@ const useBookShortcuts = ({ sideBarBookKey, bookKeys }: UseBookShortcutsProps) =
       return;
     }
     if (moveReadingRuler('right')) return;
-    viewPagination(getView(sideBarBookKey), viewSettings, 'right', 'pan', distance);
+    viewPagination(
+      getView(sideBarBookKey),
+      viewSettings,
+      'right',
+      'pan',
+      distance,
+      pendingPageOptions,
+    );
   };
 
   const goUp = (event?: KeyboardEvent | MessageEvent) => {
@@ -93,7 +130,7 @@ const useBookShortcuts = ({ sideBarBookKey, bookKeys }: UseBookShortcutsProps) =
     }
     if (moveReadingRuler('up')) return;
     if (view?.renderer.scrolled && event instanceof MessageEvent) return;
-    viewPagination(view, viewSettings, 'up', 'pan', distance);
+    viewPagination(view, viewSettings, 'up', 'pan', distance, pendingPageOptions);
   };
 
   const goDown = (event?: KeyboardEvent | MessageEvent) => {
@@ -109,7 +146,7 @@ const useBookShortcuts = ({ sideBarBookKey, bookKeys }: UseBookShortcutsProps) =
     }
     if (moveReadingRuler('down')) return;
     if (view?.renderer.scrolled && event instanceof MessageEvent) return;
-    viewPagination(view, viewSettings, 'down', 'pan', distance);
+    viewPagination(view, viewSettings, 'down', 'pan', distance, pendingPageOptions);
   };
 
   const goPrevSection = () => {
@@ -134,12 +171,28 @@ const useBookShortcuts = ({ sideBarBookKey, bookKeys }: UseBookShortcutsProps) =
 
   const goPrev = () => {
     if (moveReadingRuler('up')) return;
-    getView(sideBarBookKey)?.prev(distance);
+    const viewSettings = getViewSettings(sideBarBookKey ?? '');
+    viewPagination(
+      getView(sideBarBookKey),
+      viewSettings,
+      'up',
+      'page',
+      distance,
+      pendingPageOptions,
+    );
   };
 
   const goNext = () => {
     if (moveReadingRuler('down')) return;
-    getView(sideBarBookKey)?.next(distance);
+    const viewSettings = getViewSettings(sideBarBookKey ?? '');
+    viewPagination(
+      getView(sideBarBookKey),
+      viewSettings,
+      'down',
+      'page',
+      distance,
+      pendingPageOptions,
+    );
   };
 
   const goBack = () => {

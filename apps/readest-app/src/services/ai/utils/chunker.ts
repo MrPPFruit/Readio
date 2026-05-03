@@ -1,5 +1,7 @@
 import { TextChunk } from '../types';
 
+export const CHUNKER_VERSION = 1;
+
 // same formula as toc.ts - 1500 chars = 1 page
 export const SIZE_PER_PAGE = 1500;
 
@@ -42,8 +44,8 @@ function findBreakPoint(text: string, targetPos: number, searchRange = 50): numb
   return targetPos;
 }
 
-export function chunkSection(
-  doc: Document,
+export function chunkText(
+  text: string,
   sectionIndex: number,
   chapterTitle: string,
   bookHash: string,
@@ -51,7 +53,6 @@ export function chunkSection(
   options?: Partial<ChunkingOptions>,
 ): TextChunk[] {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  const text = extractTextFromDocument(doc);
 
   if (!text || text.length < opts.minChunkSize) {
     return text
@@ -111,4 +112,22 @@ export function chunkSection(
   }
 
   return chunks;
+}
+
+export function chunkSection(
+  doc: Document,
+  sectionIndex: number,
+  chapterTitle: string,
+  bookHash: string,
+  cumulativeSizeBeforeSection: number,
+  options?: Partial<ChunkingOptions>,
+): TextChunk[] {
+  return chunkText(
+    extractTextFromDocument(doc),
+    sectionIndex,
+    chapterTitle,
+    bookHash,
+    cumulativeSizeBeforeSection,
+    options,
+  );
 }

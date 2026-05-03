@@ -18,6 +18,7 @@ import { useScreenWakeLock } from '@/hooks/useScreenWakeLock';
 import { useTransferQueue } from '@/hooks/useTransferQueue';
 import { eventDispatcher } from '@/utils/event';
 import { interceptWindowOpen } from '@/utils/open';
+import { navigateToLibrary } from '@/utils/nav';
 import { mountAdditionalFonts } from '@/styles/fonts';
 import { isTauriAppPlatform } from '@/services/environment';
 import { getSysFontsList, setSystemUIVisibility } from '@/utils/bridge';
@@ -115,8 +116,7 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
       } else if (getIsNotebookVisible() && !isNotebookPinned) {
         setNotebookVisible(false);
       } else {
-        eventDispatcher.dispatch('close-reader');
-        router.back();
+        navigateToLibrary(router, '', undefined, true);
       }
       return true;
     }

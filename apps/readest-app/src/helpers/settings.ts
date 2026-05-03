@@ -6,6 +6,39 @@ import { useReaderStore } from '@/store/readerStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { getStyles } from '@/utils/style';
 
+const PAGINATION_RECALCULATING_SETTINGS = new Set<keyof ViewSettings>([
+  'defaultFontSize',
+  'minimumFontSize',
+  'fontWeight',
+  'defaultFont',
+  'defaultCJKFont',
+  'serifFont',
+  'sansSerifFont',
+  'monospaceFont',
+  'lineHeight',
+  'paragraphMargin',
+  'wordSpacing',
+  'letterSpacing',
+  'textIndent',
+  'fullJustification',
+  'hyphenation',
+  'marginTopPx',
+  'marginBottomPx',
+  'marginLeftPx',
+  'marginRightPx',
+  'gapPercent',
+  'maxColumnCount',
+  'maxInlineSize',
+  'maxBlockSize',
+  'writingMode',
+  'doubleBorder',
+  'showHeader',
+  'showFooter',
+  'showBarsOnScroll',
+  'showMarginsOnScroll',
+  'showTTSBar',
+]);
+
 export const saveViewSettings = async <K extends keyof ViewSettings>(
   envConfig: EnvConfigType,
   bookKey: string,
@@ -17,14 +50,23 @@ export const saveViewSettings = async <K extends keyof ViewSettings>(
   if (key === 'scrolled' || key === 'noContinuousScroll') return;
 
   const { settings, setSettings, saveSettings } = useSettingsStore.getState();
-  const { bookKeys, getView, getViewState, getViewSettings, setViewSettings } =
-    useReaderStore.getState();
+  const {
+    bookKeys,
+    getView,
+    getViewState,
+    getViewSettings,
+    setPaginationRecalculating,
+    setViewSettings,
+  } = useReaderStore.getState();
   const { getConfig, saveConfig } = useBookDataStore.getState();
 
   const applyViewSettings = async (bookKey: string) => {
     const viewSettings = getViewSettings(bookKey);
     const viewState = getViewState(bookKey);
     if (bookKey && viewSettings && viewSettings[key] !== value) {
+      if (PAGINATION_RECALCULATING_SETTINGS.has(key)) {
+        setPaginationRecalculating(bookKey, true);
+      }
       viewSettings[key] = value;
       setViewSettings(bookKey, viewSettings);
       if (applyStyles) {

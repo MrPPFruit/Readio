@@ -4,6 +4,8 @@ import type { ScoredChunk, TextChunk } from '../types';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const lunr = require('lunr') as typeof import('lunr');
 
+export const BM25_VERSION = 1;
+
 const CJK_PATTERN = /[\u3400-\u9fff\uf900-\ufaff]/;
 const CJK_RUN_PATTERN = /[\u3400-\u9fff\uf900-\ufaff]+/g;
 const WORD_PATTERN = /[a-zA-Z0-9_]+/g;

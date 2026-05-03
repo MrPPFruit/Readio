@@ -1,4 +1,4 @@
-import { generateText } from 'ai';
+import { streamText } from 'ai';
 import type { ChatModelAdapter, ChatModelRunResult } from '@assistant-ui/react';
 import { isWebAppPlatform } from '@/services/environment';
 import { AI_PROVIDER_CATALOG } from '../constants';
@@ -83,7 +83,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
 
       aiLogger.chat.send(query.length, false);
 
-      if (await isBookIndexed(bookHash)) {
+      if (await isBookIndexed(bookHash, settings)) {
         try {
           chunks = await hybridSearch(
             bookHash,
@@ -100,6 +100,15 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
         }
       } else {
         lastSources = [];
+        yield {
+          content: [
+            {
+              type: 'text',
+              text: '这本书还没有完成 AI 索引。请先点击“开始索引”，完成后我就可以基于书本内容继续回答。',
+            },
+          ],
+        };
+        return;
       }
 
       const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, currentPage);
@@ -128,15 +137,17 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
             yield { content: [{ type: 'text', text }] };
           }
         } else {
-          const result = await generateText({
+          const result = streamText({
             model: provider.getModel(),
             system: systemPrompt,
             messages: aiMessages,
             abortSignal,
           });
 
-          text = result.text;
-          if (text) yield { content: [{ type: 'text', text }] };
+          for await (const chunk of result.textStream) {
+            text += chunk;
+            if (text) yield { content: [{ type: 'text', text }] };
+          }
         }
 
         aiLogger.chat.complete(text.length);

@@ -14,6 +14,7 @@ import { useParallelViewStore } from '@/store/parallelViewStore';
 import { useMouseEvent, useTouchEvent, useLongPressEvent } from '../hooks/useIframeEvents';
 import { usePagination, viewPagination } from '../hooks/usePagination';
 import { useFoliateEvents } from '../hooks/useFoliateEvents';
+import { getReflowableFullBookPageInfo, getRendererPageInfo } from '../utils/pageInfo';
 import { useProgressSync } from '../hooks/useProgressSync';
 import { useProgressAutoSave } from '../hooks/useProgressAutoSave';
 import { useBackgroundTexture } from '@/hooks/useBackgroundTexture';
@@ -62,6 +63,7 @@ import { useDiscordPresence } from '@/hooks/useDiscordPresence';
 import { manageSyntaxHighlighting } from '@/utils/highlightjs';
 import { getViewInsets } from '@/utils/insets';
 import { handleA11yNavigation } from '@/utils/a11y';
+import { shouldEnablePageTurnAnimation } from '@/utils/pageAnimation';
 import { isCJKLang } from '@/utils/lang';
 import { getLocale } from '@/utils/misc';
 import { isFontType } from '@/utils/font';
@@ -89,7 +91,13 @@ const FoliateViewer: React.FC<{
   const { themeCode, isDarkMode } = useThemeStore();
   const { settings } = useSettingsStore();
   const { loadFont, loadCustomFonts, getLoadedFonts, getAvailableFonts } = useCustomFontStore();
-  const { getView, setView: setFoliateView, setViewInited, setProgress } = useReaderStore();
+  const {
+    getView,
+    setView: setFoliateView,
+    setViewInited,
+    setProgress,
+    setRenderedPageInfo,
+  } = useReaderStore();
   const { getViewState, getProgress, getViewSettings, setViewSettings } = useReaderStore();
   const { getParallels } = useParallelViewStore();
   const { getBookData } = useBookDataStore();
@@ -130,10 +138,22 @@ const FoliateViewer: React.FC<{
 
   const progressRelocateHandler = (event: Event) => {
     const detail = (event as CustomEvent).detail;
-    const atEnd = viewRef.current?.renderer.atEnd || false;
+    const view = viewRef.current;
+    const atEnd = view?.renderer.atEnd || false;
     const { current, next, total } = detail.location as PageInfo;
     const currentPage = atEnd && total > 0 ? total - 1 : current;
-    const pageInfo = { current: currentPage, next, total };
+    const locationPageInfo = { current: currentPage, next, total };
+    const renderedPageInfo = getRendererPageInfo(view);
+    const pageInfo =
+      view && !view.isFixedLayout
+        ? getReflowableFullBookPageInfo({
+            bookDoc,
+            section: detail.section,
+            location: locationPageInfo,
+            renderedPageInfo,
+          })
+        : locationPageInfo;
+    setRenderedPageInfo(bookKey, renderedPageInfo);
     setProgress(
       bookKey,
       detail.cfi,
@@ -329,7 +349,11 @@ const FoliateViewer: React.FC<{
 
   const stabilizedHandler = useCallback(() => {
     setLoading(false);
-  }, []);
+    const view = viewRef.current;
+    const range = view?.lastLocation?.range;
+    setRenderedPageInfo(bookKey, getRendererPageInfo(view));
+    if (range) view?.renderer.scrollToAnchor?.(range, 'pagination');
+  }, [bookKey, setRenderedPageInfo]);
 
   const docRelocateHandler = (event: Event) => {
     const detail = (event as CustomEvent).detail;
@@ -531,8 +555,12 @@ const FoliateViewer: React.FC<{
       applyTranslationStyle(viewSettings);
 
       doubleClickDisabled.current = viewSettings.disableDoubleClick!;
-      const animated = viewSettings.animated!;
       const eink = viewSettings.isEink!;
+      const animated = shouldEnablePageTurnAnimation({
+        animated: viewSettings.animated!,
+        isEink: eink,
+        isAndroidApp: !!appService?.isAndroidApp,
+      });
       const maxColumnCount = viewSettings.maxColumnCount!;
       const maxInlineSize = getMaxInlineSize(viewSettings);
       const maxBlockSize = viewSettings.maxBlockSize!;
@@ -570,6 +598,7 @@ const FoliateViewer: React.FC<{
       } else {
         await view.goToFraction(0);
       }
+      view.deselect?.();
       setViewInited(bookKey, true);
     };
 

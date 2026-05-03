@@ -1,10 +1,11 @@
-import { generateText, type ModelMessage } from 'ai';
+import { generateText, streamText, type ModelMessage } from 'ai';
 
 import { isWebAppPlatform } from '@/services/environment';
 import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { buildSystemPrompt } from './prompts';
 import { getCurrentSectionContextChunks, hybridSearch } from './ragService';
+import type { ReaderAISource } from '@/types/readerAI';
 import type { AIProviderName, AISettings, ScoredChunk } from './types';
 
 export interface ReaderChatMessage {
@@ -22,6 +23,7 @@ export interface StreamReaderAIAnswerOptions {
   question: string;
   selectionText?: string;
   signal?: AbortSignal;
+  onSources?: (sources: ReaderAISource[]) => void;
 }
 
 export interface GenerateReaderAISuggestionsOptions {
@@ -33,6 +35,7 @@ export interface GenerateReaderAISuggestionsOptions {
   source: 'selection' | 'initial' | 'follow-up';
   selectionText?: string;
   messages: ReaderChatMessage[];
+  signal?: AbortSignal;
 }
 
 const highRiskSpoilerPattern = /结局|谁是凶手|后面|最后|后来|最终|死了没|会死|真相|剧透/;
@@ -59,6 +62,17 @@ function chunksToText(chunks: ScoredChunk[]): string {
     .map((chunk) => chunk.text.trim())
     .filter(Boolean)
     .join('\n');
+}
+
+function chunkToSource(chunk: ScoredChunk): ReaderAISource {
+  return {
+    id: chunk.id,
+    chapterTitle: chunk.chapterTitle,
+    pageNumber: chunk.pageNumber,
+    sectionIndex: chunk.sectionIndex,
+    snippet: chunk.text.trim().slice(0, 120),
+    confidence: 'approximate',
+  };
 }
 
 async function buildSuggestionContext({
@@ -97,7 +111,7 @@ async function buildSuggestionContext({
 export async function generateReaderAISuggestions(
   options: GenerateReaderAISuggestionsOptions,
 ): Promise<string[]> {
-  const { settings, bookTitle, authorName = '', currentPage, source } = options;
+  const { settings, bookTitle, authorName = '', currentPage, source, signal } = options;
   if (!isSupportedProvider(settings.provider)) return [];
 
   const context = await buildSuggestionContext(options);
@@ -107,6 +121,7 @@ export async function generateReaderAISuggestions(
   const result = await generateText({
     model: provider.getModel(),
     prompt: `你是阅读 AI 助手。请基于${context.label}，为读者生成 3 个适合继续提问的简短中文问题。\n\n书名：${bookTitle}\n作者：${authorName || '未知'}\n当前页：${currentPage}\n建议来源：${source}\n防剧透：${settings.spoilerProtection ? '开启，只能基于当前进度' : '关闭'}\n\n${context.label}：\n${context.content}\n\n要求：\n- 只输出 3 行，每行一个问题\n- 不要编号以外的解释\n- 不要包含未读后文剧透`,
+    abortSignal: signal,
   });
 
   return parseSuggestions(result.text);
@@ -172,6 +187,7 @@ export async function* streamReaderAIAnswer({
   question,
   selectionText,
   signal,
+  onSources,
 }: StreamReaderAIAnswerOptions): AsyncGenerator<string> {
   const query = buildQuestion(question, selectionText);
   let chunks: ScoredChunk[] = [];
@@ -201,6 +217,8 @@ export async function* streamReaderAIAnswer({
     chunks = [];
   }
 
+  onSources?.(chunks.map(chunkToSource));
+
   const systemPrompt = buildSystemPrompt(
     bookTitle,
     authorName,
@@ -229,12 +247,14 @@ export async function* streamReaderAIAnswer({
   }
 
   const provider = getAIProvider(settings);
-  const result = await generateText({
+  const result = streamText({
     model: provider.getModel(),
     system: systemPrompt,
     messages: aiMessages,
     abortSignal: signal,
   });
 
-  if (result.text) yield result.text;
+  for await (const chunk of result.textStream) {
+    if (chunk) yield chunk;
+  }
 }

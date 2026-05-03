@@ -42,6 +42,7 @@ interface ThreadProps {
   onResetIndex?: () => void;
   isLoadingHistory?: boolean;
   hasActiveConversation?: boolean;
+  historyError?: string | null;
 }
 
 const LoadingOverlay: FC<{ isVisible: boolean }> = ({ isVisible }) => {
@@ -105,6 +106,7 @@ export const Thread: FC<ThreadProps> = ({
   onResetIndex,
   isLoadingHistory = false,
   hasActiveConversation = false,
+  historyError = null,
 }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef(true);
@@ -161,54 +163,77 @@ export const Thread: FC<ThreadProps> = ({
     <ThreadPrimitive.Root className='bg-base-100 relative flex h-full w-full flex-col items-stretch px-3'>
       <LoadingOverlay isVisible={showLoading} />
 
-      {!hasActiveConversation && (
-        <ThreadPrimitive.Empty>
-          <div className='animate-in fade-in flex h-full flex-col items-center justify-center duration-300'>
-            <div className='bg-base-content/10 mb-4 rounded-full p-3'>
-              <BookOpenIcon className='text-base-content size-6' />
-            </div>
-            <h3 className='text-base-content mb-1 text-sm font-medium'>Ask about this book</h3>
-            <p className='text-base-content/60 mb-4 text-xs'>
-              Get answers based on the book content
-            </p>
-            <Composer onClear={onClear} onResetIndex={onResetIndex} />
-          </div>
-        </ThreadPrimitive.Empty>
-      )}
-
-      <AssistantIf condition={(s) => s.thread.isEmpty === false}>
-        <div
-          className={cn(
-            'relative min-h-0 flex-1 transition-opacity duration-300',
-            showLoading ? 'opacity-0' : 'opacity-100',
-          )}
-        >
-          <ThreadPrimitive.Viewport
-            ref={viewportRef}
-            autoScroll={false}
-            className='absolute inset-0 flex flex-col overflow-y-auto scroll-smooth pt-2'
-          >
-            <ThreadPrimitive.Messages
-              components={{
-                UserMessage,
-                EditComposer,
-                AssistantMessage: () => <AssistantMessage sources={sources} />,
-              }}
-            />
-            <p className='text-base-content/40 mx-auto w-full p-1 text-center text-[10px]'>
-              AI can make mistakes. Verify with the book.
-            </p>
-            <div
-              className={cn('flex-shrink transition-all duration-300', getSpacerHeight())}
-              aria-hidden='true'
-            />
-          </ThreadPrimitive.Viewport>
-
-          <ScrollToBottomButton />
+      {historyError ? (
+        <div className='animate-in fade-in flex h-full flex-col items-center justify-center px-4 text-center duration-300'>
+          <h3 className='text-base-content mb-1 text-sm font-medium'>{historyError}</h3>
+          <p className='text-base-content/60 mb-4 text-xs'>Please select the conversation again.</p>
+          <Composer onClear={onClear} onResetIndex={onResetIndex} />
         </div>
+      ) : (
+        <>
+          {!hasActiveConversation && (
+            <ThreadPrimitive.Empty>
+              <div className='animate-in fade-in flex h-full flex-col items-center justify-center duration-300'>
+                <div className='bg-base-content/10 mb-4 rounded-full p-3'>
+                  <BookOpenIcon className='text-base-content size-6' />
+                </div>
+                <h3 className='text-base-content mb-1 text-sm font-medium'>Ask about this book</h3>
+                <p className='text-base-content/60 mb-4 text-xs'>
+                  Get answers based on the book content
+                </p>
+                <Composer onClear={onClear} onResetIndex={onResetIndex} />
+              </div>
+            </ThreadPrimitive.Empty>
+          )}
 
-        <Composer onClear={onClear} onResetIndex={onResetIndex} />
-      </AssistantIf>
+          {hasActiveConversation && !showLoading && messageCount === 0 && (
+            <div className='animate-in fade-in flex h-full flex-col items-center justify-center duration-300'>
+              <div className='bg-base-content/10 mb-4 rounded-full p-3'>
+                <BookOpenIcon className='text-base-content size-6' />
+              </div>
+              <h3 className='text-base-content mb-1 text-sm font-medium'>这个对话还没有内容</h3>
+              <p className='text-base-content/60 mb-4 text-xs'>
+                继续提问，或从历史列表选择其他对话
+              </p>
+              <Composer onClear={onClear} onResetIndex={onResetIndex} />
+            </div>
+          )}
+
+          <AssistantIf condition={(s) => s.thread.isEmpty === false}>
+            <div
+              className={cn(
+                'relative min-h-0 flex-1 transition-opacity duration-300',
+                showLoading ? 'opacity-0' : 'opacity-100',
+              )}
+            >
+              <ThreadPrimitive.Viewport
+                ref={viewportRef}
+                autoScroll={false}
+                className='absolute inset-0 flex flex-col overflow-y-auto scroll-smooth pt-2'
+              >
+                <ThreadPrimitive.Messages
+                  components={{
+                    UserMessage,
+                    EditComposer,
+                    AssistantMessage: () => <AssistantMessage sources={sources} />,
+                  }}
+                />
+                <p className='text-base-content/40 mx-auto w-full p-1 text-center text-[10px]'>
+                  AI can make mistakes. Verify with the book.
+                </p>
+                <div
+                  className={cn('flex-shrink transition-all duration-300', getSpacerHeight())}
+                  aria-hidden='true'
+                />
+              </ThreadPrimitive.Viewport>
+
+              <ScrollToBottomButton />
+            </div>
+
+            <Composer onClear={onClear} onResetIndex={onResetIndex} />
+          </AssistantIf>
+        </>
+      )}
     </ThreadPrimitive.Root>
   );
 };

@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AnnotationToolButton from '@/app/reader/components/annotator/AnnotationToolButton';
 import {
@@ -37,6 +37,10 @@ const readioFeaturesMock = vi.hoisted(() => ({
   },
 }));
 
+const { saveViewSettingsMock } = vi.hoisted(() => ({
+  saveViewSettingsMock: vi.fn(),
+}));
+
 const settingsMock = vi.hoisted(() => ({
   settings: {
     discordRichPresenceEnabled: false,
@@ -70,11 +74,24 @@ const readerStoreMock = vi.hoisted(() => ({
     applyThemeToPDF: false,
     scrolled: false,
     paragraphMode: { enabled: false },
+    defaultFontSize: 16,
+    marginTopPx: 44,
+    marginBottomPx: 22,
+    marginLeftPx: 22,
+    marginRightPx: 22,
+    gapPercent: 5,
+    lineHeight: 1.6,
   })),
-  getView: vi.fn(() => ({ renderer: { getContents: () => [] } })),
+  getView: vi.fn(() => ({
+    renderer: {
+      getContents: () => [],
+      setAttribute: vi.fn(),
+    },
+  })),
   recreateViewer: vi.fn(),
   setHoveredBookKey: vi.fn(),
   setViewSettings: vi.fn(),
+  setPaginationRecalculating: vi.fn(),
   getViewState: vi.fn(() => ({ syncing: false })),
 }));
 
@@ -262,12 +279,39 @@ vi.mock('@/styles/themes', () => ({
 }));
 
 vi.mock('@/components/Slider', () => ({
-  default: ({ label }: { label: string }) => <div>{label}</div>,
+  default: ({
+    label,
+    initialValue,
+    min = 0,
+    max = 100,
+    step = 1,
+    onChange,
+  }: {
+    label: string;
+    initialValue?: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    onChange?: (value: number) => void;
+  }) => (
+    <label>
+      {label}
+      <input
+        aria-label={label}
+        type='range'
+        min={min}
+        max={max}
+        step={step}
+        defaultValue={initialValue}
+        onChange={(event) => onChange?.(Number(event.currentTarget.value))}
+      />
+    </label>
+  ),
 }));
 
 vi.mock('@/helpers/settings', () => ({
   saveSysSettings: vi.fn(),
-  saveViewSettings: vi.fn(),
+  saveViewSettings: saveViewSettingsMock,
 }));
 
 vi.mock('@/app/reader/components/KOSyncSettings', () => ({
@@ -329,6 +373,10 @@ Object.defineProperty(window, 'ResizeObserver', {
 Object.defineProperty(window, 'innerWidth', {
   writable: true,
   value: 400,
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 afterEach(cleanup);
@@ -421,5 +469,72 @@ describe('Readio reader simplification', () => {
     expect(screen.queryByRole('button', { name: /Paragraph Mode/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /More Settings/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Font & Layout' })).toBeTruthy();
+  });
+
+  it('routes font size and line spacing changes through view settings updates', () => {
+    render(
+      <FontLayoutPanel
+        bookKey='book-1'
+        actionTab='font'
+        bottomOffset='64px'
+        marginIconSize={20}
+        forceMobileLayout
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Font Size'), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText('Line Spacing'), { target: { value: '18' } });
+
+    expect(saveViewSettingsMock).toHaveBeenCalledWith({}, 'book-1', 'defaultFontSize', 20);
+    expect(saveViewSettingsMock).toHaveBeenCalledWith({}, 'book-1', 'lineHeight', 1.8);
+  });
+
+  it('routes page margin changes through pagination-affecting view settings updates', () => {
+    render(
+      <FontLayoutPanel
+        bookKey='book-1'
+        actionTab='font'
+        bottomOffset='64px'
+        marginIconSize={20}
+        forceMobileLayout
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Page Margin'), { target: { value: '60' } });
+
+    expect(saveViewSettingsMock).toHaveBeenCalledWith(
+      {},
+      'book-1',
+      'marginTopPx',
+      53,
+      false,
+      false,
+    );
+    expect(saveViewSettingsMock).toHaveBeenCalledWith(
+      {},
+      'book-1',
+      'marginBottomPx',
+      26.5,
+      false,
+      false,
+    );
+    expect(saveViewSettingsMock).toHaveBeenCalledWith(
+      {},
+      'book-1',
+      'marginLeftPx',
+      26.5,
+      false,
+      false,
+    );
+    expect(saveViewSettingsMock).toHaveBeenCalledWith(
+      {},
+      'book-1',
+      'marginRightPx',
+      26.5,
+      false,
+      false,
+    );
+    expect(saveViewSettingsMock).toHaveBeenCalledWith({}, 'book-1', 'gapPercent', 6, false, false);
+    expect(readerStoreMock.setPaginationRecalculating).not.toHaveBeenCalled();
   });
 });

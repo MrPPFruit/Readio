@@ -1,10 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MdClose } from 'react-icons/md';
 
+import type { EmbeddingProgress } from '@/services/ai/types';
 import type { Insets } from '@/types/misc';
-import type { ReaderAIMessage } from '@/types/readerAI';
+import type {
+  ReaderAIGenerationStatus as ReaderAIGenerationStatusValue,
+  ReaderAIMessage,
+  ReaderAISource,
+} from '@/types/readerAI';
 import {
   ReaderAIComposer,
+  ReaderAIGenerationStatus,
   ReaderAISpoilerGuard,
   ReaderAISuggestionRail,
 } from './ReaderAIPrimitives';
@@ -20,12 +28,37 @@ interface ReaderAIAnswerPanelProps {
   };
   spoilerProtection?: boolean;
   suggestions?: string[];
+  suggestionsLoading?: boolean;
+  generationStatus?: ReaderAIGenerationStatusValue;
+  indexingProgress?: EmbeddingProgress;
+  onSourceClick?: (source: ReaderAISource) => void;
   onSpoilerProtectionChange?: (enabled: boolean) => void;
   onSubmit: (question: string) => void;
   onClose: () => void;
 }
 
-const followUpSuggestions = ['再解释简单一点', '和前文有什么关系？', '总结到这里'];
+interface ReaderAIMessageContentProps {
+  content: string;
+  role: ReaderAIMessage['role'];
+}
+
+const ReaderAIMessageContent: React.FC<ReaderAIMessageContentProps> = ({ content, role }) => {
+  const html = useMemo(() => {
+    const parsed = marked.parse(content, { breaks: true, async: false });
+    return DOMPurify.sanitize(parsed);
+  }, [content]);
+
+  return (
+    <div
+      className={
+        role === 'assistant'
+          ? 'prose prose-sm prose-headings:text-base-content prose-p:text-base-content prose-strong:text-base-content prose-li:text-base-content prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-p:my-2 max-w-none text-sm leading-7 [&_*:first-child]:mt-0 [&_*:last-child]:mb-0'
+          : 'whitespace-pre-wrap text-sm leading-7'
+      }
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+};
 
 const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
   messages,
@@ -34,7 +67,11 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
   error,
   setupAction,
   spoilerProtection = true,
-  suggestions = followUpSuggestions,
+  suggestions = [],
+  suggestionsLoading = false,
+  generationStatus = 'idle',
+  indexingProgress,
+  onSourceClick,
   onSpoilerProtectionChange,
   onSubmit,
   onClose,
@@ -87,10 +124,22 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
     }
   };
 
+  const formatSourceLabel = (source: ReaderAISource) => {
+    const pageLabel = source.pageNumber
+      ? `${source.confidence === 'approximate' ? '约第' : '第'} ${source.pageNumber} 页`
+      : source.confidence === 'approximate'
+        ? '约略位置'
+        : '原文位置';
+    return `${pageLabel} · ${source.chapterTitle}`;
+  };
+
   const initialQuestion = messages.find((message) => message.role === 'user');
   const conversationMessages = initialQuestion
     ? messages.filter((message) => message.id !== initialQuestion.id)
     : messages;
+  const indexingPercent = indexingProgress?.total
+    ? Math.min(100, Math.round((indexingProgress.current / indexingProgress.total) * 100))
+    : undefined;
 
   return (
     <section
@@ -112,8 +161,8 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
         }}
       >
         <div className='bg-base-content/20 mx-auto mb-3 h-1 w-10 rounded-full' aria-hidden='true' />
-        <div className='flex items-start justify-between gap-3'>
-          <div className='min-w-0'>
+        <div className='flex items-start justify-between gap-2'>
+          <div className='min-w-0 flex-1'>
             <p className='text-primary/80 mb-1 text-[11px] font-semibold uppercase tracking-wide'>
               Reader AI
             </p>
@@ -127,22 +176,22 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
               围绕当前位置解释、总结和追问。
             </p>
           </div>
-          <button
-            ref={closeButtonRef}
-            type='button'
-            onClick={onClose}
-            className='btn btn-ghost btn-circle text-base-content/70 h-11 min-h-11 w-11 shrink-0'
-            aria-label='关闭 AI 阅读助手'
-          >
-            <MdClose size={20} aria-hidden='true' />
-          </button>
-        </div>
-        <div className='mt-3'>
-          <ReaderAISpoilerGuard
-            enabled={spoilerProtection}
-            onChange={(enabled) => onSpoilerProtectionChange?.(enabled)}
-            variant='badge'
-          />
+          <div className='flex shrink-0 items-center gap-1'>
+            <ReaderAISpoilerGuard
+              enabled={spoilerProtection}
+              onChange={(enabled) => onSpoilerProtectionChange?.(enabled)}
+              variant='badge'
+            />
+            <button
+              ref={closeButtonRef}
+              type='button'
+              onClick={onClose}
+              className='btn btn-ghost btn-circle text-base-content/70 h-11 min-h-11 w-11 shrink-0'
+              aria-label='关闭 AI 阅读助手'
+            >
+              <MdClose size={20} aria-hidden='true' />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -158,11 +207,49 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
             className='border-primary/20 bg-primary/10 text-base-content rounded-2xl border px-4 py-3'
             aria-label='原始问题'
           >
+            {initialQuestion.quotedText && (
+              <div className='mb-3'>
+                <div className='text-base-content/55 mb-1 text-[11px] font-semibold tracking-wide'>
+                  选中的原文
+                </div>
+                <blockquote className='border-base-content/15 text-base-content/65 border-l-2 pl-3 text-xs leading-5'>
+                  「{initialQuestion.quotedText}」
+                </blockquote>
+              </div>
+            )}
             <div className='text-primary/80 mb-1 text-[11px] font-semibold uppercase tracking-wide'>
               你的问题
             </div>
             <p className='text-sm leading-6'>{initialQuestion.content}</p>
           </section>
+        )}
+
+        {indexingProgress && (
+          <div
+            className='border-base-content/10 bg-base-100 text-base-content rounded-2xl border px-4 py-3 text-sm'
+            role='status'
+            aria-live='polite'
+          >
+            <div className='mb-2 flex items-center justify-between gap-3'>
+              <span>正在结构化本书内容，完成后会继续回答…</span>
+              {indexingPercent !== undefined && (
+                <span className='text-base-content/60 text-xs'>{indexingPercent}%</span>
+              )}
+            </div>
+            <div
+              className='bg-base-content/10 h-2 overflow-hidden rounded-full'
+              role='progressbar'
+              aria-label='结构化进度'
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={indexingPercent}
+            >
+              <div
+                className='bg-primary h-full rounded-full transition-[width]'
+                style={{ width: `${indexingPercent ?? 20}%` }}
+              />
+            </div>
+          </div>
         )}
 
         <section className='space-y-3' aria-label='AI 对话历史'>
@@ -179,19 +266,49 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
                 <span className='bg-primary h-2 w-2 rounded-full' aria-hidden='true' />
                 {message.role === 'user' ? '追问' : 'AI 回答'}
               </div>
-              <div className='whitespace-pre-wrap text-sm leading-7'>{message.content}</div>
+              {message.role === 'assistant' && loading && !message.content ? (
+                <ReaderAIGenerationStatus status={generationStatus} />
+              ) : (
+                <ReaderAIMessageContent content={message.content} role={message.role} />
+              )}
+              {message.role === 'assistant' && message.sources?.length ? (
+                <section
+                  className='border-base-content/10 mt-3 space-y-2 border-t pt-3'
+                  aria-label='参考来源'
+                >
+                  {message.sources.map((source) => {
+                    const label = formatSourceLabel(source);
+                    return (
+                      <button
+                        key={source.id}
+                        type='button'
+                        className='border-base-content/10 bg-base-200/60 text-base-content/75 w-full rounded-2xl border px-3 py-2 text-left text-xs leading-5'
+                        onClick={() => onSourceClick?.(source)}
+                        aria-label={`跳转到来源：${label}`}
+                      >
+                        <span className='block font-medium'>{label}</span>
+                        {source.snippet && (
+                          <span className='text-base-content/55 mt-1 block'>
+                            「{source.snippet}」
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </section>
+              ) : null}
             </article>
           ))}
         </section>
 
-        {loading && (
-          <div
-            className='border-base-content/10 bg-base-100 text-base-content/60 rounded-2xl border px-4 py-3 text-sm'
-            role='status'
-          >
-            正在基于当前位置生成回答…
-          </div>
-        )}
+        {loading &&
+          !conversationMessages.some(
+            (message) => message.role === 'assistant' && !message.content,
+          ) && (
+            <div className='border-base-content/10 bg-base-100 rounded-2xl border px-4 py-3'>
+              <ReaderAIGenerationStatus status={generationStatus} />
+            </div>
+          )}
         {error && (
           <div
             className='border-error/30 bg-base-100 text-error rounded-2xl border px-4 py-3 text-sm'
@@ -210,11 +327,17 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
           </button>
         )}
 
-        {!loading && (
+        {!loading && suggestionsLoading && (
+          <div className='text-base-content/55 text-xs leading-5' role='status' aria-live='polite'>
+            正在生成追问建议…
+          </div>
+        )}
+        {!loading && !suggestionsLoading && suggestions.length > 0 && (
           <ReaderAISuggestionRail
             suggestions={suggestions}
             selectedValue={question}
             ariaLabel='追问建议'
+            layout='stack'
             onSelect={setQuestion}
           />
         )}

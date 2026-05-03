@@ -1,4 +1,5 @@
 import type { EmbeddingModel, LanguageModel } from 'ai';
+import type { ReaderAISource } from '@/types/readerAI';
 
 export type AIProviderName =
   | 'openrouter'
@@ -78,6 +79,10 @@ export interface BookIndexMeta {
   totalSections: number;
   totalChunks: number;
   embeddingModel: string;
+  indexVersion: number;
+  chunkerVersion: number;
+  bm25Version: number;
+  estimatedBytes: number;
   lastUpdated: number;
 }
 
@@ -103,6 +108,8 @@ export interface AIConversation {
   title: string;
   createdAt: number;
   updatedAt: number;
+  favoritedAt?: number;
+  archivedAt?: number;
 }
 
 // single message in an AI conversation
@@ -111,5 +118,7 @@ export interface AIMessage {
   conversationId: string;
   role: 'user' | 'assistant';
   content: string;
+  quotedText?: string;
+  sources?: ReaderAISource[];
   createdAt: number;
 }

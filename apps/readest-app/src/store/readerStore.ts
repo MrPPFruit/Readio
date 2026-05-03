@@ -32,6 +32,9 @@ interface ViewState {
   inited: boolean;
   error: string | null;
   progress: BookProgress | null;
+  pendingPageInfo: PageInfo | null;
+  renderedPageInfo: PageInfo | null;
+  paginationRecalculating: boolean;
   ribbonVisible: boolean;
   ttsEnabled: boolean;
   syncing: boolean;
@@ -66,6 +69,9 @@ interface ReaderStore {
     range: Range,
   ) => void;
   getProgress: (key: string) => BookProgress | null;
+  setPendingPageInfo: (key: string, pageInfo: PageInfo | null) => void;
+  setRenderedPageInfo: (key: string, pageInfo: PageInfo | null) => void;
+  setPaginationRecalculating: (key: string, recalculating: boolean) => void;
   setView: (key: string, view: FoliateView) => void;
   getView: (key: string | null) => FoliateView | null;
   getViews: () => FoliateView[];
@@ -143,6 +149,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
           inited: false,
           error: null,
           progress: null,
+          pendingPageInfo: null,
+          renderedPageInfo: null,
+          paginationRecalculating: false,
           ribbonVisible: false,
           ttsEnabled: false,
           syncing: false,
@@ -269,6 +278,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
             inited: false,
             error: null,
             progress: null,
+            pendingPageInfo: null,
+            renderedPageInfo: null,
+            paginationRecalculating: false,
             ribbonVisible: false,
             ttsEnabled: false,
             syncing: false,
@@ -292,6 +304,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
             inited: false,
             error: 'Failed to load book.',
             progress: null,
+            pendingPageInfo: null,
+            renderedPageInfo: null,
+            paginationRecalculating: false,
             ribbonVisible: false,
             ttsEnabled: false,
             syncing: false,
@@ -341,6 +356,49 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
     }));
   },
   getProgress: (key: string) => get().viewStates[key]?.progress || null,
+  setPendingPageInfo: (key: string, pageInfo: PageInfo | null) =>
+    set((state) => {
+      const viewState = state.viewStates[key];
+      if (!viewState) return state;
+      return {
+        viewStates: {
+          ...state.viewStates,
+          [key]: {
+            ...viewState,
+            pendingPageInfo: pageInfo,
+          },
+        },
+      };
+    }),
+  setRenderedPageInfo: (key: string, pageInfo: PageInfo | null) =>
+    set((state) => {
+      const viewState = state.viewStates[key];
+      if (!viewState) return state;
+      return {
+        viewStates: {
+          ...state.viewStates,
+          [key]: {
+            ...viewState,
+            renderedPageInfo: pageInfo,
+          },
+        },
+      };
+    }),
+  setPaginationRecalculating: (key: string, recalculating: boolean) =>
+    set((state) => {
+      const viewState = state.viewStates[key];
+      if (!viewState) return state;
+      return {
+        viewStates: {
+          ...state.viewStates,
+          [key]: {
+            ...viewState,
+            pendingPageInfo: recalculating ? null : viewState.pendingPageInfo,
+            paginationRecalculating: recalculating,
+          },
+        },
+      };
+    }),
   setProgress: (
     key: string,
     location: string,
@@ -357,6 +415,20 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
       if (!viewState || !bookData) return state;
 
       const pageInfo = bookData.isFixedLayout ? section : pageinfo;
+      const oldPageInfo = bookData.isFixedLayout
+        ? viewState.progress?.section
+        : viewState.progress?.pageinfo;
+      const pendingPageInfo = viewState.pendingPageInfo;
+      const shouldKeepPendingPageInfo =
+        !!pendingPageInfo &&
+        !!oldPageInfo &&
+        pendingPageInfo.total === pageInfo.total &&
+        ((pendingPageInfo.current > oldPageInfo.current &&
+          pageInfo.current >= oldPageInfo.current &&
+          pageInfo.current < pendingPageInfo.current) ||
+          (pendingPageInfo.current < oldPageInfo.current &&
+            pageInfo.current <= oldPageInfo.current &&
+            pageInfo.current > pendingPageInfo.current));
       const progress: [number, number] = [pageInfo.current + 1, pageInfo.total];
       const progressPercentage = Math.round((progress[0] / progress[1]) * 100);
 
@@ -396,6 +468,9 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
           ...state.viewStates,
           [key]: {
             ...viewState,
+            pendingPageInfo: shouldKeepPendingPageInfo ? pendingPageInfo : null,
+            renderedPageInfo: bookData.isFixedLayout ? section : viewState.renderedPageInfo,
+            paginationRecalculating: false,
             progress: {
               ...viewState.progress,
               location,
@@ -429,6 +504,8 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
         ...state.viewStates,
         [key]: {
           ...state.viewStates[key]!,
+          pendingPageInfo: null,
+          paginationRecalculating: true,
           ttsEnabled: enabled,
         },
       },

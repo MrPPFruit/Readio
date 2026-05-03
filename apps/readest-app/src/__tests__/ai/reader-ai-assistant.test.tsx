@@ -1,7 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AIConversation, AISettings } from '@/services/ai/types';
+import type { AIConversation, AIMessage, AISettings } from '@/services/ai/types';
 
 const mocks = vi.hoisted(() => ({
   indexBook: vi.fn(),
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   addMessage: vi.fn(),
   getBookData: vi.fn(),
   getProgress: vi.fn(),
+  getView: vi.fn(),
   useKeyDownActions: vi.fn(),
   setActiveSettingsItemId: vi.fn(),
   setSettingsDialogBookKey: vi.fn(),
@@ -34,6 +35,9 @@ const settings: AISettings = {
 let storeState: {
   activeConversationId: string | null;
   conversations: AIConversation[];
+  messages: AIMessage[];
+  historyError: string | null;
+  setActiveConversation: ReturnType<typeof vi.fn>;
   createConversation: typeof mocks.createConversation;
   addMessage: typeof mocks.addMessage;
 };
@@ -62,7 +66,7 @@ vi.mock('@/store/bookDataStore', () => ({
 
 vi.mock('@/store/readerStore', () => ({
   useReaderStore: {
-    getState: () => ({ getProgress: mocks.getProgress }),
+    getState: () => ({ getProgress: mocks.getProgress, getView: mocks.getView }),
   },
 }));
 
@@ -123,33 +127,64 @@ vi.mock('@/app/reader/components/ai/ReaderAIAnswerPanel', () => ({
     spoilerProtection,
     onSpoilerProtectionChange,
     suggestions,
+    suggestionsLoading,
+    generationStatus,
+    onSourceClick,
     onSubmit,
     onClose,
     setupAction,
+    indexingProgress,
   }: {
-    messages: { role: string; content: string }[];
+    messages: {
+      role: string;
+      content: string;
+      quotedText?: string;
+      sources?: { id: string; cfi?: string; href?: string }[];
+    }[];
     loading: boolean;
     spoilerProtection: boolean;
     suggestions: string[];
+    suggestionsLoading?: boolean;
+    generationStatus?: string;
+    onSourceClick?: (source: { id: string; cfi?: string; href?: string }) => void;
     onSpoilerProtectionChange: (enabled: boolean) => void;
     onSubmit: (question: string) => void;
     onClose: () => void;
     setupAction?: { label: string; onClick: () => void };
-  }) => (
-    <div data-testid='answer-panel' data-loading={loading ? 'true' : 'false'}>
-      <div data-testid='answer-spoiler-state'>
-        {spoilerProtection ? 'protected' : 'unprotected'}
+    indexingProgress?: { current: number; total: number; phase: string };
+  }) => {
+    const firstSource = messages.find((message) => message.sources)?.sources?.[0];
+
+    return (
+      <div data-testid='answer-panel' data-loading={loading ? 'true' : 'false'}>
+        <div data-testid='answer-spoiler-state'>
+          {spoilerProtection ? 'protected' : 'unprotected'}
+        </div>
+        <div data-testid='answer-suggestions'>{suggestions.join('|')}</div>
+        <div data-testid='answer-suggestions-loading'>
+          {suggestionsLoading ? 'loading' : 'idle'}
+        </div>
+        <div data-testid='generation-status'>{generationStatus ?? 'none'}</div>
+        <button onClick={() => firstSource && onSourceClick?.(firstSource)}>click-source</button>
+        {indexingProgress && (
+          <div data-testid='indexing-progress'>
+            {indexingProgress.phase}:{indexingProgress.current}/{indexingProgress.total}
+          </div>
+        )}
+        <button onClick={() => onSpoilerProtectionChange(false)}>allow-spoilers-answer</button>
+        <div data-testid='messages'>
+          {messages
+            .map((message) =>
+              [message.role, message.content, message.quotedText].filter(Boolean).join(':'),
+            )
+            .join('|')}
+        </div>
+        {setupAction && <button onClick={setupAction.onClick}>{setupAction.label}</button>}
+        <button onClick={() => onSubmit('follow-up')}>ask-follow-up</button>
+        <button onClick={onClose}>close-answer</button>
       </div>
-      <div data-testid='answer-suggestions'>{suggestions.join('|')}</div>
-      <button onClick={() => onSpoilerProtectionChange(false)}>allow-spoilers-answer</button>
-      <div data-testid='messages'>
-        {messages.map((message) => `${message.role}:${message.content}`).join('|')}
-      </div>
-      {setupAction && <button onClick={setupAction.onClick}>{setupAction.label}</button>}
-      <button onClick={() => onSubmit('follow-up')}>ask-follow-up</button>
-      <button onClick={onClose}>close-answer</button>
-    </div>
-  ),
+    );
+  },
 }));
 
 import ReaderAIAssistant from '@/app/reader/components/ai/ReaderAIAssistant';
@@ -177,6 +212,22 @@ function pendingStream(signal?: AbortSignal) {
   })();
 }
 
+type IndexBookOptions = {
+  onProgress: (progress: { current: number; total: number; phase: string }) => void;
+  signal: AbortSignal;
+};
+
+function getIndexBookOptions(): IndexBookOptions {
+  return mocks.indexBook.mock.calls[0]![3] as IndexBookOptions;
+}
+
+async function flushAsyncWork() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   settings.enabled = true;
@@ -197,10 +248,16 @@ beforeEach(() => {
     bookDoc: { metadata: { title: 'Current Book', author: 'Author' } },
   });
   mocks.getProgress.mockReturnValue({ page: 7 });
+  mocks.getView.mockReturnValue({ goTo: vi.fn() });
   mocks.useKeyDownActions.mockReturnValue({ current: null });
   storeState = {
     activeConversationId: null,
     conversations: [],
+    messages: [],
+    historyError: null,
+    setActiveConversation: vi.fn(async (id: string | null) => {
+      storeState.activeConversationId = id;
+    }),
     createConversation: mocks.createConversation,
     addMessage: mocks.addMessage,
   };
@@ -208,6 +265,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
 });
 
 describe('ReaderAIAssistant integration safeguards', () => {
@@ -307,6 +365,42 @@ describe('ReaderAIAssistant integration safeguards', () => {
     expect(mocks.streamReaderAIAnswer).not.toHaveBeenCalled();
   });
 
+  it('opens stored conversation history in the reader AI answer panel', async () => {
+    storeState.messages = [
+      {
+        id: 'history-user',
+        conversationId: 'conversation-1',
+        role: 'user',
+        content: '这里发生了什么？',
+        createdAt: 1,
+      },
+      {
+        id: 'history-assistant',
+        conversationId: 'conversation-1',
+        role: 'assistant',
+        content: '这是已经保存的回答。',
+        createdAt: 2,
+      },
+    ];
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+
+    await import('@/utils/event').then(({ eventDispatcher }) =>
+      eventDispatcher.dispatch('reader-ai-open-history', {
+        bookKey: 'current-book-instance',
+        conversationId: 'conversation-1',
+      }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('messages').textContent).toBe(
+        'user:这里发生了什么？|assistant:这是已经保存的回答。',
+      ),
+    );
+    expect(storeState.setActiveConversation).toHaveBeenCalledWith('conversation-1');
+    expect(screen.getByTestId('answer-panel').getAttribute('data-loading')).toBe('false');
+  });
+
   it('generates ask-box suggestions from selected text context', async () => {
     render(<ReaderAIAssistant bookKey='current-book-instance' />);
 
@@ -331,6 +425,52 @@ describe('ReaderAIAssistant integration safeguards', () => {
       expect(screen.getByTestId('ask-suggestions').textContent).toBe(
         '生成建议一|生成建议二|生成建议三',
       ),
+    );
+  });
+
+  it('clears the reader selection when opening AI from selected text', async () => {
+    const deselect = vi.fn();
+    mocks.getView.mockReturnValue({ goTo: vi.fn(), deselect });
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    await import('@/utils/event').then(({ eventDispatcher }) =>
+      eventDispatcher.dispatch('reader-ai-open', {
+        bookKey: 'current-book-instance',
+        source: 'selection',
+        selection: { text: '克莱恩看见灰雾之上出现新的线索', page: 7 },
+      }),
+    );
+
+    expect(deselect).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByText('ask-question')).toBeTruthy());
+  });
+
+  it('keeps selected text as quote metadata when asking from a selection', async () => {
+    mocks.streamReaderAIAnswer.mockReturnValue(streamChunks(['answer']));
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    await import('@/utils/event').then(({ eventDispatcher }) =>
+      eventDispatcher.dispatch('reader-ai-open', {
+        bookKey: 'current-book-instance',
+        source: 'selection',
+        selection: { text: '克莱恩看见灰雾之上出现新的线索', page: 7 },
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('ask-question')).toBeTruthy());
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('messages').textContent).toContain(
+        'user:question:克莱恩看见灰雾之上出现新的线索',
+      ),
+    );
+    await waitFor(() =>
+      expect(mocks.addMessage).toHaveBeenCalledWith({
+        conversationId: 'new-conversation',
+        role: 'user',
+        content: 'question',
+        quotedText: '克莱恩看见灰雾之上出现新的线索',
+      }),
     );
   });
 
@@ -367,6 +507,135 @@ describe('ReaderAIAssistant integration safeguards', () => {
     );
   });
 
+  it('shows follow-up suggestion loading only after streaming completes', async () => {
+    let resolveAnswer: (() => void) | undefined;
+    let resolveSuggestions: ((value: string[]) => void) | undefined;
+    mocks.streamReaderAIAnswer.mockReturnValue(
+      (async function* () {
+        yield 'partial';
+        await new Promise<void>((resolve) => {
+          resolveAnswer = resolve;
+        });
+        yield ' done';
+      })(),
+    );
+    mocks.generateReaderAISuggestions.mockResolvedValueOnce(['初始建议一']);
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    await waitFor(() =>
+      expect(screen.getByTestId('ask-suggestions').textContent).toBe('初始建议一'),
+    );
+    mocks.generateReaderAISuggestions.mockClear();
+    mocks.generateReaderAISuggestions.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveSuggestions = resolve;
+      }),
+    );
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await waitFor(() => expect(screen.getByTestId('messages').textContent).toContain('partial'));
+    expect(screen.getByTestId('answer-suggestions-loading').textContent).toBe('idle');
+    expect(screen.getByTestId('answer-suggestions').textContent).toBe('');
+
+    resolveAnswer?.();
+    await waitFor(() =>
+      expect(screen.getByTestId('answer-suggestions-loading').textContent).toBe('loading'),
+    );
+    expect(screen.getByTestId('answer-suggestions').textContent).toBe('');
+
+    resolveSuggestions?.(['真正建议一', '真正建议二', '真正建议三']);
+    await waitFor(() =>
+      expect(screen.getByTestId('answer-suggestions').textContent).toBe(
+        '真正建议一|真正建议二|真正建议三',
+      ),
+    );
+  });
+
+  it('does not persist an empty answer after generation timeout', async () => {
+    vi.useFakeTimers();
+    mocks.streamReaderAIAnswer.mockImplementation(({ signal }: { signal?: AbortSignal }) =>
+      (async function* () {
+        await new Promise<void>((resolve) => {
+          signal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      })(),
+    );
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await flushAsyncWork();
+    expect(mocks.streamReaderAIAnswer).toHaveBeenCalled();
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushAsyncWork();
+
+    expect(screen.getByTestId('messages').textContent).toContain(
+      'AI 生成超时，请稍后重试，或切换更快的模型。',
+    );
+    expect(mocks.addMessage).not.toHaveBeenCalled();
+  });
+
+  it('stores exact selected-text source metadata and jumps by cfi when clicked', async () => {
+    mocks.streamReaderAIAnswer.mockImplementation(
+      ({ onSources }: { onSources?: (sources: unknown[]) => void }) => {
+        onSources?.([
+          {
+            id: 'selection-source',
+            chapterTitle: '选中的原文',
+            pageNumber: 7,
+            cfi: 'epubcfi(/6/2)',
+            snippet: '克莱恩看见灰雾之上出现新的线索',
+            confidence: 'exact',
+          },
+        ]);
+        return streamChunks(['answer']);
+      },
+    );
+    const goTo = vi.fn();
+    mocks.getView.mockReturnValue({ goTo });
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    await import('@/utils/event').then(({ eventDispatcher }) =>
+      eventDispatcher.dispatch('reader-ai-open', {
+        bookKey: 'current-book-instance',
+        source: 'selection',
+        selection: {
+          text: '克莱恩看见灰雾之上出现新的线索',
+          page: 7,
+          cfi: 'epubcfi(/6/2)',
+        },
+      }),
+    );
+    await waitFor(() => expect(screen.getByText('ask-question')).toBeTruthy());
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await waitFor(() =>
+      expect(mocks.addMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'new-conversation',
+          role: 'assistant',
+          content: 'answer',
+          sources: expect.arrayContaining([
+            expect.objectContaining({
+              cfi: 'epubcfi(/6/2)',
+              confidence: 'exact',
+            }),
+          ]),
+        }),
+      ),
+    );
+
+    fireEvent.click(screen.getByText('click-source'));
+    expect(goTo).toHaveBeenCalledWith('epubcfi(/6/2)');
+  });
+
   it('passes spoiler protection state to answer streaming and defaults to protected mode', async () => {
     render(<ReaderAIAssistant bookKey='current-book-instance' />);
     fireEvent.click(screen.getByText('open-ai'));
@@ -399,9 +668,60 @@ describe('ReaderAIAssistant integration safeguards', () => {
     fireEvent.click(screen.getByText('ask-question'));
 
     await waitFor(() => expect(mocks.indexBook).toHaveBeenCalled());
-    expect(mocks.indexBook.mock.calls[0]![4]).toBeInstanceOf(AbortSignal);
+    expect(getIndexBookOptions().onProgress).toEqual(expect.any(Function));
+    expect(getIndexBookOptions().signal).toBeInstanceOf(AbortSignal);
     await waitFor(() => expect(mocks.streamReaderAIAnswer).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByTestId('messages').textContent).toContain('answer'));
+  });
+
+  it('does not show detailed indexing progress before the first-use threshold', async () => {
+    vi.useFakeTimers();
+    mocks.isBookIndexed.mockResolvedValue(false);
+    mocks.indexBook.mockImplementation(
+      () =>
+        new Promise<void>(() => {
+          // keep indexing pending
+        }),
+    );
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await flushAsyncWork();
+    expect(mocks.indexBook).toHaveBeenCalled();
+    const { onProgress } = getIndexBookOptions();
+    act(() => {
+      onProgress({ current: 1, total: 4, phase: 'chunking' });
+      vi.advanceTimersByTime(4999);
+    });
+
+    expect(screen.queryByTestId('indexing-progress')).toBeNull();
+  });
+
+  it('shows detailed indexing progress after the first-use threshold', async () => {
+    vi.useFakeTimers();
+    mocks.isBookIndexed.mockResolvedValue(false);
+    mocks.indexBook.mockImplementation(
+      () =>
+        new Promise<void>(() => {
+          // keep indexing pending
+        }),
+    );
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await flushAsyncWork();
+    expect(mocks.indexBook).toHaveBeenCalled();
+    const { onProgress } = getIndexBookOptions();
+    act(() => {
+      onProgress({ current: 2, total: 4, phase: 'chunking' });
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(screen.getByTestId('indexing-progress').textContent).toBe('chunking:2/4');
   });
 
   it('explains likely recovery steps when the provider request fails', async () => {
@@ -449,10 +769,14 @@ describe('ReaderAIAssistant integration safeguards', () => {
     fireEvent.click(screen.getByText('open-ai'));
     fireEvent.click(screen.getByText('ask-question'));
 
-    await waitFor(() => expect(mocks.indexBook).toHaveBeenCalled());
+    await flushAsyncWork();
+    expect(mocks.indexBook).toHaveBeenCalled();
+    const { onProgress } = getIndexBookOptions();
+    onProgress({ current: 1, total: 4, phase: 'chunking' });
     fireEvent.click(screen.getByText('close-answer'));
     resolveIndexing?.();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByTestId('indexing-progress')).toBeNull();
     expect(mocks.streamReaderAIAnswer).not.toHaveBeenCalled();
     expect(mocks.addMessage).not.toHaveBeenCalled();
   });

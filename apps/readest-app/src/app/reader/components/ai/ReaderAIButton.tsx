@@ -12,10 +12,9 @@ interface ReaderAIButtonProps {
 
 const READER_AI_BUTTON_BOTTOM_OFFSET = {
   default: 64,
-  progress: 184,
-  font: 210,
-  color: 280,
 } as const;
+
+const MOBILE_FOOTER_PANEL_TABS = new Set(['progress', 'font', 'color']);
 
 const ReaderAIButton: React.FC<ReaderAIButtonProps> = ({ bookKey, onClick }) => {
   const { appService } = useEnv();
@@ -24,14 +23,10 @@ const ReaderAIButton: React.FC<ReaderAIButtonProps> = ({ bookKey, onClick }) => 
   const footerActionTab = getFooterActionTab(bookKey);
   const isMobileFooter =
     appService?.isMobile || window.innerWidth < 640 || window.innerHeight < 640;
-  const bottomOffset =
-    isMobileFooter && footerActionTab in READER_AI_BUTTON_BOTTOM_OFFSET
-      ? READER_AI_BUTTON_BOTTOM_OFFSET[
-          footerActionTab as keyof typeof READER_AI_BUTTON_BOTTOM_OFFSET
-        ]
-      : READER_AI_BUTTON_BOTTOM_OFFSET.default;
+  const isMobileFooterPanelOpen = isMobileFooter && MOBILE_FOOTER_PANEL_TABS.has(footerActionTab);
+  const bottomOffset = READER_AI_BUTTON_BOTTOM_OFFSET.default;
 
-  if (hoveredBookKey !== bookKey) return null;
+  if (hoveredBookKey !== bookKey || isMobileFooterPanelOpen) return null;
 
   return (
     <div

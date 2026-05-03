@@ -28,8 +28,9 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
   const { getBookData } = useBookDataStore();
-  const { getProgress, getViewSettings, getView } = useReaderStore();
+  const { getProgress, getViewSettings, getView, getViewState } = useReaderStore();
   const view = getView(bookKey);
+  const viewState = getViewState(bookKey);
   const bookData = getBookData(bookKey);
   const viewSettings = getViewSettings(bookKey)!;
   const progress = getProgress(bookKey);
@@ -50,14 +51,27 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 
   const lang = localStorage?.getItem('i18nextLng') || '';
   const localize = isVertical && lang.toLowerCase().startsWith('zh');
-  const pageInfo = bookData?.isFixedLayout ? section : pageinfo;
-  const progressInfo = formatProgress(pageInfo?.current, pageInfo?.total, template, localize, lang);
-
   const { page: current = 0, pages: total = 0 } = view?.renderer || {};
+  const relocatedPageInfo = bookData?.isFixedLayout ? section : pageinfo;
+  const pageInfo = viewState?.pendingPageInfo ?? relocatedPageInfo;
+  const progressInfo = viewState?.paginationRecalculating
+    ? ''
+    : formatProgress(pageInfo?.current, pageInfo?.total, template, localize, lang);
+  const accessiblePageInfo =
+    !viewState?.paginationRecalculating && pageInfo
+      ? _('On {{current}} of {{total}} page', {
+          current: pageInfo.current + 1,
+          total: pageInfo.total,
+        })
+      : '';
   const pagesLeft = bookData?.isFixedLayout
     ? 1
-    : Math.min(Math.max(total - current, 1), pageInfo ? pageInfo.total - pageInfo.current : total);
-  const showPagesLeft = total > 0 || bookData?.isFixedLayout;
+    : Math.min(
+        Math.max(total - current, 1),
+        relocatedPageInfo ? relocatedPageInfo.total - relocatedPageInfo.current : total,
+      );
+  const showPagesLeft =
+    !viewState?.paginationRecalculating && (total > 0 || bookData?.isFixedLayout);
   const timeLeftStr = showPagesLeft
     ? _('{{time}} min left in chapter', {
         time: formatNumber(
@@ -164,18 +178,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
         isMobile ? 'pointer-events-auto' : 'pointer-events-none',
       )}
       onClick={() => cycleProgressInfoModes()}
-      aria-label={[
-        progress
-          ? _('On {{current}} of {{total}} page', {
-              current: current + 1,
-              total: total,
-            })
-          : '',
-        timeLeftStr,
-        pagesLeftStr,
-      ]
-        .filter(Boolean)
-        .join(', ')}
+      aria-label={[accessiblePageInfo, timeLeftStr, pagesLeftStr].filter(Boolean).join(', ')}
       style={
         isVertical
           ? {
@@ -249,7 +252,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
         <div className='progress-info flex-1 items-center overflow-hidden whitespace-nowrap text-end tabular-nums'>
           {(progressBarMode === 'all' || progressBarMode.includes('progress')) && (
             <>
-              {viewSettings.showProgressInfo && (
+              {viewSettings.showProgressInfo && progressInfo && (
                 <span
                   className={clsx(
                     'progress-info-label text-end',

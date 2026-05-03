@@ -75,6 +75,9 @@ function seedViewState(key: string, overrides: Record<string, unknown> = {}) {
         inited: false,
         error: null,
         progress: null,
+        pendingPageInfo: null,
+        renderedPageInfo: null,
+        paginationRecalculating: false,
         ribbonVisible: false,
         ttsEnabled: false,
         syncing: false,
@@ -270,6 +273,145 @@ describe('readerStore', () => {
       useReaderStore.getState().setViewSettings('', { fontSize: 16 } as unknown as ViewSettings);
       // Should not throw or create new state
       expect(Object.keys(useReaderStore.getState().viewStates)).toHaveLength(0);
+    });
+  });
+
+  describe('pagination indicator state', () => {
+    test('stores rendered page info without showing stale progress before relocation', () => {
+      seedViewState('bookid-0', {
+        renderedPageInfo: { current: 4055, total: 10397 },
+        paginationRecalculating: true,
+      });
+
+      useReaderStore.getState().setRenderedPageInfo('bookid-0', { current: 8, total: 120 });
+
+      const viewState = useReaderStore.getState().getViewState('bookid-0');
+      expect(viewState?.renderedPageInfo).toEqual({ current: 8, total: 120 });
+      expect(viewState?.paginationRecalculating).toBe(true);
+    });
+
+    test('stores pending page info for immediate page-turn feedback', () => {
+      seedViewState('bookid-0');
+
+      useReaderStore.getState().setPendingPageInfo('bookid-0', { current: 4, total: 20 });
+
+      expect(useReaderStore.getState().getViewState('bookid-0')?.pendingPageInfo).toEqual({
+        current: 4,
+        total: 20,
+      });
+    });
+
+    test('keeps pending full-book page info when relocate still reports the previous page', () => {
+      seedViewState('bookid-0', {
+        pendingPageInfo: { current: 4056, total: 10397 },
+        progress: {
+          section: { current: 0, total: 3 },
+          pageinfo: { current: 4055, total: 10397 },
+          page: 4056,
+        },
+      });
+      useBookDataStore.setState({
+        booksData: {
+          bookid: {
+            id: 'bookid',
+            book: null,
+            file: null,
+            config: { updatedAt: Date.now() },
+            bookDoc: null,
+            isFixedLayout: false,
+          },
+        },
+      });
+
+      useReaderStore
+        .getState()
+        .setProgress(
+          'bookid-0',
+          'epubcfi(/6/4)',
+          { href: 'chapter.xhtml', label: 'Chapter 1' } as never,
+          { current: 0, total: 3 },
+          { current: 4055, total: 10397 },
+          { section: 1, total: 10 },
+          {} as Range,
+        );
+
+      expect(useReaderStore.getState().getViewState('bookid-0')?.pendingPageInfo).toEqual({
+        current: 4056,
+        total: 10397,
+      });
+    });
+
+    test('clears pending full-book page info when relocate catches up to the pending page', () => {
+      seedViewState('bookid-0', {
+        pendingPageInfo: { current: 4056, total: 10397 },
+        progress: {
+          section: { current: 0, total: 3 },
+          pageinfo: { current: 4055, total: 10397 },
+          page: 4056,
+        },
+      });
+      useBookDataStore.setState({
+        booksData: {
+          bookid: {
+            id: 'bookid',
+            book: null,
+            file: null,
+            config: { updatedAt: Date.now() },
+            bookDoc: null,
+            isFixedLayout: false,
+          },
+        },
+      });
+
+      useReaderStore
+        .getState()
+        .setProgress(
+          'bookid-0',
+          'epubcfi(/6/6)',
+          { href: 'chapter.xhtml', label: 'Chapter 1' } as never,
+          { current: 0, total: 3 },
+          { current: 4056, total: 10397 },
+          { section: 1, total: 10 },
+          {} as Range,
+        );
+
+      expect(useReaderStore.getState().getViewState('bookid-0')?.pendingPageInfo).toBeNull();
+    });
+
+    test('marks pagination recalculating and clears it when progress relocates', () => {
+      seedViewState('bookid-0', {
+        pendingPageInfo: { current: 5, total: 20 },
+        paginationRecalculating: true,
+      });
+      useBookDataStore.setState({
+        booksData: {
+          bookid: {
+            id: 'bookid',
+            book: null,
+            file: null,
+            config: { updatedAt: Date.now() },
+            bookDoc: null,
+            isFixedLayout: false,
+          },
+        },
+      });
+
+      useReaderStore
+        .getState()
+        .setProgress(
+          'bookid-0',
+          'epubcfi(/6/2)',
+          { href: 'chapter.xhtml', label: 'Chapter 1' } as never,
+          { current: 0, total: 3 },
+          { current: 6, total: 24 },
+          { section: 1, total: 10 },
+          {} as Range,
+        );
+
+      const viewState = useReaderStore.getState().getViewState('bookid-0');
+      expect(viewState?.pendingPageInfo).toBeNull();
+      expect(viewState?.paginationRecalculating).toBe(false);
+      expect(viewState?.progress?.pageinfo).toEqual({ current: 6, total: 24 });
     });
   });
 

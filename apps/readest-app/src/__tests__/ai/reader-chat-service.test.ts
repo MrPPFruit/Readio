@@ -103,6 +103,23 @@ describe('generateReaderAISuggestions', () => {
     expect(generateTextMock.mock.calls[0]![0].prompt).toContain('克莱恩在灰雾之上看见新的线索。');
   });
 
+  it('passes abort signals to suggestion generation', async () => {
+    const controller = new AbortController();
+
+    await generateReaderAISuggestions({
+      settings,
+      bookHash: 'book-hash',
+      bookTitle: 'Book',
+      currentPage: 7,
+      source: 'selection',
+      selectionText: '克莱恩在灰雾之上看见新的线索。',
+      messages: [],
+      signal: controller.signal,
+    });
+
+    expect(generateTextMock.mock.calls[0]![0].abortSignal).toBe(controller.signal);
+  });
+
   it('uses current page content when no text is selected', async () => {
     const suggestions = await generateReaderAISuggestions({
       settings,
@@ -204,7 +221,7 @@ describe('streamReaderAIAnswer', () => {
         3,
         undefined,
       );
-      expect(generateTextMock).toHaveBeenCalled();
+      expect(streamTextMock).toHaveBeenCalled();
     });
   });
 
@@ -247,14 +264,21 @@ describe('streamReaderAIAnswer', () => {
       }
     });
 
-    const call = generateTextMock.mock.calls[0]?.[0];
+    const call = streamTextMock.mock.calls[0]?.[0];
     expect(call.system.indexOf('白银城，伯格家')).toBeLessThan(
       call.system.indexOf('班西港的气氛越来越不对劲'),
     );
     expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 4054, 4);
   });
 
-  it('uses direct provider generation in the Tauri app even when window exists', async () => {
+  it('streams direct provider chunks in the Tauri app even when window exists', async () => {
+    streamTextMock.mockReturnValue({
+      textStream: (async function* () {
+        yield 'first ';
+        yield 'second';
+      })(),
+    });
+
     await runWithAppPlatform('tauri', async () => {
       const originalWindow = globalThis.window;
       const originalFetch = globalThis.fetch;
@@ -278,15 +302,60 @@ describe('streamReaderAIAnswer', () => {
           chunks.push(chunk);
         }
 
-        expect(chunks).toEqual(['ok']);
-        expect(generateTextMock).toHaveBeenCalled();
-        expect(streamTextMock).not.toHaveBeenCalled();
+        expect(chunks).toEqual(['first ', 'second']);
+        expect(streamTextMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            model: 'mock-model',
+            messages: [{ role: 'user', content: '发生了什么？' }],
+          }),
+        );
+        expect(generateTextMock).not.toHaveBeenCalled();
         expect(fetchMock).not.toHaveBeenCalled();
       } finally {
         Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });
         Object.defineProperty(globalThis, 'fetch', { value: originalFetch, configurable: true });
       }
     });
+  });
+
+  it('reports approximate RAG sources before streaming the answer', async () => {
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'chunk-source',
+        bookHash: 'book-hash',
+        sectionIndex: 5,
+        chapterTitle: '第五章 线索',
+        text: '灰雾之上的线索再次出现，克莱恩开始复盘。',
+        pageNumber: 38,
+        score: 0.9,
+        searchMethod: 'hybrid',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithAppPlatform('tauri', async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings,
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        currentPage: 42,
+        messages: [],
+        question: '发生了什么？',
+        onSources,
+      })) {
+      }
+    });
+
+    expect(onSources).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'chunk-source',
+        chapterTitle: '第五章 线索',
+        pageNumber: 38,
+        sectionIndex: 5,
+        snippet: '灰雾之上的线索再次出现，克莱恩开始复盘。',
+        confidence: 'approximate',
+      }),
+    ]);
   });
 
   it('sends bounded readerContext instead of raw system when using the web browser API route', async () => {

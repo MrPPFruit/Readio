@@ -5,7 +5,7 @@ vi.mock('../types', () => ({
   TextChunk: {},
 }));
 
-import { extractTextFromDocument, chunkSection } from '@/services/ai/utils/chunker';
+import { extractTextFromDocument, chunkSection, chunkText } from '@/services/ai/utils/chunker';
 
 describe('AI Chunker', () => {
   const createDocument = (html: string): Document => {
@@ -51,6 +51,19 @@ describe('AI Chunker', () => {
     const bookHash = 'test-hash';
     const sectionIndex = 0;
     const chapterTitle = 'Chapter 1';
+
+    test('should chunk already extracted text without re-reading the DOM', () => {
+      const chunks = chunkText(
+        'Readable content. '.repeat(80),
+        sectionIndex,
+        chapterTitle,
+        bookHash,
+        0,
+      );
+
+      expect(chunks.length).toBeGreaterThan(1);
+      expect(chunks[0]!.bookHash).toBe(bookHash);
+    });
 
     test('should create single chunk for short text', () => {
       const doc = createDocument('<p>Short text that is less than max chunk size.</p>');

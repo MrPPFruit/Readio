@@ -8,6 +8,10 @@ const mockSaveConversation = vi.fn<(conv: AIConversation) => Promise<void>>();
 const mockSaveMessage = vi.fn<(msg: AIMessage) => Promise<void>>();
 const mockDeleteConversation = vi.fn<(id: string) => Promise<void>>();
 const mockUpdateConversationTitle = vi.fn<(id: string, title: string) => Promise<void>>();
+const mockUpdateConversationFavorite =
+  vi.fn<(id: string, favoritedAt: number | undefined) => Promise<void>>();
+const mockUpdateConversationArchived =
+  vi.fn<(id: string, archivedAt: number | undefined) => Promise<void>>();
 
 vi.mock('@/services/ai/storage/aiStore', () => ({
   aiStore: {
@@ -21,10 +25,27 @@ vi.mock('@/services/ai/storage/aiStore', () => ({
       mockDeleteConversation(...args),
     updateConversationTitle: (...args: Parameters<typeof mockUpdateConversationTitle>) =>
       mockUpdateConversationTitle(...args),
+    updateConversationFavorite: (...args: Parameters<typeof mockUpdateConversationFavorite>) =>
+      mockUpdateConversationFavorite(...args),
+    updateConversationArchived: (...args: Parameters<typeof mockUpdateConversationArchived>) =>
+      mockUpdateConversationArchived(...args),
   },
 }));
 
 import { useAIChatStore } from '@/store/aiChatStore';
+
+type AIChatStoreWithHistoryActions = ReturnType<typeof useAIChatStore.getState> & {
+  historyError: string | null;
+  toggleFavoriteConversation: (id: string) => Promise<void>;
+  archiveConversation: (id: string) => Promise<void>;
+  favoriteConversations: (ids: string[]) => Promise<void>;
+  archiveConversations: (ids: string[]) => Promise<void>;
+  deleteConversations: (ids: string[]) => Promise<void>;
+};
+
+function getStoreWithHistoryActions() {
+  return useAIChatStore.getState() as AIChatStoreWithHistoryActions;
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -34,7 +55,8 @@ beforeEach(() => {
     messages: [],
     isLoadingHistory: false,
     currentBookHash: null,
-  });
+    historyError: null,
+  } as Partial<AIChatStoreWithHistoryActions>);
 });
 
 describe('aiChatStore', () => {
@@ -47,6 +69,7 @@ describe('aiChatStore', () => {
       expect(state.messages).toEqual([]);
       expect(state.isLoadingHistory).toBe(false);
       expect(state.currentBookHash).toBeNull();
+      expect(getStoreWithHistoryActions().historyError).toBeNull();
     });
   });
 
@@ -145,6 +168,22 @@ describe('aiChatStore', () => {
       expect(state.activeConversationId).toBe('c1');
       expect(state.messages).toEqual([]);
       expect(state.isLoadingHistory).toBe(false);
+      expect(getStoreWithHistoryActions().historyError).toBe('Unable to load conversation history');
+    });
+
+    test('clears history error after messages load successfully', async () => {
+      const msgs: AIMessage[] = [
+        { id: 'm1', conversationId: 'c1', role: 'user', content: 'hello', createdAt: 100 },
+      ];
+      mockGetMessages.mockResolvedValue(msgs);
+      useAIChatStore.setState({
+        historyError: 'Unable to load conversation history',
+      } as Partial<AIChatStoreWithHistoryActions>);
+
+      await useAIChatStore.getState().setActiveConversation('c1');
+
+      expect(getStoreWithHistoryActions().historyError).toBeNull();
+      expect(useAIChatStore.getState().messages).toEqual(msgs);
     });
   });
 
@@ -412,10 +451,17 @@ describe('aiChatStore', () => {
         ],
       });
 
-      await useAIChatStore.getState().renameConversation('c1', 'New Title');
+      await useAIChatStore.getState().renameConversation('c1', '  New Title  ');
 
       expect(mockUpdateConversationTitle).toHaveBeenCalledWith('c1', 'New Title');
       expect(useAIChatStore.getState().conversations).toEqual(updated);
+    });
+
+    test('does not persist an empty trimmed title', async () => {
+      await useAIChatStore.getState().renameConversation('c1', '   ');
+
+      expect(mockUpdateConversationTitle).not.toHaveBeenCalled();
+      expect(mockGetConversations).not.toHaveBeenCalled();
     });
 
     test('does not reload when currentBookHash is null', async () => {
@@ -426,6 +472,156 @@ describe('aiChatStore', () => {
       await useAIChatStore.getState().renameConversation('c1', 'New Title');
 
       expect(mockGetConversations).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── toggleFavoriteConversation ─────────────────────────────────
+  describe('toggleFavoriteConversation', () => {
+    test('favorites an unfavorited conversation and reloads list', async () => {
+      mockUpdateConversationFavorite.mockResolvedValue(undefined);
+      const updated: AIConversation[] = [
+        {
+          id: 'c1',
+          bookHash: 'book1',
+          title: 'Conv 1',
+          createdAt: 100,
+          updatedAt: 200,
+          favoritedAt: 500,
+        },
+      ];
+      mockGetConversations.mockResolvedValue(updated);
+      useAIChatStore.setState({
+        currentBookHash: 'book1',
+        conversations: [
+          { id: 'c1', bookHash: 'book1', title: 'Conv 1', createdAt: 100, updatedAt: 200 },
+        ],
+      });
+
+      await getStoreWithHistoryActions().toggleFavoriteConversation('c1');
+
+      expect(mockUpdateConversationFavorite).toHaveBeenCalledWith('c1', expect.any(Number));
+      expect(mockUpdateConversationFavorite.mock.calls[0]?.[1]).not.toBe(200);
+      expect(useAIChatStore.getState().conversations).toEqual(updated);
+    });
+
+    test('unfavorites a favorited conversation', async () => {
+      mockUpdateConversationFavorite.mockResolvedValue(undefined);
+      useAIChatStore.setState({
+        currentBookHash: 'book1',
+        conversations: [
+          {
+            id: 'c1',
+            bookHash: 'book1',
+            title: 'Conv 1',
+            createdAt: 100,
+            updatedAt: 200,
+            favoritedAt: 300,
+          },
+        ],
+      });
+
+      await getStoreWithHistoryActions().toggleFavoriteConversation('c1');
+
+      expect(mockUpdateConversationFavorite).toHaveBeenCalledWith('c1', undefined);
+    });
+  });
+
+  // ── archiveConversation ─────────────────────────────────────────
+  describe('archiveConversation', () => {
+    test('archives a conversation and reloads the default list', async () => {
+      mockUpdateConversationArchived.mockResolvedValue(undefined);
+      const remaining: AIConversation[] = [
+        { id: 'c2', bookHash: 'book1', title: 'Conv 2', createdAt: 100, updatedAt: 300 },
+      ];
+      mockGetConversations.mockResolvedValue(remaining);
+      useAIChatStore.setState({
+        currentBookHash: 'book1',
+        activeConversationId: 'c2',
+        conversations: [
+          { id: 'c1', bookHash: 'book1', title: 'Conv 1', createdAt: 100, updatedAt: 200 },
+          { id: 'c2', bookHash: 'book1', title: 'Conv 2', createdAt: 100, updatedAt: 300 },
+        ],
+      });
+
+      await getStoreWithHistoryActions().archiveConversation('c1');
+
+      expect(mockUpdateConversationArchived).toHaveBeenCalledWith('c1', expect.any(Number));
+      expect(useAIChatStore.getState().conversations).toEqual(remaining);
+      expect(useAIChatStore.getState().activeConversationId).toBe('c2');
+    });
+
+    test('clears active conversation when archiving it', async () => {
+      mockUpdateConversationArchived.mockResolvedValue(undefined);
+      mockGetConversations.mockResolvedValue([]);
+      useAIChatStore.setState({
+        currentBookHash: 'book1',
+        activeConversationId: 'c1',
+        conversations: [
+          { id: 'c1', bookHash: 'book1', title: 'Conv 1', createdAt: 100, updatedAt: 200 },
+        ],
+        messages: [{ id: 'm1', conversationId: 'c1', role: 'user', content: 'hi', createdAt: 100 }],
+      });
+
+      await getStoreWithHistoryActions().archiveConversation('c1');
+
+      expect(useAIChatStore.getState().activeConversationId).toBeNull();
+      expect(useAIChatStore.getState().messages).toEqual([]);
+    });
+  });
+
+  // ── bulk conversation actions ───────────────────────────────────
+  describe('bulk conversation actions', () => {
+    test('favorites selected conversations with the same timestamp and reloads list', async () => {
+      mockUpdateConversationFavorite.mockResolvedValue(undefined);
+      const updated: AIConversation[] = [
+        { id: 'c1', bookHash: 'book1', title: 'Conv 1', createdAt: 100, updatedAt: 200 },
+        { id: 'c2', bookHash: 'book1', title: 'Conv 2', createdAt: 100, updatedAt: 300 },
+      ];
+      mockGetConversations.mockResolvedValue(updated);
+      useAIChatStore.setState({ currentBookHash: 'book1' });
+
+      await getStoreWithHistoryActions().favoriteConversations(['c1', 'c2']);
+
+      expect(mockUpdateConversationFavorite).toHaveBeenCalledTimes(2);
+      const favoritedAt = mockUpdateConversationFavorite.mock.calls[0]?.[1];
+      expect(mockUpdateConversationFavorite).toHaveBeenCalledWith('c1', favoritedAt);
+      expect(mockUpdateConversationFavorite).toHaveBeenCalledWith('c2', favoritedAt);
+      expect(useAIChatStore.getState().conversations).toEqual(updated);
+    });
+
+    test('archives selected conversations and clears active if included', async () => {
+      mockUpdateConversationArchived.mockResolvedValue(undefined);
+      mockGetConversations.mockResolvedValue([]);
+      useAIChatStore.setState({
+        currentBookHash: 'book1',
+        activeConversationId: 'c2',
+        messages: [{ id: 'm1', conversationId: 'c2', role: 'user', content: 'hi', createdAt: 100 }],
+      });
+
+      await getStoreWithHistoryActions().archiveConversations(['c1', 'c2']);
+
+      expect(mockUpdateConversationArchived).toHaveBeenCalledTimes(2);
+      expect(mockUpdateConversationArchived).toHaveBeenCalledWith('c1', expect.any(Number));
+      expect(mockUpdateConversationArchived).toHaveBeenCalledWith('c2', expect.any(Number));
+      expect(useAIChatStore.getState().activeConversationId).toBeNull();
+      expect(useAIChatStore.getState().messages).toEqual([]);
+    });
+
+    test('deletes selected conversations and clears active if included', async () => {
+      mockDeleteConversation.mockResolvedValue(undefined);
+      mockGetConversations.mockResolvedValue([]);
+      useAIChatStore.setState({
+        currentBookHash: 'book1',
+        activeConversationId: 'c2',
+        messages: [{ id: 'm1', conversationId: 'c2', role: 'user', content: 'hi', createdAt: 100 }],
+      });
+
+      await getStoreWithHistoryActions().deleteConversations(['c1', 'c2']);
+
+      expect(mockDeleteConversation).toHaveBeenCalledWith('c1');
+      expect(mockDeleteConversation).toHaveBeenCalledWith('c2');
+      expect(useAIChatStore.getState().activeConversationId).toBeNull();
+      expect(useAIChatStore.getState().messages).toEqual([]);
     });
   });
 

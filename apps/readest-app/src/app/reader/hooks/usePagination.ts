@@ -16,6 +16,11 @@ export type ScrollSource = 'touch' | 'mouse';
 type PaginationSide = 'left' | 'right' | 'up' | 'down';
 type PaginationMode = 'pan' | 'page' | 'section';
 
+export type PaginationOptions = {
+  onPendingPageInfo?: (pageInfo: { current: number; total: number }) => void;
+  getCurrentPageInfo?: () => { current: number; total: number } | null | undefined;
+};
+
 const swapLeftRight = (side: PaginationSide) => {
   if (side === 'left') return 'right';
   if (side === 'right') return 'left';
@@ -52,12 +57,25 @@ export const viewPagination = (
   side: PaginationSide,
   mode: PaginationMode = 'page',
   panDistance: number = 50,
+  options: PaginationOptions = {},
 ) => {
   if (!view || !viewSettings) return;
   const renderer = view.renderer;
   if (viewSettings.rtl) {
     side = swapLeftRight(side);
   }
+  const markPendingPageInfo = () => {
+    if (mode === 'section' || renderer.scrolled) return;
+    const pageInfo = options.getCurrentPageInfo?.();
+    const total = pageInfo?.total;
+    if (!total || total <= 0) return;
+    const direction = side === 'left' || side === 'up' ? -1 : 1;
+    if ((direction < 0 && renderer.atStart) || (direction > 0 && renderer.atEnd)) return;
+    options.onPendingPageInfo?.({
+      current: Math.max(0, Math.min(total - 1, pageInfo.current + direction)),
+      total,
+    });
+  };
   if (renderer.scrolled) {
     const { size } = renderer;
     const showHeader = viewSettings.showHeader && viewSettings.showBarsOnScroll;
@@ -74,6 +92,7 @@ export const viewPagination = (
       case 'pan':
       case 'page':
       default:
+        markPendingPageInfo();
         return side === 'left' || side === 'up' ? view.prev(distance) : view.next(distance);
     }
   } else if (mode === 'pan' && isPanningView(view, viewSettings)) {
@@ -82,6 +101,7 @@ export const viewPagination = (
     } else if (hasVerticalPanning(view, viewSettings) && (side === 'up' || side === 'down')) {
       return view.pan(0, side === 'up' ? -panDistance : panDistance);
     } else {
+      markPendingPageInfo();
       return side === 'left' || side === 'up' ? view.prev() : view.next();
     }
   } else {
@@ -95,6 +115,7 @@ export const viewPagination = (
       case 'pan':
       case 'page':
       default:
+        markPendingPageInfo();
         return side === 'left' || side === 'up' ? view.prev() : view.next();
     }
   }
@@ -107,9 +128,22 @@ export const usePagination = (
 ) => {
   const { appService } = useEnv();
   const { getBookData } = useBookDataStore();
-  const { getViewSettings, getViewState } = useReaderStore();
+  const { getProgress, getViewSettings, getViewState, setPendingPageInfo } = useReaderStore();
   const { hoveredBookKey, setHoveredBookKey } = useReaderStore();
   const { acquireVolumeKeyInterception, releaseVolumeKeyInterception } = useDeviceControlStore();
+  const pendingPageOptions = {
+    getCurrentPageInfo: () => {
+      const progress = getProgress(bookKey);
+      const viewState = getViewState(bookKey);
+      if (viewState?.paginationRecalculating) return null;
+      const relocatedPageInfo = getBookData(bookKey)?.isFixedLayout
+        ? progress?.section
+        : progress?.pageinfo;
+      return viewState?.pendingPageInfo ?? relocatedPageInfo;
+    },
+    onPendingPageInfo: (pageInfo: { current: number; total: number }) =>
+      setPendingPageInfo(bookKey, pageInfo),
+  };
 
   const handlePageFlip = async (
     msg: MessageEvent | CustomEvent | React.MouseEvent<HTMLDivElement, MouseEvent>,
@@ -185,7 +219,7 @@ export const usePagination = (
                 return;
               }
 
-              viewPagination(viewRef.current, viewSettings, side);
+              viewPagination(viewRef.current, viewSettings, side, 'page', 50, pendingPageOptions);
             }
           }
         } else if (
@@ -196,13 +230,13 @@ export const usePagination = (
           // The wheel event is handled by the iframe itself in scrolled mode.
           const { deltaY, deltaX } = msg.data;
           if (deltaY > 0) {
-            viewPagination(viewRef.current, viewSettings, 'down');
+            viewPagination(viewRef.current, viewSettings, 'down', 'page', 50, pendingPageOptions);
           } else if (deltaY < 0) {
-            viewPagination(viewRef.current, viewSettings, 'up');
+            viewPagination(viewRef.current, viewSettings, 'up', 'page', 50, pendingPageOptions);
           } else if (deltaX < 0) {
-            viewPagination(viewRef.current, viewSettings, 'left');
+            viewPagination(viewRef.current, viewSettings, 'left', 'page', 50, pendingPageOptions);
           } else if (deltaX > 0) {
-            viewPagination(viewRef.current, viewSettings, 'right');
+            viewPagination(viewRef.current, viewSettings, 'right', 'page', 50, pendingPageOptions);
           }
         } else if (msg.data.type === 'iframe-mouseup') {
           if (msg.data.button === 3) {
@@ -221,12 +255,12 @@ export const usePagination = (
           if (viewSettings.readingRulerEnabled && dispatchReadingRulerMove('up')) {
             return;
           }
-          viewPagination(viewRef.current, viewSettings, 'up');
+          viewPagination(viewRef.current, viewSettings, 'up', 'page', 50, pendingPageOptions);
         } else if (keyName === 'VolumeDown') {
           if (viewSettings.readingRulerEnabled && dispatchReadingRulerMove('down')) {
             return;
           }
-          viewPagination(viewRef.current, viewSettings, 'down');
+          viewPagination(viewRef.current, viewSettings, 'down', 'page', 50, pendingPageOptions);
         }
       }
     } else {
@@ -238,9 +272,9 @@ export const usePagination = (
         const viewSettings = getViewSettings(bookKey);
         if (!viewSettings?.disableClick) {
           if (clientX < leftThreshold) {
-            viewPagination(viewRef.current, viewSettings, 'left');
+            viewPagination(viewRef.current, viewSettings, 'left', 'page', 50, pendingPageOptions);
           } else if (clientX > rightThreshold) {
-            viewPagination(viewRef.current, viewSettings, 'right');
+            viewPagination(viewRef.current, viewSettings, 'right', 'page', 50, pendingPageOptions);
           }
         }
       }
@@ -279,7 +313,14 @@ export const usePagination = (
       const { deltaX, deltaY, deltaT } = detail;
       const vx = Math.abs(deltaX / (deltaT || 1));
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 30 && vx > 0.2) {
-        viewPagination(viewRef.current, viewSettings, deltaX > 0 ? 'left' : 'right');
+        viewPagination(
+          viewRef.current,
+          viewSettings,
+          deltaX > 0 ? 'left' : 'right',
+          'page',
+          50,
+          pendingPageOptions,
+        );
         return true;
       }
       return false;

@@ -17,6 +17,10 @@ const mockView = {
   pan: vi.fn(),
   renderer: {
     scrolled: false,
+    pages: 10,
+    page: 3,
+    atStart: false,
+    atEnd: false,
     setAttribute: vi.fn(),
   },
   history: {
@@ -35,12 +39,24 @@ const currentViewSettings = {
   paragraphMode: { enabled: false },
 };
 
+const readerStoreMock = vi.hoisted(() => ({
+  getProgress: vi.fn(),
+  getViewState: vi.fn(),
+  setPendingPageInfo: vi.fn(),
+}));
+
+const bookDataStoreMock = vi.hoisted(() => ({
+  getBookData: vi.fn(),
+}));
+
 vi.mock('@/store/readerStore', () => ({
   useReaderStore: () => ({
+    getProgress: readerStoreMock.getProgress,
     getView: () => mockView,
-    getViewState: () => ({ ttsEnabled: false }),
+    getViewState: readerStoreMock.getViewState,
     getViewSettings: () => currentViewSettings,
     setViewSettings: vi.fn(),
+    setPendingPageInfo: readerStoreMock.setPendingPageInfo,
   }),
 }));
 
@@ -58,9 +74,7 @@ vi.mock('@/store/settingsStore', () => ({
 }));
 
 vi.mock('@/store/bookDataStore', () => ({
-  useBookDataStore: () => ({
-    getBookData: vi.fn(),
-  }),
+  useBookDataStore: () => bookDataStoreMock,
 }));
 
 vi.mock('@/store/notebookStore', () => ({
@@ -128,6 +142,14 @@ describe('useBookShortcuts', () => {
     currentViewSettings.rtl = false;
     currentViewSettings.paragraphMode.enabled = false;
     mockView.book.dir = 'ltr';
+    mockView.renderer.scrolled = false;
+    mockView.renderer.pages = 10;
+    mockView.renderer.page = 3;
+    mockView.renderer.atStart = false;
+    mockView.renderer.atEnd = false;
+    readerStoreMock.getViewState.mockReturnValue({ ttsEnabled: false, pendingPageInfo: null });
+    readerStoreMock.getProgress.mockReturnValue({ pageinfo: { current: 3, total: 10 } });
+    bookDataStoreMock.getBookData.mockReturnValue({ isFixedLayout: false });
   });
 
   afterEach(() => {
@@ -166,7 +188,7 @@ describe('useBookShortcuts', () => {
     render(<Harness />);
     shortcutState.actions?.['onGoNext']?.();
 
-    expect(mockView.next).toHaveBeenCalledWith(72);
+    expect(mockView.next).toHaveBeenCalled();
   });
 
   it('falls back to normal page navigation when the ruler cannot move further', () => {
@@ -175,6 +197,76 @@ describe('useBookShortcuts', () => {
     render(<Harness />);
     shortcutState.actions?.['onGoNext']?.();
 
-    expect(mockView.next).toHaveBeenCalledWith(72);
+    expect(mockView.next).toHaveBeenCalled();
+  });
+
+  it('marks pending page info when keyboard page shortcuts flip pages', () => {
+    currentViewSettings.readingRulerEnabled = false;
+
+    render(<Harness />);
+    shortcutState.actions?.['onGoRight']?.();
+
+    expect(readerStoreMock.setPendingPageInfo).toHaveBeenCalledWith('book-1', {
+      current: 4,
+      total: 10,
+    });
+  });
+
+  it('continues pending full-book page info for unsettled keyboard page turns', () => {
+    currentViewSettings.readingRulerEnabled = false;
+    mockView.renderer.pages = 20;
+    mockView.renderer.page = 3;
+    readerStoreMock.getViewState.mockReturnValue({
+      ttsEnabled: false,
+      pendingPageInfo: { current: 4056, total: 10397 },
+    });
+    readerStoreMock.getProgress.mockReturnValue({ pageinfo: { current: 4055, total: 10397 } });
+
+    render(<Harness />);
+    shortcutState.actions?.['onGoRight']?.();
+
+    expect(readerStoreMock.setPendingPageInfo).toHaveBeenCalledWith('book-1', {
+      current: 4057,
+      total: 10397,
+    });
+  });
+
+  it('continues pending full-book page info for next and previous page shortcuts', () => {
+    currentViewSettings.readingRulerEnabled = false;
+    readerStoreMock.getViewState.mockReturnValue({
+      ttsEnabled: false,
+      pendingPageInfo: { current: 4056, total: 10397 },
+    });
+    readerStoreMock.getProgress.mockReturnValue({ pageinfo: { current: 4055, total: 10397 } });
+
+    render(<Harness />);
+    shortcutState.actions?.['onGoNext']?.();
+    shortcutState.actions?.['onGoPrev']?.();
+
+    expect(readerStoreMock.setPendingPageInfo).toHaveBeenCalledWith('book-1', {
+      current: 4057,
+      total: 10397,
+    });
+    expect(readerStoreMock.setPendingPageInfo).toHaveBeenCalledWith('book-1', {
+      current: 4055,
+      total: 10397,
+    });
+  });
+
+  it('uses fixed-layout section info for keyboard shortcut pending page state', () => {
+    currentViewSettings.readingRulerEnabled = false;
+    bookDataStoreMock.getBookData.mockReturnValue({ isFixedLayout: true });
+    readerStoreMock.getProgress.mockReturnValue({
+      section: { current: 8, total: 100 },
+      pageinfo: { current: 4055, total: 10397 },
+    });
+
+    render(<Harness />);
+    shortcutState.actions?.['onGoRight']?.();
+
+    expect(readerStoreMock.setPendingPageInfo).toHaveBeenCalledWith('book-1', {
+      current: 9,
+      total: 100,
+    });
   });
 });

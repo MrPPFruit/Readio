@@ -5,7 +5,7 @@ import { RiArrowLeftDoubleLine, RiArrowRightDoubleLine } from 'react-icons/ri';
 import { useEnv } from '@/context/EnvContext';
 import { useReaderStore } from '@/store/readerStore';
 import { useTranslation } from '@/hooks/useTranslation';
-import { viewPagination } from '../hooks/usePagination';
+import { viewPagination, type PaginationOptions } from '../hooks/usePagination';
 import { useBookDataStore } from '@/store/bookDataStore';
 
 interface PageNavigationButtonsProps {
@@ -20,29 +20,44 @@ const PageNavigationButtons: React.FC<PageNavigationButtonsProps> = ({
   const _ = useTranslation();
   const { appService } = useEnv();
   const { getBookData } = useBookDataStore();
-  const { getView, getProgress, getViewSettings, hoveredBookKey } = useReaderStore();
+  const {
+    getView,
+    getViewState,
+    getProgress,
+    getViewSettings,
+    hoveredBookKey,
+    setPendingPageInfo,
+  } = useReaderStore();
   const bookData = getBookData(bookKey);
   const view = getView(bookKey);
   const viewSettings = getViewSettings(bookKey);
+  const viewState = getViewState(bookKey);
   const progress = getProgress(bookKey);
   const { section, pageinfo } = progress || {};
-  const pageInfo = bookData?.isFixedLayout ? section : pageinfo;
-  const currentPage = pageInfo?.current;
+  const relocatedPageInfo = bookData?.isFixedLayout ? section : pageinfo;
+  const pageInfo = viewState?.paginationRecalculating
+    ? null
+    : (viewState?.pendingPageInfo ?? relocatedPageInfo);
 
   const isPageNavigationButtonsVisible =
     (hoveredBookKey === bookKey || isDropdownOpen) && viewSettings?.showPaginationButtons;
 
+  const pendingPageOptions: PaginationOptions = {
+    getCurrentPageInfo: () => pageInfo,
+    onPendingPageInfo: (pageInfo) => setPendingPageInfo(bookKey, pageInfo),
+  };
+
   const handleGoLeftPage = useCallback(() => {
-    viewPagination(view, viewSettings, 'left', 'page');
-  }, [view, viewSettings]);
+    viewPagination(view, viewSettings, 'left', 'page', 50, pendingPageOptions);
+  }, [view, viewSettings, pendingPageOptions]);
 
   const handleGoLeftSection = useCallback(() => {
     viewPagination(view, viewSettings, 'left', 'section');
   }, [view, viewSettings]);
 
   const handleGoRightPage = useCallback(() => {
-    viewPagination(view, viewSettings, 'right', 'page');
-  }, [view, viewSettings]);
+    viewPagination(view, viewSettings, 'right', 'page', 50, pendingPageOptions);
+  }, [view, viewSettings, pendingPageOptions]);
 
   const handleGoRightSection = useCallback(() => {
     viewPagination(view, viewSettings, 'right', 'section');
@@ -50,8 +65,11 @@ const PageNavigationButtons: React.FC<PageNavigationButtonsProps> = ({
 
   const getLeftPageLabel = () => {
     const baseLabel = viewSettings?.rtl ? _('Next Page') : _('Previous Page');
-    if (currentPage !== undefined) {
-      return `${baseLabel}, ${_('Page {{number}}', { number: currentPage + 1 })}`;
+    if (pageInfo) {
+      return `${baseLabel}, ${_('Page {{current}} of {{total}}', {
+        current: pageInfo.current + 1,
+        total: pageInfo.total,
+      })}`;
     }
     return baseLabel;
   };
@@ -62,8 +80,11 @@ const PageNavigationButtons: React.FC<PageNavigationButtonsProps> = ({
 
   const getRightPageLabel = () => {
     const baseLabel = viewSettings?.rtl ? _('Previous Page') : _('Next Page');
-    if (currentPage !== undefined) {
-      return `${baseLabel}, ${_('Page {{number}}', { number: currentPage + 1 })}`;
+    if (pageInfo) {
+      return `${baseLabel}, ${_('Page {{current}} of {{total}}', {
+        current: pageInfo.current + 1,
+        total: pageInfo.total,
+      })}`;
     }
     return baseLabel;
   };
@@ -74,9 +95,12 @@ const PageNavigationButtons: React.FC<PageNavigationButtonsProps> = ({
 
   return (
     <>
-      {currentPage !== undefined && (
+      {pageInfo && (
         <div className='sr-only' role='status' aria-live='polite' aria-atomic='true'>
-          {_('Page {{number}}', { number: currentPage + 1 })}
+          {_('Page {{current}} of {{total}}', {
+            current: pageInfo.current + 1,
+            total: pageInfo.total,
+          })}
         </div>
       )}
 

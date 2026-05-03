@@ -1,11 +1,12 @@
 import { embed, embedMany } from 'ai';
 import { aiStore } from './storage/aiStore';
-import { chunkSection, extractTextFromDocument } from './utils/chunker';
+import { estimateAIIndexBytes } from './storage/estimate';
+import { CHUNKER_VERSION, chunkText, extractTextFromDocument } from './utils/chunker';
 import { withRetryAndTimeout, AI_TIMEOUTS, AI_RETRY_CONFIGS } from './utils/retry';
 import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { aiLogger } from './logger';
-import { getCurrentPageContextChunks } from './search/bm25';
+import { BM25_VERSION, getCurrentPageContextChunks } from './search/bm25';
 import type {
   AISettings,
   TextChunk,
@@ -18,6 +19,7 @@ import type {
 type IndexBookJob = {
   promise: Promise<void>;
   controller: AbortController;
+  indexKey: string;
 };
 
 interface SectionItem {
@@ -39,6 +41,16 @@ export interface BookDocType {
   metadata?: { title?: string | { [key: string]: string }; author?: string | { name?: string } };
 }
 
+export const INDEX_VERSION = 1;
+export const BM25_ONLY_EMBEDDING_MODEL = 'bm25-only';
+
+interface IndexIdentity {
+  indexVersion: number;
+  chunkerVersion: number;
+  bm25Version: number;
+  embeddingModel: string;
+}
+
 const indexingStates = new Map<string, IndexingState>();
 const indexingJobs = new Map<string, IndexBookJob>();
 
@@ -47,8 +59,49 @@ function throwIfAborted(signal?: AbortSignal): void {
   throw new DOMException('Aborted', 'AbortError');
 }
 
-export async function isBookIndexed(bookHash: string): Promise<boolean> {
-  const indexed = await aiStore.isIndexed(bookHash);
+function getEmbeddingModelName(settings?: AISettings): string {
+  if (!settings) return BM25_ONLY_EMBEDDING_MODEL;
+  return settings.providerEmbeddingModels?.[settings.provider] || BM25_ONLY_EMBEDDING_MODEL;
+}
+
+function getIndexIdentity(settings?: AISettings): IndexIdentity {
+  return {
+    indexVersion: INDEX_VERSION,
+    chunkerVersion: CHUNKER_VERSION,
+    bm25Version: BM25_VERSION,
+    embeddingModel: getEmbeddingModelName(settings),
+  };
+}
+
+function getIndexJobKey(bookHash: string, settings: AISettings): string {
+  const identity = getIndexIdentity(settings);
+  return [
+    bookHash,
+    identity.indexVersion,
+    identity.chunkerVersion,
+    identity.bm25Version,
+    identity.embeddingModel,
+  ].join(':');
+}
+
+function isBookIndexMetaCurrent(meta: BookIndexMeta | null, settings?: AISettings): boolean {
+  if (!meta || meta.totalChunks <= 0) return false;
+  const identity = getIndexIdentity(settings);
+  if (meta.indexVersion !== identity.indexVersion) return false;
+  if (meta.chunkerVersion !== identity.chunkerVersion) return false;
+  if (meta.bm25Version !== identity.bm25Version) return false;
+  if (
+    settings &&
+    meta.embeddingModel !== identity.embeddingModel &&
+    meta.embeddingModel !== BM25_ONLY_EMBEDDING_MODEL
+  )
+    return false;
+  return true;
+}
+
+export async function isBookIndexed(bookHash: string, settings?: AISettings): Promise<boolean> {
+  const meta = await aiStore.getMeta(bookHash);
+  const indexed = isBookIndexMetaCurrent(meta, settings);
   aiLogger.rag.isIndexed(bookHash, indexed);
   return indexed;
 }
@@ -78,16 +131,29 @@ function getChapterTitle(toc: TOCItem[] | undefined, sectionIndex: number): stri
   return toc[0]?.label || `Section ${sectionIndex + 1}`;
 }
 
+interface IndexBookOptions {
+  onProgress?: (progress: EmbeddingProgress) => void;
+  signal?: AbortSignal;
+}
+
 export async function indexBook(
   bookDoc: BookDocType,
   bookHash: string,
   settings: AISettings,
-  onProgress?: (progress: EmbeddingProgress) => void,
-  signal?: AbortSignal,
+  options: IndexBookOptions = {},
 ): Promise<void> {
+  const { onProgress, signal } = options;
   throwIfAborted(signal);
+  const indexKey = getIndexJobKey(bookHash, settings);
   const existingJob = indexingJobs.get(bookHash);
-  if (existingJob) return existingJob.promise;
+  if (existingJob) {
+    if (existingJob.indexKey === indexKey) return existingJob.promise;
+    await existingJob.promise.catch((error) => {
+      if ((error as Error).name !== 'AbortError') throw error;
+    });
+    throwIfAborted(signal);
+    return indexBook(bookDoc, bookHash, settings, { onProgress, signal });
+  }
 
   const controller = new AbortController();
   if (signal) {
@@ -102,7 +168,7 @@ export async function indexBook(
       }
     },
   );
-  indexingJobs.set(bookHash, { promise, controller });
+  indexingJobs.set(bookHash, { promise, controller, indexKey });
   return promise;
 }
 
@@ -117,9 +183,13 @@ async function runIndexBook(
   const startTime = Date.now();
   const title = extractTitle(bookDoc.metadata);
 
-  if (await aiStore.isIndexed(bookHash)) {
+  const existingMeta = await aiStore.getMeta(bookHash);
+  if (isBookIndexMetaCurrent(existingMeta, settings)) {
     aiLogger.rag.isIndexed(bookHash, true);
     return;
+  }
+  if (existingMeta) {
+    await aiStore.clearBook(bookHash);
   }
   throwIfAborted(signal);
 
@@ -161,8 +231,8 @@ async function runIndexBook(
         throwIfAborted(signal);
         const text = extractTextFromDocument(doc);
         if (text.length < 100) continue;
-        const sectionChunks = chunkSection(
-          doc,
+        const sectionChunks = chunkText(
+          text,
           i,
           getChapterTitle(toc, i),
           bookHash,
@@ -190,10 +260,11 @@ async function runIndexBook(
 
     throwIfAborted(signal);
     onProgress?.({ current: 0, total: allChunks.length, phase: 'embedding' });
-    const embeddingModelName = settings.providerEmbeddingModels?.[settings.provider] || 'bm25-only';
+    const embeddingModelName = getEmbeddingModelName(settings);
     aiLogger.embedding.start(embeddingModelName, allChunks.length);
 
     const texts = allChunks.map((c) => c.text);
+    let savedEmbeddingModelName = embeddingModelName;
     if (settings.providerEmbeddingModels?.[settings.provider]) {
       try {
         const provider = getAIProvider(settings);
@@ -221,6 +292,7 @@ async function runIndexBook(
         );
       } catch (e) {
         aiLogger.embedding.error('batch', (e as Error).message);
+        savedEmbeddingModelName = BM25_ONLY_EMBEDDING_MODEL;
       }
     }
     state.chunksProcessed = allChunks.length;
@@ -247,9 +319,14 @@ async function runIndexBook(
       authorName: extractAuthor(bookDoc.metadata),
       totalSections: sections.length,
       totalChunks: allChunks.length,
-      embeddingModel: embeddingModelName,
+      embeddingModel: savedEmbeddingModelName,
+      indexVersion: INDEX_VERSION,
+      chunkerVersion: CHUNKER_VERSION,
+      bm25Version: BM25_VERSION,
+      estimatedBytes: 0,
       lastUpdated: Date.now(),
     };
+    meta.estimatedBytes = estimateAIIndexBytes(allChunks, meta);
     throwIfAborted(signal);
     aiLogger.store.saveMeta(meta);
     await aiStore.saveMeta(meta);

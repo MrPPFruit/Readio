@@ -122,8 +122,8 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
         onKeyDown={handleDialogKeyDown}
       >
         <div className='bg-base-content/20 mx-auto mb-3 h-1 w-10 rounded-full' aria-hidden='true' />
-        <div className='mb-4 flex items-start justify-between gap-3'>
-          <div className='min-w-0'>
+        <div className='mb-4 flex items-start justify-between gap-2'>
+          <div className='min-w-0 flex-1'>
             <p className='text-primary/80 mb-1 font-sans text-[11px] font-semibold uppercase tracking-wide'>
               Reader AI
             </p>
@@ -137,23 +137,22 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
               默认只根据你读到的位置回答。
             </p>
           </div>
-          <button
-            ref={closeButtonRef}
-            type='button'
-            onClick={onClose}
-            className='btn btn-ghost btn-circle text-base-content/70 h-11 min-h-11 w-11 shrink-0'
-            aria-label='关闭 AI 提问框'
-          >
-            <MdClose size={20} aria-hidden='true' />
-          </button>
-        </div>
-
-        <div className='mb-4'>
-          <ReaderAISpoilerGuard
-            enabled={spoilerProtection}
-            onChange={(enabled) => onSpoilerProtectionChange?.(enabled)}
-            variant='row'
-          />
+          <div className='flex shrink-0 items-center gap-1'>
+            <ReaderAISpoilerGuard
+              enabled={spoilerProtection}
+              onChange={(enabled) => onSpoilerProtectionChange?.(enabled)}
+              variant='badge'
+            />
+            <button
+              ref={closeButtonRef}
+              type='button'
+              onClick={onClose}
+              className='btn btn-ghost btn-circle text-base-content/70 h-11 min-h-11 w-11 shrink-0'
+              aria-label='关闭 AI 提问框'
+            >
+              <MdClose size={20} aria-hidden='true' />
+            </button>
+          </div>
         </div>
 
         <div className='mb-3'>
@@ -161,6 +160,7 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
             suggestions={suggestions}
             selectedValue={question}
             ariaLabel='建议问题'
+            layout='stack'
             onSelect={setQuestion}
           />
         </div>
