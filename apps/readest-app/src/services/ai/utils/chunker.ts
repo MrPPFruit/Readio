@@ -1,6 +1,6 @@
 import { TextChunk } from '../types';
 
-export const CHUNKER_VERSION = 1;
+export const CHUNKER_VERSION = 2;
 
 // same formula as toc.ts - 1500 chars = 1 page
 export const SIZE_PER_PAGE = 1500;
@@ -64,6 +64,7 @@ export function chunkText(
             chapterTitle,
             text: text.trim(),
             pageNumber: Math.floor(cumulativeSizeBeforeSection / SIZE_PER_PAGE),
+            sortIndex: cumulativeSizeBeforeSection,
           },
         ]
       : [];
@@ -86,6 +87,7 @@ export function chunkText(
           chapterTitle,
           text: remaining,
           pageNumber: Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
+          sortIndex: cumulativeSizeBeforeSection + position,
         });
       } else if (chunks.length > 0) {
         chunks[chunks.length - 1]!.text += ' ' + remaining;
@@ -104,6 +106,7 @@ export function chunkText(
         chapterTitle,
         text: chunkText,
         pageNumber: Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
+        sortIndex: cumulativeSizeBeforeSection + position,
       });
       chunkIndex++;
     }

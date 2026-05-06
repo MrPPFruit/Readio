@@ -151,6 +151,16 @@ describe('Reader AI panels', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('does not let answer panel pointer events bubble into the reader', () => {
+    const onClose = vi.fn();
+    render(<ReaderAIAnswerPanel messages={messages} onSubmit={vi.fn()} onClose={onClose} />);
+
+    fireEvent.pointerDown(screen.getByRole('dialog', { name: 'AI 阅读助手' }));
+    fireEvent.click(screen.getByRole('dialog', { name: 'AI 阅读助手' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('keeps Tab focus inside the answer panel', () => {
     render(<ReaderAIAnswerPanel messages={messages} onSubmit={vi.fn()} onClose={vi.fn()} />);
 
@@ -362,8 +372,7 @@ describe('Reader AI panels', () => {
     ).toContain('w-full');
   });
 
-  it('renders answer sources and delegates source navigation', () => {
-    const onSourceClick = vi.fn();
+  it('renders compact numbered references sorted by book order', () => {
     render(
       <ReaderAIAnswerPanel
         messages={[
@@ -375,17 +384,107 @@ describe('Reader AI panels', () => {
             createdAt: 2,
             sources: [
               {
-                id: 'selection-source',
-                chapterTitle: '选中的原文',
-                pageNumber: 12,
-                cfi: 'epubcfi(/6/2)',
-                snippet: '亚恩看见夕阳。',
-                confidence: 'exact',
+                id: 'late-source',
+                chapterTitle: '第九章 线索',
+                sectionIndex: 9,
+                pageNumber: 88,
+                snippet: '后面的线索。',
+                confidence: 'approximate',
               },
               {
-                id: 'rag-source',
+                id: 'early-source',
                 chapterTitle: '第五章 线索',
+                sectionIndex: 5,
                 pageNumber: 38,
+                snippet: '灰雾之上的线索再次出现。',
+                confidence: 'approximate',
+              },
+            ],
+          },
+        ]}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const references = screen.getByRole('region', { name: '引用来源' });
+    const referenceButtons = within(references).getAllByRole('button');
+
+    expect(referenceButtons[0]?.textContent).toContain('[1]');
+    expect(referenceButtons[0]?.textContent).toContain('第五章 线索');
+    expect(referenceButtons[0]?.textContent).toContain('约略位置');
+    expect(referenceButtons[0]?.textContent).not.toContain('第 38 页');
+    expect(referenceButtons[0]?.textContent).not.toContain('灰雾之上的线索再次出现');
+    expect(referenceButtons[1]?.textContent).toContain('[2]');
+    expect(referenceButtons[1]?.textContent).toContain('第九章 线索');
+  });
+
+  it('keeps citation numbers aligned with same-position source order', () => {
+    const onSourceClick = vi.fn();
+    render(
+      <ReaderAIAnswerPanel
+        messages={[
+          { id: 'user-source-tie', role: 'user', content: '解释这段', createdAt: 1 },
+          {
+            id: 'assistant-source-tie',
+            role: 'assistant',
+            content: '这是回答 [1]。',
+            createdAt: 2,
+            sources: [
+              {
+                id: 'z-service-first',
+                chapterTitle: '同页第一条',
+                sectionIndex: 3,
+                sortIndex: 300,
+                cfi: 'epubcfi(/6/2)',
+                snippet: '服务排序中的第一条。',
+                confidence: 'approximate',
+              },
+              {
+                id: 'a-service-second',
+                chapterTitle: '同页第二条',
+                sectionIndex: 3,
+                sortIndex: 300,
+                cfi: 'epubcfi(/6/4)',
+                snippet: '服务排序中的第二条。',
+                confidence: 'approximate',
+              },
+            ],
+          },
+        ]}
+        onSourceClick={onSourceClick}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '查看引用 1' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: '引用 1' })).getByRole('button', {
+        name: '跳转查看原文',
+      }),
+    );
+
+    expect(onSourceClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'z-service-first' }));
+  });
+
+  it('opens a source peek sheet before delegating source navigation', () => {
+    const onSourceClick = vi.fn();
+    render(
+      <ReaderAIAnswerPanel
+        messages={[
+          { id: 'user-source-peek', role: 'user', content: '解释这段', createdAt: 1 },
+          {
+            id: 'assistant-source-peek',
+            role: 'assistant',
+            content: '这是回答。',
+            createdAt: 2,
+            sources: [
+              {
+                id: 'source-peek',
+                chapterTitle: '第五章 线索',
+                sectionIndex: 5,
+                cfi: 'epubcfi(/6/2)',
                 snippet: '灰雾之上的线索再次出现。',
                 confidence: 'approximate',
               },
@@ -398,14 +497,75 @@ describe('Reader AI panels', () => {
       />,
     );
 
-    const sources = screen.getByRole('region', { name: '参考来源' });
-    expect(within(sources).getByText('第 12 页 · 选中的原文')).toBeTruthy();
-    expect(within(sources).getByText('约第 38 页 · 第五章 线索')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /查看引用 1/ }));
 
-    fireEvent.click(within(sources).getByRole('button', { name: /跳转到来源：第 12 页/ }));
-    expect(onSourceClick).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'selection-source', cfi: 'epubcfi(/6/2)' }),
+    const peek = screen.getByRole('dialog', { name: '引用 1' });
+    expect(within(peek).getByText('第五章 线索')).toBeTruthy();
+    expect(within(peek).getByText('「灰雾之上的线索再次出现。」')).toBeTruthy();
+
+    fireEvent.click(within(peek).getByRole('button', { name: '跳转查看原文' }));
+    expect(onSourceClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'source-peek' }));
+  });
+
+  it('turns inline citation marks into source peek buttons', () => {
+    render(
+      <ReaderAIAnswerPanel
+        messages={[
+          { id: 'user-citation', role: 'user', content: '解释这段', createdAt: 1 },
+          {
+            id: 'assistant-citation',
+            role: 'assistant',
+            content: '这条线索很关键 [1]，但还不能剧透后文。',
+            createdAt: 2,
+            sources: [
+              {
+                id: 'source-citation',
+                chapterTitle: '第五章 线索',
+                sectionIndex: 5,
+                snippet: '灰雾之上的线索再次出现。',
+                confidence: 'approximate',
+              },
+            ],
+          },
+        ]}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
     );
+
+    fireEvent.click(screen.getByRole('button', { name: '查看引用 1' }));
+
+    expect(screen.getByRole('dialog', { name: '引用 1' })).toBeTruthy();
+  });
+
+  it('does not turn citation-like text inside code into source buttons', () => {
+    render(
+      <ReaderAIAnswerPanel
+        messages={[
+          { id: 'user-code-citation', role: 'user', content: '解释这段', createdAt: 1 },
+          {
+            id: 'assistant-code-citation',
+            role: 'assistant',
+            content: '普通引用 [1]\n\n`array[1]`',
+            createdAt: 2,
+            sources: [
+              {
+                id: 'source-code-citation',
+                chapterTitle: '第五章 线索',
+                sectionIndex: 5,
+                snippet: '灰雾之上的线索再次出现。',
+                confidence: 'approximate',
+              },
+            ],
+          },
+        ]}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole('button', { name: '查看引用 1' })).toHaveLength(1);
+    expect(screen.getByText('array[1]').tagName).toBe('CODE');
   });
 
   it('shows accessible indexing progress when provided', () => {
@@ -453,6 +613,27 @@ describe('Reader AI panels', () => {
     fireEvent.click(screen.getByRole('button', { name: '提问' }));
 
     expect(onSubmit).toHaveBeenCalledWith('总结本章');
+  });
+
+  it('submits an ask box suggestion on pointer up without closing the panel', () => {
+    const onSubmit = vi.fn();
+    const onClose = vi.fn();
+    render(<ReaderAIAskBox source='control' onSubmit={onSubmit} onClose={onClose} />);
+
+    fireEvent.pointerUp(screen.getByLabelText('使用建议问题：前面发生了什么？'));
+
+    expect(onSubmit).toHaveBeenCalledWith('前面发生了什么？');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not let inner ask box pointer events bubble to the backdrop', () => {
+    const onClose = vi.fn();
+    render(<ReaderAIAskBox source='control' onSubmit={vi.fn()} onClose={onClose} />);
+
+    fireEvent.pointerDown(screen.getByRole('dialog', { name: '问问这本书' }));
+    fireEvent.click(screen.getByRole('dialog', { name: '问问这本书' }));
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('stacks ask box suggestions instead of showing half-visible horizontal chips', () => {

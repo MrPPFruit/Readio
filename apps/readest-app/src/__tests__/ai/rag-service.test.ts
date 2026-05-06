@@ -100,10 +100,12 @@ function createDocument(html: string): Document {
 
 const bookDoc = {
   metadata: { title: 'Book', author: 'Author' },
-  toc: [{ id: 0, label: 'Chapter 1' }],
+  toc: [{ id: 0, label: 'Chapter 1', href: 'chapter-1.xhtml' }],
   sections: [
     {
       id: 'section-1',
+      href: 'chapter-1.xhtml',
+      cfi: 'epubcfi(/6/2)',
       size: 1200,
       linear: 'yes',
       createDocument: async () => createDocument(`<p>${'Readable content. '.repeat(80)}</p>`),
@@ -119,7 +121,7 @@ const currentMeta: BookIndexMeta = {
   totalChunks: 3,
   embeddingModel: 'text-embedding-3-small',
   indexVersion: 1,
-  chunkerVersion: 1,
+  chunkerVersion: 2,
   bm25Version: 1,
   estimatedBytes: 4096,
   lastUpdated: 1,
@@ -185,12 +187,49 @@ describe('indexBook metadata freshness', () => {
     expect(mocks.saveMeta).toHaveBeenCalledWith(
       expect.objectContaining({
         indexVersion: 1,
-        chunkerVersion: 1,
+        chunkerVersion: 2,
         bm25Version: 1,
         estimatedBytes: expect.any(Number),
       }),
     );
     expect(mocks.saveMeta.mock.calls[0]![0].estimatedBytes).toBeGreaterThan(0);
+  });
+
+  it('stores section jump targets and specific nested chapter labels on chunks', async () => {
+    const nestedBookDoc = {
+      metadata: { title: 'Book', author: 'Author' },
+      toc: [
+        {
+          id: 0,
+          label: '第一部 小丑',
+          href: 'part-1.xhtml',
+          subitems: [{ id: 0, label: '第五章 线索', href: 'chapter-5.xhtml' }],
+        },
+      ],
+      sections: [
+        {
+          id: 'chapter-5',
+          href: 'chapter-5.xhtml',
+          cfi: 'epubcfi(/6/10)',
+          size: 1200,
+          linear: 'yes',
+          createDocument: async () =>
+            createDocument(`<p>${'灰雾之上的线索再次出现。'.repeat(80)}</p>`),
+        },
+      ],
+    };
+
+    await indexBook(nestedBookDoc, 'book-hash', { ...settings, providerEmbeddingModels: {} });
+
+    expect(mocks.saveChunks).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          chapterTitle: '第五章 线索',
+          href: 'chapter-5.xhtml',
+          cfi: 'epubcfi(/6/10)',
+        }),
+      ]),
+    );
   });
 
   it('uses BM25-only indexing without embeddings when no embedding model is configured', async () => {

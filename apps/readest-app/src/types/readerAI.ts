@@ -34,6 +34,7 @@ export interface ReaderAISource {
   chapterTitle: string;
   pageNumber?: number;
   sectionIndex?: number;
+  sortIndex?: number;
   cfi?: string;
   href?: string;
   snippet?: string;

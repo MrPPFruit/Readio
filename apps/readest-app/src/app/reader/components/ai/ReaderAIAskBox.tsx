@@ -119,6 +119,8 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
         aria-labelledby='reader-ai-ask-title'
         aria-describedby='reader-ai-ask-description'
         tabIndex={-1}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
         onKeyDown={handleDialogKeyDown}
       >
         <div className='bg-base-content/20 mx-auto mb-3 h-1 w-10 rounded-full' aria-hidden='true' />
@@ -161,7 +163,7 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
             selectedValue={question}
             ariaLabel='建议问题'
             layout='stack'
-            onSelect={setQuestion}
+            onSelect={handleSubmit}
           />
         </div>
 

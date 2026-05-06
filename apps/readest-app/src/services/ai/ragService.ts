@@ -26,6 +26,8 @@ interface SectionItem {
   id: string;
   size: number;
   linear: string;
+  cfi?: string;
+  href?: string;
   createDocument: () => Promise<Document>;
 }
 
@@ -33,6 +35,7 @@ interface TOCItem {
   id: number;
   label: string;
   href?: string;
+  subitems?: TOCItem[];
 }
 
 export interface BookDocType {
@@ -123,12 +126,33 @@ function extractAuthor(metadata?: BookDocType['metadata']): string {
   return metadata.author.name || 'Unknown Author';
 }
 
-function getChapterTitle(toc: TOCItem[] | undefined, sectionIndex: number): string {
-  if (!toc || toc.length === 0) return `Section ${sectionIndex + 1}`;
-  for (let i = toc.length - 1; i >= 0; i--) {
-    if (toc[i]!.id <= sectionIndex) return toc[i]!.label;
+function getSectionTocItems(toc: TOCItem[] | undefined, sectionIndex: number): TOCItem[] {
+  if (!toc?.length) return [];
+  const items: TOCItem[] = [];
+  const walk = (tocItems: TOCItem[]) => {
+    for (const item of tocItems) {
+      items.push(item);
+      if (item.subitems?.length) walk(item.subitems);
+    }
+  };
+  walk(toc);
+  return items.filter((item) => item.id <= sectionIndex).sort((a, b) => a.id - b.id);
+}
+
+function getChapterTitle(
+  toc: TOCItem[] | undefined,
+  sectionIndex: number,
+  sectionHref?: string,
+): string {
+  const candidates = getSectionTocItems(toc, sectionIndex);
+  if (candidates.length === 0) return `Section ${sectionIndex + 1}`;
+  if (sectionHref) {
+    const hrefMatch = [...candidates]
+      .reverse()
+      .find((item) => item.href?.split('#')[0] === sectionHref);
+    if (hrefMatch) return hrefMatch.label;
   }
-  return toc[0]?.label || `Section ${sectionIndex + 1}`;
+  return candidates[candidates.length - 1]?.label || `Section ${sectionIndex + 1}`;
 }
 
 interface IndexBookOptions {
@@ -234,10 +258,14 @@ async function runIndexBook(
         const sectionChunks = chunkText(
           text,
           i,
-          getChapterTitle(toc, i),
+          getChapterTitle(toc, i, section.href),
           bookHash,
           cumulativeSizes[i] ?? 0,
-        );
+        ).map((chunk) => ({
+          ...chunk,
+          ...(section.cfi ? { cfi: section.cfi } : {}),
+          ...(section.href ? { href: section.href } : {}),
+        }));
         throwIfAborted(signal);
         aiLogger.chunker.section(i, text.length, sectionChunks.length);
         allChunks.push(...sectionChunks);

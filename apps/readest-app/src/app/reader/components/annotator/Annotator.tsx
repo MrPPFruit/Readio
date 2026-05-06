@@ -272,7 +272,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
         handleTouchStart();
       } else if (ev.type === 'touchend') {
         androidTouchEndRef.current = true;
-        handleTouchEnd();
+        handleTouchEnd(doc, index);
         handlePointerUp(doc, index);
       }
     };

@@ -40,24 +40,133 @@ interface ReaderAIAnswerPanelProps {
 interface ReaderAIMessageContentProps {
   content: string;
   role: ReaderAIMessage['role'];
+  sources?: ReaderAISource[];
+  onCitationClick?: (index: number) => void;
 }
 
-const ReaderAIMessageContent: React.FC<ReaderAIMessageContentProps> = ({ content, role }) => {
+const sourceOrderValue = (source: ReaderAISource) =>
+  source.sortIndex ??
+  (source.sectionIndex ?? Number.MAX_SAFE_INTEGER) * 1_000_000 + (source.pageNumber ?? 0);
+
+const getOrderedSources = (sources: ReaderAISource[] = []) =>
+  sources
+    .map((source, index) => ({ source, index }))
+    .sort((a, b) => {
+      const orderDiff = sourceOrderValue(a.source) - sourceOrderValue(b.source);
+      return orderDiff === 0 ? a.index - b.index : orderDiff;
+    })
+    .map(({ source }) => source);
+
+const formatSourceLabel = (source: ReaderAISource) => {
+  const locationLabel =
+    source.confidence === 'exact' && source.pageNumber ? `第 ${source.pageNumber} 页` : '约略位置';
+  return `${source.chapterTitle} · ${locationLabel}`;
+};
+
+const citationButtonClassName =
+  'border-primary/25 bg-primary/10 text-primary mx-0.5 inline-flex min-h-7 min-w-7 items-center justify-center rounded-full border px-1.5 align-baseline text-[11px] font-semibold leading-none';
+
+function renderTextWithCitations(
+  text: string,
+  keyPrefix: string,
+  sourceCount: number,
+  onCitationClick?: (index: number) => void,
+): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  for (const match of text.matchAll(/\[(\d+)\]/g)) {
+    if (match.index === undefined) continue;
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    const citationIndex = Number(match[1]);
+    if (citationIndex >= 1 && citationIndex <= sourceCount) {
+      nodes.push(
+        <button
+          key={`${keyPrefix}-citation-${match.index}`}
+          type='button'
+          className={citationButtonClassName}
+          onClick={() => onCitationClick?.(citationIndex - 1)}
+          aria-label={`查看引用 ${citationIndex}`}
+        >
+          [{citationIndex}]
+        </button>,
+      );
+    } else {
+      nodes.push(match[0]);
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+function renderHtmlNode(
+  node: ChildNode,
+  key: string,
+  sourceCount: number,
+  citationsDisabled: boolean,
+  onCitationClick?: (index: number) => void,
+): React.ReactNode {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent ?? '';
+    return citationsDisabled
+      ? text
+      : renderTextWithCitations(text, key, sourceCount, onCitationClick);
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return null;
+
+  const element = node as Element;
+  const tagName = element.tagName.toLowerCase();
+  const nextCitationsDisabled =
+    citationsDisabled || ['a', 'code', 'kbd', 'pre', 'samp'].includes(tagName);
+  const props: Record<string, string> = { key };
+  for (const attribute of Array.from(element.attributes)) {
+    if (attribute.name.startsWith('on') || attribute.name === 'style') continue;
+    props[attribute.name === 'class' ? 'className' : attribute.name] = attribute.value;
+  }
+  const children = Array.from(element.childNodes).map((child, index) =>
+    renderHtmlNode(child, `${key}-${index}`, sourceCount, nextCitationsDisabled, onCitationClick),
+  );
+  return React.createElement(tagName, props, children);
+}
+
+function renderHtmlWithCitations(
+  html: string,
+  sourceCount: number,
+  onCitationClick?: (index: number) => void,
+): React.ReactNode[] {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  return Array.from(template.content.childNodes).map((node, index) =>
+    renderHtmlNode(node, `html-${index}`, sourceCount, false, onCitationClick),
+  );
+}
+
+const ReaderAIMessageContent: React.FC<ReaderAIMessageContentProps> = ({
+  content,
+  role,
+  sources = [],
+  onCitationClick,
+}) => {
   const html = useMemo(() => {
     const parsed = marked.parse(content, { breaks: true, async: false });
     return DOMPurify.sanitize(parsed);
   }, [content]);
 
-  return (
-    <div
-      className={
-        role === 'assistant'
-          ? 'prose prose-sm prose-headings:text-base-content prose-p:text-base-content prose-strong:text-base-content prose-li:text-base-content prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-p:my-2 max-w-none text-sm leading-7 [&_*:first-child]:mt-0 [&_*:last-child]:mb-0'
-          : 'whitespace-pre-wrap text-sm leading-7'
-      }
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
+  const sourceCount = sources.length;
+  const contentNodes = useMemo(() => {
+    if (role !== 'assistant' || sourceCount === 0) return null;
+    return renderHtmlWithCitations(html, sourceCount, onCitationClick);
+  }, [html, role, sourceCount, onCitationClick]);
+  const className =
+    role === 'assistant'
+      ? 'prose prose-sm prose-headings:text-base-content prose-p:text-base-content prose-strong:text-base-content prose-li:text-base-content prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-p:my-2 max-w-none text-sm leading-7 [&_*:first-child]:mt-0 [&_*:last-child]:mb-0'
+      : 'whitespace-pre-wrap text-sm leading-7';
+
+  if (!contentNodes) {
+    return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+
+  return <div className={className}>{contentNodes}</div>;
 };
 
 const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
@@ -77,6 +186,7 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
   onClose,
 }) => {
   const [question, setQuestion] = useState('');
+  const [activeSource, setActiveSource] = useState<{ source: ReaderAISource; index: number }>();
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -124,13 +234,8 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
     }
   };
 
-  const formatSourceLabel = (source: ReaderAISource) => {
-    const pageLabel = source.pageNumber
-      ? `${source.confidence === 'approximate' ? '约第' : '第'} ${source.pageNumber} 页`
-      : source.confidence === 'approximate'
-        ? '约略位置'
-        : '原文位置';
-    return `${pageLabel} · ${source.chapterTitle}`;
+  const openSource = (source: ReaderAISource, index: number) => {
+    setActiveSource({ source, index });
   };
 
   const initialQuestion = messages.find((message) => message.role === 'user');
@@ -150,6 +255,8 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
       aria-labelledby='reader-ai-answer-title'
       aria-describedby='reader-ai-answer-description'
       tabIndex={-1}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
       onKeyDown={handleDialogKeyDown}
     >
       <header
@@ -253,52 +360,73 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
         )}
 
         <section className='space-y-3' aria-label='AI 对话历史'>
-          {conversationMessages.map((message) => (
-            <article
-              key={message.id}
-              className={
-                message.role === 'user'
-                  ? 'border-primary/15 bg-primary/5 text-base-content rounded-[1.25rem] border px-4 py-3'
-                  : 'border-base-content/10 bg-base-100 text-base-content eink:shadow-none rounded-[1.25rem] border px-4 py-4 shadow-sm'
-              }
-            >
-              <div className='text-base-content/55 mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide'>
-                <span className='bg-primary h-2 w-2 rounded-full' aria-hidden='true' />
-                {message.role === 'user' ? '追问' : 'AI 回答'}
-              </div>
-              {message.role === 'assistant' && loading && !message.content ? (
-                <ReaderAIGenerationStatus status={generationStatus} />
-              ) : (
-                <ReaderAIMessageContent content={message.content} role={message.role} />
-              )}
-              {message.role === 'assistant' && message.sources?.length ? (
-                <section
-                  className='border-base-content/10 mt-3 space-y-2 border-t pt-3'
-                  aria-label='参考来源'
-                >
-                  {message.sources.map((source) => {
-                    const label = formatSourceLabel(source);
-                    return (
-                      <button
-                        key={source.id}
-                        type='button'
-                        className='border-base-content/10 bg-base-200/60 text-base-content/75 w-full rounded-2xl border px-3 py-2 text-left text-xs leading-5'
-                        onClick={() => onSourceClick?.(source)}
-                        aria-label={`跳转到来源：${label}`}
-                      >
-                        <span className='block font-medium'>{label}</span>
-                        {source.snippet && (
-                          <span className='text-base-content/55 mt-1 block'>
-                            「{source.snippet}」
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </section>
-              ) : null}
-            </article>
-          ))}
+          {conversationMessages.map((message) => {
+            const orderedSources = getOrderedSources(message.sources);
+            return (
+              <article
+                key={message.id}
+                className={
+                  message.role === 'user'
+                    ? 'border-primary/15 bg-primary/5 text-base-content rounded-[1.25rem] border px-4 py-3'
+                    : 'border-base-content/10 bg-base-100 text-base-content eink:shadow-none rounded-[1.25rem] border px-4 py-4 shadow-sm'
+                }
+              >
+                <div className='text-base-content/55 mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide'>
+                  <span className='bg-primary h-2 w-2 rounded-full' aria-hidden='true' />
+                  {message.role === 'user' ? '追问' : 'AI 回答'}
+                </div>
+                {message.role === 'assistant' && loading && !message.content ? (
+                  <ReaderAIGenerationStatus status={generationStatus} />
+                ) : (
+                  <ReaderAIMessageContent
+                    content={message.content}
+                    role={message.role}
+                    sources={orderedSources}
+                    onCitationClick={(index) => {
+                      const source = orderedSources[index];
+                      if (source) openSource(source, index);
+                    }}
+                  />
+                )}
+                {message.role === 'assistant' && orderedSources.length ? (
+                  <section
+                    className='border-base-content/10 mt-3 border-t pt-3'
+                    aria-label='引用来源'
+                  >
+                    <div className='text-base-content/55 mb-2 text-[11px] font-semibold tracking-wide'>
+                      引用
+                    </div>
+                    <div className='space-y-1.5'>
+                      {orderedSources.map((source, index) => {
+                        const label = formatSourceLabel(source);
+                        return (
+                          <button
+                            key={source.id}
+                            type='button'
+                            className='hover:border-primary/30 hover:bg-primary/5 focus-visible:ring-primary/30 border-base-content/10 bg-base-200/45 text-base-content/75 flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs leading-5 transition-colors focus:outline-none focus-visible:ring-2'
+                            onClick={() => openSource(source, index)}
+                            aria-label={`查看引用 ${index + 1}：${label}`}
+                          >
+                            <span className='bg-primary/10 text-primary border-primary/20 inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold'>
+                              [{index + 1}]
+                            </span>
+                            <span className='min-w-0 flex-1'>
+                              <span className='block font-medium'>{source.chapterTitle}</span>
+                              <span className='text-base-content/50 block'>
+                                {source.confidence === 'exact' && source.pageNumber
+                                  ? `第 ${source.pageNumber} 页`
+                                  : '约略位置'}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+              </article>
+            );
+          })}
         </section>
 
         {loading &&
@@ -342,6 +470,56 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
           />
         )}
       </div>
+
+      {activeSource && (
+        <div className='absolute inset-x-0 bottom-0 z-[60] px-3 pb-3' role='presentation'>
+          <section
+            className='border-base-content/10 bg-base-100 text-base-content rounded-[1.5rem] border p-4 shadow-2xl'
+            role='dialog'
+            aria-modal='false'
+            aria-label={`引用 ${activeSource.index + 1}`}
+          >
+            <div className='mb-3 flex items-start justify-between gap-3'>
+              <div className='min-w-0'>
+                <div className='text-primary/80 mb-1 text-[11px] font-semibold tracking-wide'>
+                  引用 [{activeSource.index + 1}]
+                </div>
+                <h3 className='text-sm font-semibold leading-5'>
+                  {activeSource.source.chapterTitle}
+                </h3>
+                <p className='text-base-content/55 mt-1 text-xs'>
+                  {activeSource.source.confidence === 'exact' && activeSource.source.pageNumber
+                    ? `第 ${activeSource.source.pageNumber} 页`
+                    : '约略位置'}
+                </p>
+              </div>
+              <button
+                type='button'
+                className='btn btn-ghost btn-sm text-base-content/60 h-9 min-h-9 rounded-full px-3'
+                onClick={() => setActiveSource(undefined)}
+              >
+                关闭
+              </button>
+            </div>
+            {activeSource.source.snippet && (
+              <blockquote className='border-primary/25 bg-primary/5 text-base-content/70 mb-3 rounded-2xl border-l-2 px-3 py-2 text-xs leading-5'>
+                「{activeSource.source.snippet}」
+              </blockquote>
+            )}
+            <button
+              type='button'
+              className='btn btn-primary h-10 min-h-10 w-full rounded-2xl text-sm'
+              disabled={!activeSource.source.cfi && !activeSource.source.href}
+              onClick={() => {
+                onSourceClick?.(activeSource.source);
+                setActiveSource(undefined);
+              }}
+            >
+              跳转查看原文
+            </button>
+          </section>
+        </div>
+      )}
 
       <footer
         className='border-base-content/10 bg-base-100/95 eink:bg-base-100 eink:backdrop-blur-0 border-t px-3 py-3 backdrop-blur-md'

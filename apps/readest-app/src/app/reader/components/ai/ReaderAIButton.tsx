@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import React from 'react';
+import React, { useRef } from 'react';
 import { MdAutoAwesome, MdMenuBook } from 'react-icons/md';
 
 import { useEnv } from '@/context/EnvContext';
@@ -18,6 +18,7 @@ const MOBILE_FOOTER_PANEL_TABS = new Set(['progress', 'font', 'color']);
 
 const ReaderAIButton: React.FC<ReaderAIButtonProps> = ({ bookKey, onClick }) => {
   const { appService } = useEnv();
+  const pointerOpenedRef = useRef(false);
   const { hoveredBookKey, getFooterActionTab, getViewSettings } = useReaderStore();
   const viewSettings = getViewSettings(bookKey);
   const footerActionTab = getFooterActionTab(bookKey);
@@ -25,6 +26,23 @@ const ReaderAIButton: React.FC<ReaderAIButtonProps> = ({ bookKey, onClick }) => 
     appService?.isMobile || window.innerWidth < 640 || window.innerHeight < 640;
   const isMobileFooterPanelOpen = isMobileFooter && MOBILE_FOOTER_PANEL_TABS.has(footerActionTab);
   const bottomOffset = READER_AI_BUTTON_BOTTOM_OFFSET.default;
+  const openAIOnPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    pointerOpenedRef.current = true;
+    onClick();
+  };
+
+  const openAIOnClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (pointerOpenedRef.current) {
+      pointerOpenedRef.current = false;
+      return;
+    }
+    onClick();
+  };
 
   if (hoveredBookKey !== bookKey || isMobileFooterPanelOpen) return null;
 
@@ -42,7 +60,8 @@ const ReaderAIButton: React.FC<ReaderAIButtonProps> = ({ bookKey, onClick }) => 
     >
       <button
         type='button'
-        onClick={onClick}
+        onPointerDown={openAIOnPointerDown}
+        onClick={openAIOnClick}
         className={clsx(
           'border-base-content/10 bg-base-100/95 text-base-content relative h-12 min-h-12 w-12 rounded-2xl border shadow-xl backdrop-blur-md sm:h-12 sm:min-h-12 sm:w-12',
           'font-sans transition-[transform,background-color,border-color,box-shadow] duration-150 active:scale-95',

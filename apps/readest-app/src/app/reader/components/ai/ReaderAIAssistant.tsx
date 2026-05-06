@@ -396,18 +396,8 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
       bookData?.book?.author ||
       (bookData?.bookDoc?.metadata.author ? formatAuthors(bookData.bookDoc.metadata.author) : '');
     const currentPage = selection?.page || progress?.page || 1;
-    const selectedSource: ReaderAISource | undefined = selection?.cfi
-      ? {
-          id: `${assistantMessage.id}-selection-source`,
-          chapterTitle: '选中的原文',
-          pageNumber: selection.page,
-          cfi: selection.cfi,
-          snippet: selection.text,
-          confidence: 'exact',
-        }
-      : undefined;
     let answer = '';
-    let answerSources = selectedSource ? [selectedSource] : [];
+    let answerSources: ReaderAISource[] = [];
     let timedOut = false;
     const timeoutId = setTimeout(() => {
       timedOut = true;
@@ -427,7 +417,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
         selectionText: selection?.text,
         signal: controller.signal,
         onSources: (sources) => {
-          answerSources = selectedSource ? [selectedSource, ...sources] : sources;
+          answerSources = sources;
           setMessages((currentMessages) =>
             currentMessages.map((message) =>
               message.id === assistantMessage.id ? { ...message, sources: answerSources } : message,

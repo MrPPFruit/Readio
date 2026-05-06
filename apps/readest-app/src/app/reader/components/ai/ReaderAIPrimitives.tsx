@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import React, { useId } from 'react';
+import React, { useId, useRef } from 'react';
 import type { ReaderAIGenerationStatus as ReaderAIGenerationStatusValue } from '@/types/readerAI';
 import { MdArrowUpward } from 'react-icons/md';
 
@@ -132,6 +132,7 @@ export const ReaderAISuggestionRail: React.FC<ReaderAISuggestionRailProps> = ({
   onSelect,
 }) => {
   const stacked = layout === 'stack';
+  const pointerSubmittedRef = useRef(false);
 
   return (
     <div className={stacked ? 'relative' : 'relative -mx-1'}>
@@ -149,7 +150,21 @@ export const ReaderAISuggestionRail: React.FC<ReaderAISuggestionRailProps> = ({
             <li key={suggestion} className={stacked ? '' : 'shrink-0'}>
               <button
                 type='button'
-                onClick={() => onSelect(suggestion)}
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerUp={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  pointerSubmittedRef.current = true;
+                  onSelect(suggestion);
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (pointerSubmittedRef.current) {
+                    pointerSubmittedRef.current = false;
+                    return;
+                  }
+                  onSelect(suggestion);
+                }}
                 className={clsx(
                   'min-h-11 rounded-2xl border font-sans text-sm leading-5 transition-colors',
                   'focus-visible:ring-primary focus-visible:ring-offset-base-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',

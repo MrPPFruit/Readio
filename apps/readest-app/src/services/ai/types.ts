@@ -64,7 +64,10 @@ export interface TextChunk {
   chapterTitle: string;
   text: string;
   embedding?: number[];
-  pageNumber: number; // page number using Readest's 1500 chars/page formula
+  pageNumber: number; // legacy character-estimated page number, not current reader layout page
+  sortIndex?: number;
+  cfi?: string;
+  href?: string;
 }
 
 export interface ScoredChunk extends TextChunk {

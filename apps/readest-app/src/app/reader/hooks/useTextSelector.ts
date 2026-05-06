@@ -16,18 +16,42 @@ export const shouldHandleSelectionChange = ({
   lastPointerType,
   now,
   lastSelectionInputAt,
+  hasCompletedSelectionInput = true,
 }: {
   osPlatform: string;
   isAndroidApp?: boolean;
   lastPointerType: string;
   now: number;
   lastSelectionInputAt: number;
+  hasCompletedSelectionInput?: boolean;
 }) => {
   const isRecentSelectionInput = now - lastSelectionInputAt <= SELECTION_INPUT_GRACE_MS;
   const isTouchInput = lastPointerType === 'touch' || lastPointerType === 'pen';
   const isAndroid = osPlatform === 'android' && isAndroidApp;
-  return isRecentSelectionInput && (isAndroid || isTouchInput);
+  if (isAndroid) return isRecentSelectionInput && hasCompletedSelectionInput;
+  return isRecentSelectionInput && isTouchInput;
 };
+
+export const shouldProcessPendingAndroidSelection = ({
+  osPlatform,
+  isAndroidApp,
+  hasPendingSelectionChange,
+  lastPointerType,
+  now,
+  lastSelectionInputAt,
+}: {
+  osPlatform: string;
+  isAndroidApp?: boolean;
+  hasPendingSelectionChange: boolean;
+  lastPointerType: string;
+  now: number;
+  lastSelectionInputAt: number;
+}) =>
+  osPlatform === 'android' &&
+  !!isAndroidApp &&
+  hasPendingSelectionChange &&
+  lastPointerType === 'touch' &&
+  now - lastSelectionInputAt <= SELECTION_INPUT_GRACE_MS;
 
 export const useTextSelector = (
   bookKey: string,
@@ -51,6 +75,8 @@ export const useTextSelector = (
   const selectionPosition = useRef<number | null>(null);
   const lastPointerType = useRef<string>('mouse');
   const lastSelectionInputAt = useRef(0);
+  const hasCompletedSelectionInput = useRef(false);
+  const hasPendingAndroidSelectionChange = useRef(false);
   const isInstantAnnotating = useRef(false);
   const isInstantAnnotated = useRef(false);
   const annotationStartPoint = useRef<Point | null>(null);
@@ -132,6 +158,7 @@ export const useTextSelector = (
     lastPointerType.current = ev.pointerType;
     if (ev.pointerType === 'touch' || ev.pointerType === 'pen') {
       lastSelectionInputAt.current = Date.now();
+      hasCompletedSelectionInput.current = false;
     }
 
     if (isInstantAnnotationEnabled()) {
@@ -216,33 +243,15 @@ export const useTextSelector = (
     isTouchStarted.current = true;
     lastPointerType.current = 'touch';
     lastSelectionInputAt.current = Date.now();
+    hasCompletedSelectionInput.current = false;
+    hasPendingAndroidSelectionChange.current = false;
   };
   const handleTouchMove = (ev: TouchEvent) => {
     if (isInstantAnnotating.current) {
       ev.preventDefault();
     }
   };
-  const handleTouchEnd = () => {
-    isTouchStarted.current = false;
-  };
-  const handleSelectionchange = (doc: Document, index: number) => {
-    // Available on iOS, Android and Desktop, fired when the selection is changed.
-    // On Android native app, this is the primary way to detect text selection.
-    // On web with touch/pen in scroll mode, pointerup never fires (pointercancel
-    // fires instead when browser takes over for scrolling), so we also handle
-    // selectionchange for touch/pen input to pick up native text selections.
-    if (
-      !shouldHandleSelectionChange({
-        osPlatform,
-        isAndroidApp: appService?.isAndroidApp,
-        lastPointerType: lastPointerType.current,
-        now: Date.now(),
-        lastSelectionInputAt: lastSelectionInputAt.current,
-      })
-    ) {
-      return;
-    }
-
+  const processPendingSelectionChange = (doc: Document, index: number) => {
     const sel = doc.getSelection() as Selection;
     if (isValidSelection(sel)) {
       if (!selectionPosition.current) {
@@ -252,6 +261,54 @@ export const useTextSelector = (
     } else {
       selectionPosition.current = null;
     }
+  };
+
+  const handleTouchEnd = (doc: Document, index: number) => {
+    isTouchStarted.current = false;
+    hasCompletedSelectionInput.current = true;
+    if (
+      shouldProcessPendingAndroidSelection({
+        osPlatform,
+        isAndroidApp: appService?.isAndroidApp,
+        hasPendingSelectionChange: hasPendingAndroidSelectionChange.current,
+        lastPointerType: lastPointerType.current,
+        now: Date.now(),
+        lastSelectionInputAt: lastSelectionInputAt.current,
+      })
+    ) {
+      processPendingSelectionChange(doc, index);
+    }
+    hasPendingAndroidSelectionChange.current = false;
+  };
+  const handleSelectionchange = (doc: Document, index: number) => {
+    // Available on iOS, Android and Desktop, fired when the selection is changed.
+    // On Android native app, this is the primary way to detect text selection.
+    // On web with touch/pen in scroll mode, pointerup never fires (pointercancel
+    // fires instead when browser takes over for scrolling), so we also handle
+    // selectionchange for touch/pen input to pick up native text selections.
+    const now = Date.now();
+    if (
+      !shouldHandleSelectionChange({
+        osPlatform,
+        isAndroidApp: appService?.isAndroidApp,
+        lastPointerType: lastPointerType.current,
+        now,
+        lastSelectionInputAt: lastSelectionInputAt.current,
+        hasCompletedSelectionInput: hasCompletedSelectionInput.current,
+      })
+    ) {
+      hasPendingAndroidSelectionChange.current = shouldProcessPendingAndroidSelection({
+        osPlatform,
+        isAndroidApp: appService?.isAndroidApp,
+        hasPendingSelectionChange: true,
+        lastPointerType: lastPointerType.current,
+        now,
+        lastSelectionInputAt: lastSelectionInputAt.current,
+      });
+      return;
+    }
+
+    processPendingSelectionChange(doc, index);
   };
   const handleScroll = () => {
     // Prevent the container from scrolling when text is selected in paginated mode

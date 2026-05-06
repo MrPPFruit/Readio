@@ -1,16 +1,18 @@
 # HANDOFF
 
-## 2026-04-28 最新状态
+## 2026-05-07 最新状态
 
-- alpha.8 AI 助手批次已完成并发布为 GitHub prerelease：`https://github.com/MrPPFruit/Readio/releases/tag/v0.1.0-alpha.8`。
-- 发布目标分支：`readio/restart-readest-base`；提交：`d11cc862 feat: add reader AI assistant`。
-- APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.8-android-arm64-release.apk`。
-- APK SHA-256：`d44b5a1976445fec70e0cd5301a251e6e913c2ec4c8eff2f487a5bcba2a4fa21`。
+- alpha.9 Reader AI 改进批次已实现并完成模拟器验证，尚未提交/发布。
+- 当前 APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.9-android-arm64-release.apk`，大小约 53M，mtime `May 7 01:01`。
+- APK 构建成功，签名验证通过：v2=true、v3=true、signers=1。
+- 已安装到 `emulator-5554`：`adb install -r ...alpha.9...apk` 输出 `Success`；`com.ppg.readio/.MainActivity` 可启动。
+- 基础 UI 验证通过：首页显示 Continue Reading 与 Alice 图书；进入 Alice 阅读器成功。
+- Reader AI 入口验证通过：阅读器控制层打开后，实际设备坐标约 `980,1696` 点击 AI 按钮，底部 Reader AI Ask Sheet 正常弹出；最终截图证据 `/tmp/readio_review_fixed_ai_panel_2.png`。
+- 关键修复：Android WebView 内阅读器控制层会在 `pointerup/click` 前收起浮动按钮，因此 `ReaderAIButton` 改为主键 `onPointerDown` 立即打开 AI，并在后续 `click` 中去重，避免双触发；非主键 pointerdown 不打开 AI。
+- Code Reviewer 后追加修复：同位置引用来源保持服务排序，避免 citation `[1]` 跳错源；Android selectionchange 在长按/拖拽过程中先缓存，touchend 后处理，避免真实长按选区被丢弃。
+- 验证证据：Vitest 实际跑全量 `189 files / 3475 tests passed`；`pnpm --filter @readest/readest-app lint` 通过，`808 files checked`；`pnpm --filter @readest/readest-app exec tsgo --noEmit` 通过；APK rebuild/install/smoke test 通过。
+- 当前工作树包含 Reader AI/RAG/selection/annotator 相关未提交改动，以及未跟踪 `.codepilot-uploads/`；提交前需复查 diff，避免误提交无关上传目录。
 - GitHub 默认分支已于 2026-04-28 切换为 `readio/restart-readest-base`；该分支是 Readio 后续主线。旧默认分支 `feature/m0-spikes` 保留为 M0 spike 历史归档，不再作为 PR/release 基准。
-- GitHub 仓库已于 2026-04-28 从 private 切为 public：`https://github.com/MrPPFruit/Readio`。公开前已做最小敏感信息检查：未发现明显私钥/访问令牌；`.env.tauri` 中存在的 PostHog/Supabase anon/Stripe publishable 属于前端公开类配置。
-- GitHub PR 曾失败：旧默认分支 `feature/m0-spikes` 与 `readio/restart-readest-base` 没有共同历史，GitHub 拒绝跨 unrelated histories 创建 PR。以后不要静默执行 `--allow-unrelated-histories` 合并；新工作应从 `readio/restart-readest-base` 拉分支。
-- 验证证据：AI UI/assistant targeted tests 2 files / 27 tests passed；release APK 构建成功；已安装到 `emulator-5554` 并 smoke-test 首页、阅读器、AI FAB、Ask Sheet、建议选择、Answer Panel、关闭/遮罩关闭。
-- 当前本地工作树只剩 `HANDOFF.md` 修改未提交；AI 助手代码提交已推送到 `origin/readio/restart-readest-base`。
 
 ## 当前目标与进度
 

@@ -225,7 +225,7 @@ describe('streamReaderAIAnswer', () => {
     });
   });
 
-  it('adds current-page context before search results for generic recap questions', async () => {
+  it('adds current-page context for generic recap questions while keeping citation order canonical', async () => {
     getCurrentSectionContextChunksMock.mockResolvedValue([
       {
         id: 'current-page-1',
@@ -265,8 +265,10 @@ describe('streamReaderAIAnswer', () => {
     });
 
     const call = streamTextMock.mock.calls[0]?.[0];
-    expect(call.system.indexOf('白银城，伯格家')).toBeLessThan(
-      call.system.indexOf('班西港的气氛越来越不对劲'),
+    expect(call.system).toContain('白银城，伯格家');
+    expect(call.system).toContain('班西港的气氛越来越不对劲');
+    expect(call.system).toMatch(
+      /\[Source 1: 第五十六章 驱散\][\s\S]*\[Source 2: 第五十八章 压制\]/,
     );
     expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 4054, 4);
   });
@@ -318,10 +320,20 @@ describe('streamReaderAIAnswer', () => {
     });
   });
 
-  it('reports approximate RAG sources before streaming the answer', async () => {
+  it('uses book order consistently for source citations and rendered references', async () => {
     hybridSearchMock.mockResolvedValue([
       {
-        id: 'chunk-source',
+        id: 'late-source',
+        bookHash: 'book-hash',
+        sectionIndex: 8,
+        chapterTitle: '第八章 后续',
+        text: '后续线索。',
+        pageNumber: 82,
+        score: 0.99,
+        searchMethod: 'hybrid',
+      },
+      {
+        id: 'early-source',
         bookHash: 'book-hash',
         sectionIndex: 5,
         chapterTitle: '第五章 线索',
@@ -348,14 +360,25 @@ describe('streamReaderAIAnswer', () => {
 
     expect(onSources).toHaveBeenCalledWith([
       expect.objectContaining({
-        id: 'chunk-source',
+        id: 'early-source',
         chapterTitle: '第五章 线索',
-        pageNumber: 38,
         sectionIndex: 5,
         snippet: '灰雾之上的线索再次出现，克莱恩开始复盘。',
         confidence: 'approximate',
       }),
+      expect.objectContaining({
+        id: 'late-source',
+        chapterTitle: '第八章 后续',
+        sectionIndex: 8,
+      }),
     ]);
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringMatching(
+          /\[Source 1: 第五章 线索\][\s\S]*灰雾之上的线索再次出现[\s\S]*\[Source 2: 第八章 后续\]/,
+        ),
+      }),
+    );
   });
 
   it('sends bounded readerContext instead of raw system when using the web browser API route', async () => {
@@ -367,7 +390,17 @@ describe('streamReaderAIAnswer', () => {
       Object.defineProperty(globalThis, 'fetch', { value: fetchMock, configurable: true });
       hybridSearchMock.mockResolvedValue([
         {
-          id: 'chunk-1',
+          id: 'late-source',
+          bookHash: 'book-hash',
+          sectionIndex: 8,
+          chapterTitle: 'Chapter 8',
+          text: 'Later passage.',
+          pageNumber: 80,
+          score: 0.99,
+          searchMethod: 'hybrid',
+        },
+        {
+          id: 'early-source',
           bookHash: 'book-hash',
           sectionIndex: 1,
           chapterTitle: 'Chapter 1',
@@ -405,7 +438,10 @@ describe('streamReaderAIAnswer', () => {
           authorName: 'Author',
           currentPage: 42,
           spoilerProtection: true,
-          chunks: [{ text: 'A relevant passage.', chapterTitle: 'Chapter 1', pageNumber: 4 }],
+          chunks: [
+            { text: 'A relevant passage.', chapterTitle: 'Chapter 1', pageNumber: 4 },
+            { text: 'Later passage.', chapterTitle: 'Chapter 8', pageNumber: 80 },
+          ],
         });
       } finally {
         Object.defineProperty(globalThis, 'window', { value: originalWindow, configurable: true });

@@ -64,14 +64,25 @@ function chunksToText(chunks: ScoredChunk[]): string {
     .join('\n');
 }
 
+function sortChunksByBookOrder(chunks: ScoredChunk[]): ScoredChunk[] {
+  return [...chunks].sort((a, b) => {
+    const sortA = a.sortIndex ?? a.sectionIndex * 1_000_000 + a.pageNumber;
+    const sortB = b.sortIndex ?? b.sectionIndex * 1_000_000 + b.pageNumber;
+    if (sortA !== sortB) return sortA - sortB;
+    return b.score - a.score;
+  });
+}
+
 function chunkToSource(chunk: ScoredChunk): ReaderAISource {
   return {
     id: chunk.id,
     chapterTitle: chunk.chapterTitle,
-    pageNumber: chunk.pageNumber,
     sectionIndex: chunk.sectionIndex,
+    sortIndex: chunk.sortIndex,
+    ...(chunk.cfi ? { cfi: chunk.cfi } : {}),
+    ...(chunk.href ? { href: chunk.href } : {}),
     snippet: chunk.text.trim().slice(0, 120),
-    confidence: 'approximate',
+    confidence: chunk.cfi || chunk.href ? 'section' : 'approximate',
   };
 }
 
@@ -217,12 +228,13 @@ export async function* streamReaderAIAnswer({
     chunks = [];
   }
 
-  onSources?.(chunks.map(chunkToSource));
+  const orderedChunks = sortChunksByBookOrder(chunks);
+  onSources?.(orderedChunks.map(chunkToSource));
 
   const systemPrompt = buildSystemPrompt(
     bookTitle,
     authorName,
-    chunks,
+    orderedChunks,
     currentPage,
     settings.spoilerProtection,
   );
@@ -239,7 +251,13 @@ export async function* streamReaderAIAnswer({
   if (isWebAppPlatform()) {
     yield* streamViaApiRoute(
       aiMessages,
-      { bookTitle, authorName, currentPage, spoilerProtection: settings.spoilerProtection, chunks },
+      {
+        bookTitle,
+        authorName,
+        currentPage,
+        spoilerProtection: settings.spoilerProtection,
+        chunks: orderedChunks,
+      },
       settings,
       signal,
     );

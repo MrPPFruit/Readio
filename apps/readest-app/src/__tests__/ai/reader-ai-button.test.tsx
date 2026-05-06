@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ReaderAIButton from '@/app/reader/components/ai/ReaderAIButton';
@@ -30,8 +30,9 @@ vi.mock('@/store/readerStore', () => ({
   }),
 }));
 
-function renderButton() {
-  render(<ReaderAIButton bookKey='book-1' onClick={vi.fn()} />);
+function renderButton(onClick = vi.fn()) {
+  render(<ReaderAIButton bookKey='book-1' onClick={onClick} />);
+  return onClick;
 }
 
 beforeEach(() => {
@@ -85,5 +86,31 @@ describe('ReaderAIButton positioning', () => {
     expect(
       screen.getByRole('button', { name: '打开 AI 阅读助手' }).parentElement?.className,
     ).toContain('left-4');
+  });
+
+  it('opens on pointer down before reader controls can hide the button on mobile WebView', () => {
+    const onClick = renderButton();
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: '打开 AI 阅读助手' }));
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double open when click follows pointer down', () => {
+    const onClick = renderButton();
+    const button = screen.getByRole('button', { name: '打开 AI 阅读助手' });
+
+    fireEvent.pointerDown(button);
+    fireEvent.click(button);
+
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores non-primary pointer down on desktop', () => {
+    const onClick = renderButton();
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: '打开 AI 阅读助手' }), { button: 2 });
+
+    expect(onClick).not.toHaveBeenCalled();
   });
 });

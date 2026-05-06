@@ -582,24 +582,21 @@ describe('ReaderAIAssistant integration safeguards', () => {
     expect(mocks.addMessage).not.toHaveBeenCalled();
   });
 
-  it('stores exact selected-text source metadata and jumps by cfi when clicked', async () => {
+  it('keeps selected text out of assistant source references', async () => {
     mocks.streamReaderAIAnswer.mockImplementation(
       ({ onSources }: { onSources?: (sources: unknown[]) => void }) => {
         onSources?.([
           {
-            id: 'selection-source',
-            chapterTitle: '选中的原文',
-            pageNumber: 7,
-            cfi: 'epubcfi(/6/2)',
-            snippet: '克莱恩看见灰雾之上出现新的线索',
-            confidence: 'exact',
+            id: 'rag-source',
+            chapterTitle: '第五章 线索',
+            sectionIndex: 5,
+            snippet: '灰雾之上的线索再次出现。',
+            confidence: 'approximate',
           },
         ]);
         return streamChunks(['answer']);
       },
     );
-    const goTo = vi.fn();
-    mocks.getView.mockReturnValue({ goTo });
 
     render(<ReaderAIAssistant bookKey='current-book-instance' />);
     await import('@/utils/event').then(({ eventDispatcher }) =>
@@ -622,18 +619,16 @@ describe('ReaderAIAssistant integration safeguards', () => {
           conversationId: 'new-conversation',
           role: 'assistant',
           content: 'answer',
-          sources: expect.arrayContaining([
-            expect.objectContaining({
-              cfi: 'epubcfi(/6/2)',
-              confidence: 'exact',
-            }),
-          ]),
+          sources: [expect.objectContaining({ id: 'rag-source' })],
         }),
       ),
     );
-
-    fireEvent.click(screen.getByText('click-source'));
-    expect(goTo).toHaveBeenCalledWith('epubcfi(/6/2)');
+    expect(mocks.addMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: 'assistant',
+        sources: expect.arrayContaining([expect.objectContaining({ chapterTitle: '选中的原文' })]),
+      }),
+    );
   });
 
   it('passes spoiler protection state to answer streaming and defaults to protected mode', async () => {
