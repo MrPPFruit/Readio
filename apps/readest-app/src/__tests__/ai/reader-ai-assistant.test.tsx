@@ -736,6 +736,31 @@ describe('ReaderAIAssistant integration safeguards', () => {
     expect(screen.getByTestId('answer-panel').textContent).toContain('去设置 AI');
   });
 
+  it('keeps the answer panel open when a follow-up provider request fails', async () => {
+    mocks.streamReaderAIAnswer.mockReturnValueOnce(streamChunks(['first answer']));
+    mocks.streamReaderAIAnswer.mockReturnValueOnce(
+      rejectedStream(new Error('Provider request failed')),
+    );
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+    await waitFor(() =>
+      expect(screen.getByTestId('messages').textContent).toContain('first answer'),
+    );
+
+    fireEvent.click(screen.getByText('ask-follow-up'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('messages').textContent).toContain(
+        'AI 请求失败，请检查 API Key、额度、模型名称或服务商状态后重试。',
+      ),
+    );
+    expect(screen.getByTestId('answer-panel')).toBeTruthy();
+    expect(screen.getByTestId('messages').textContent).toContain('first answer');
+    expect(screen.getByTestId('messages').textContent).toContain('user:follow-up');
+  });
+
   it('shows a clear error when indexing fails', async () => {
     mocks.isBookIndexed.mockResolvedValue(false);
     mocks.indexBook.mockRejectedValue(new Error('index failed'));
@@ -843,7 +868,25 @@ describe('ReaderAIAssistant integration safeguards', () => {
     );
   });
 
-  it('registers Android back handling for open AI panels', async () => {
+  it('keeps the answer panel open when Android back cancels a loading answer', async () => {
+    mocks.streamReaderAIAnswer.mockImplementation(({ signal }: { signal?: AbortSignal }) =>
+      pendingStream(signal),
+    );
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await waitFor(() => expect(screen.getByTestId('messages').textContent).toContain('partial'));
+    const lastCall = mocks.useKeyDownActions.mock.calls.at(-1)![0];
+    lastCall.onCancel();
+
+    await waitFor(() => expect(screen.getByTestId('answer-panel')).toBeTruthy());
+    expect(screen.getByTestId('answer-panel').getAttribute('data-loading')).toBe('false');
+    expect(screen.getByTestId('messages').textContent).toContain('partial');
+  });
+
+  it('registers Android back handling for open idle AI panels', async () => {
     render(<ReaderAIAssistant bookKey='current-book-instance' />);
     fireEvent.click(screen.getByText('open-ai'));
 

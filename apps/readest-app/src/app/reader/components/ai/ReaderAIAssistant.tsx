@@ -8,6 +8,7 @@ import { generateReaderAISuggestions, streamReaderAIAnswer } from '@/services/ai
 import { useAIChatStore } from '@/store/aiChatStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
+import { useSidebarStore } from '@/store/sidebarStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { Insets } from '@/types/misc';
 import type {
@@ -73,7 +74,12 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
   const abortControllerRef = useRef<AbortController | null>(null);
   const inFlightMessageIdsRef = useRef<{ userId: string; assistantId: string } | null>(null);
   const indexingProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadingRef = useRef(false);
   const { settings } = useSettingsStore();
+
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
 
   const clearIndexingProgress = () => {
     if (indexingProgressTimerRef.current) {
@@ -187,6 +193,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
       abortControllerRef.current?.abort();
       abortControllerRef.current = null;
       inFlightMessageIdsRef.current = null;
+      useSidebarStore.getState().setSideBarVisible(false);
       clearIndexingProgress();
       await useAIChatStore.getState().setActiveConversation(detail.conversationId);
       const historyMessages = useAIChatStore
@@ -252,12 +259,16 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     inFlightMessageIdsRef.current = null;
   };
 
-  const closeAssistant = () => {
+  const cancelInFlightRequest = ({ removeMessages }: { removeMessages: boolean }) => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setLoading(false);
-    removeInFlightMessages();
     clearIndexingProgress();
+    if (removeMessages) removeInFlightMessages();
+  };
+
+  const closeAssistant = () => {
+    cancelInFlightRequest({ removeMessages: true });
     setSuggestions([]);
     setSuggestionsLoading(false);
     setGenerationStatus('idle');
@@ -265,7 +276,16 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     setMode('closed');
   };
 
-  useKeyDownActions({ onCancel: closeAssistant, enabled: mode !== 'closed' });
+  const handleCancel = () => {
+    if (loadingRef.current) {
+      cancelInFlightRequest({ removeMessages: false });
+      setGenerationStatus('idle');
+      return;
+    }
+    closeAssistant();
+  };
+
+  useKeyDownActions({ onCancel: handleCancel, enabled: mode !== 'closed' });
 
   const persistCompletedExchange = async (
     question: string,
@@ -300,8 +320,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
   const askAI = async (question: string) => {
     const previousInFlightMessageIds = inFlightMessageIdsRef.current;
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      removeInFlightMessages();
+      cancelInFlightRequest({ removeMessages: true });
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;

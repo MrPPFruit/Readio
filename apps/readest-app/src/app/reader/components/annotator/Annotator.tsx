@@ -96,6 +96,12 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     settings.globalReadSettings.highlightStyles[selectedStyle],
   );
   const androidTouchEndRef = useRef(false);
+  const loadCleanupRef = useRef<(() => void)[]>([]);
+
+  const cleanupLoadListeners = useCallback(() => {
+    loadCleanupRef.current.forEach((cleanup) => cleanup());
+    loadCleanupRef.current = [];
+  }, []);
 
   const showingPopup =
     showAnnotPopup ||
@@ -235,6 +241,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     handleSelectionchange,
     handleShowPopup,
     handleUpToPopup,
+    clearPendingSelectionProcessing,
     handleContextmenu,
   } = useTextSelector(
     bookKey,
@@ -252,8 +259,12 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   };
 
   const onLoad = (event: Event) => {
+    cleanupLoadListeners();
+    clearPendingSelectionProcessing();
     const detail = (event as CustomEvent).detail;
     const { doc, index } = detail;
+    const loadedDoc = detail.doc as Document | undefined;
+    const renderer = view?.renderer;
 
     const handleTouchmove = (ev: TouchEvent) => {
       // Available on iOS, on Android not fired
@@ -264,6 +275,13 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       }
       handleTouchMove(ev);
     };
+    const handleDocTouchEnd = () => handleTouchEnd(doc, index);
+    const handleDocPointerDown = (ev: PointerEvent) => handlePointerDown(doc, index, ev);
+    const handleDocPointerMove = (ev: PointerEvent) => handlePointerMove(doc, index, ev);
+    const handleDocPointerCancel = (ev: PointerEvent) => handlePointerCancel(doc, index, ev);
+    const handleDocPointerUp = (ev: PointerEvent) => handlePointerUp(doc, index, ev);
+    const handleDocSelectionChange = () => handleSelectionchange(doc, index);
+    const handleRendererRepositionScroll = () => repositionPopups();
 
     const handleNativeTouch = (event: CustomEvent) => {
       const ev = event.detail as NativeTouchEventType;
@@ -273,35 +291,52 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
       } else if (ev.type === 'touchend') {
         androidTouchEndRef.current = true;
         handleTouchEnd(doc, index);
-        handlePointerUp(doc, index);
       }
     };
 
     if (appService?.isAndroidApp) {
       listenToNativeTouchEvents();
       eventDispatcher.on('native-touch', handleNativeTouch);
+      loadCleanupRef.current.push(() => eventDispatcher.off('native-touch', handleNativeTouch));
     }
 
     // Attach generic selection listeners for all formats, including PDF.
     // For PDF we only guarantee Copy & Translate; highlight/annotate may be limited by CFI support.
-    view?.renderer?.addEventListener('scroll', handleScroll);
-    // Reposition popups on scroll to keep them in view
-    view?.renderer?.addEventListener('scroll', () => {
-      repositionPopups();
-    });
+    renderer?.addEventListener('scroll', handleScroll);
+    renderer?.addEventListener('scroll', handleRendererRepositionScroll);
+    if (renderer) {
+      loadCleanupRef.current.push(() => {
+        renderer.removeEventListener('scroll', handleScroll);
+        renderer.removeEventListener('scroll', handleRendererRepositionScroll);
+      });
+    }
+
     const opts = { passive: false };
-    detail.doc?.addEventListener('touchstart', handleTouchStart, opts);
-    detail.doc?.addEventListener('touchmove', handleTouchmove, opts);
-    detail.doc?.addEventListener('touchend', handleTouchEnd);
-    detail.doc?.addEventListener('pointerdown', handlePointerDown.bind(null, doc, index), opts);
-    detail.doc?.addEventListener('pointermove', handlePointerMove.bind(null, doc, index), opts);
-    detail.doc?.addEventListener('pointercancel', handlePointerCancel.bind(null, doc, index));
-    detail.doc?.addEventListener('pointerup', handlePointerUp.bind(null, doc, index));
-    detail.doc?.addEventListener('selectionchange', handleSelectionchange.bind(null, doc, index));
+    loadedDoc?.addEventListener('touchstart', handleTouchStart, opts);
+    loadedDoc?.addEventListener('touchmove', handleTouchmove, opts);
+    loadedDoc?.addEventListener('touchend', handleDocTouchEnd);
+    loadedDoc?.addEventListener('pointerdown', handleDocPointerDown, opts);
+    loadedDoc?.addEventListener('pointermove', handleDocPointerMove, opts);
+    loadedDoc?.addEventListener('pointercancel', handleDocPointerCancel);
+    loadedDoc?.addEventListener('pointerup', handleDocPointerUp);
+    loadedDoc?.addEventListener('selectionchange', handleDocSelectionChange);
+
+    if (loadedDoc) {
+      loadCleanupRef.current.push(() => {
+        loadedDoc.removeEventListener('touchstart', handleTouchStart);
+        loadedDoc.removeEventListener('touchmove', handleTouchmove);
+        loadedDoc.removeEventListener('touchend', handleDocTouchEnd);
+        loadedDoc.removeEventListener('pointerdown', handleDocPointerDown);
+        loadedDoc.removeEventListener('pointermove', handleDocPointerMove);
+        loadedDoc.removeEventListener('pointercancel', handleDocPointerCancel);
+        loadedDoc.removeEventListener('pointerup', handleDocPointerUp);
+        loadedDoc.removeEventListener('selectionchange', handleDocSelectionChange);
+      });
+    }
 
     // For PDF selections, enable right-click context menu to directly open translator popup.
-    if (bookData.isFixedLayout) {
-      detail.doc?.addEventListener('contextmenu', (e: Event) => {
+    if (bookData.isFixedLayout && loadedDoc) {
+      const handlePdfContextMenu = (e: Event) => {
         try {
           const sel = doc.getSelection?.();
           if (sel && !sel.isCollapsed) {
@@ -330,11 +365,20 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
         e.preventDefault();
         e.stopPropagation();
         return false;
-      });
+      };
+      loadedDoc.addEventListener('contextmenu', handlePdfContextMenu);
+      loadCleanupRef.current.push(() =>
+        loadedDoc.removeEventListener('contextmenu', handlePdfContextMenu),
+      );
     }
 
     // Disable the default context menu on mobile devices (selection handles suffice)
-    detail.doc?.addEventListener('contextmenu', handleContextmenu);
+    loadedDoc?.addEventListener('contextmenu', handleContextmenu);
+    if (loadedDoc) {
+      loadCleanupRef.current.push(() =>
+        loadedDoc.removeEventListener('contextmenu', handleContextmenu),
+      );
+    }
   };
 
   const onCreateOverlay = (event: Event) => {
@@ -445,6 +489,8 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   };
 
   useFoliateEvents(view, { onLoad, onCreateOverlay, onDrawAnnotation, onShowAnnotation });
+
+  useEffect(() => cleanupLoadListeners, [cleanupLoadListeners]);
 
   useEffect(() => {
     handleShowPopup(showingPopup);

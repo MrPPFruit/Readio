@@ -9,6 +9,22 @@ import { isPointerInsideSelection, Point, TextSelection } from '@/utils/sel';
 import { useInstantAnnotation } from './useInstantAnnotation';
 
 const SELECTION_INPUT_GRACE_MS = 1_200;
+const ANDROID_SELECTION_STABILITY_MS = 100;
+const ANDROID_MAX_SELECTION_TEXT_LENGTH = 2_000;
+
+export const isProbablyInvalidAndroidSelection = ({
+  text,
+  bounds,
+}: {
+  text: string;
+  bounds?: Pick<DOMRect, 'width' | 'height'>;
+}) => {
+  const trimmedText = text.trim();
+  if (!trimmedText) return true;
+  if (trimmedText.length > ANDROID_MAX_SELECTION_TEXT_LENGTH) return true;
+  if (bounds && (bounds.width <= 0 || bounds.height <= 0)) return true;
+  return false;
+};
 
 export const shouldHandleSelectionChange = ({
   osPlatform,
@@ -77,6 +93,8 @@ export const useTextSelector = (
   const lastSelectionInputAt = useRef(0);
   const hasCompletedSelectionInput = useRef(false);
   const hasPendingAndroidSelectionChange = useRef(false);
+  const androidSelectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInstantAnnotating = useRef(false);
   const isInstantAnnotated = useRef(false);
   const annotationStartPoint = useRef<Point | null>(null);
@@ -254,6 +272,17 @@ export const useTextSelector = (
   const processPendingSelectionChange = (doc: Document, index: number) => {
     const sel = doc.getSelection() as Selection;
     if (isValidSelection(sel)) {
+      const range = sel.getRangeAt(0);
+      if (
+        appService?.isAndroidApp &&
+        isProbablyInvalidAndroidSelection({
+          text: sel.toString(),
+          bounds: range.getBoundingClientRect(),
+        })
+      ) {
+        selectionPosition.current = null;
+        return;
+      }
       if (!selectionPosition.current) {
         selectionPosition.current = view?.renderer?.start || null;
       }
@@ -261,6 +290,21 @@ export const useTextSelector = (
     } else {
       selectionPosition.current = null;
     }
+  };
+
+  const clearAndroidSelectionTimer = () => {
+    if (!androidSelectionTimerRef.current) return;
+    clearTimeout(androidSelectionTimerRef.current);
+    androidSelectionTimerRef.current = null;
+  };
+
+  const scheduleAndroidSelectionProcessing = (doc: Document, index: number) => {
+    clearAndroidSelectionTimer();
+    androidSelectionTimerRef.current = setTimeout(() => {
+      androidSelectionTimerRef.current = null;
+      processPendingSelectionChange(doc, index);
+      hasPendingAndroidSelectionChange.current = false;
+    }, ANDROID_SELECTION_STABILITY_MS);
   };
 
   const handleTouchEnd = (doc: Document, index: number) => {
@@ -276,7 +320,8 @@ export const useTextSelector = (
         lastSelectionInputAt: lastSelectionInputAt.current,
       })
     ) {
-      processPendingSelectionChange(doc, index);
+      scheduleAndroidSelectionProcessing(doc, index);
+      return;
     }
     hasPendingAndroidSelectionChange.current = false;
   };
@@ -308,6 +353,12 @@ export const useTextSelector = (
       return;
     }
 
+    if (appService?.isAndroidApp) {
+      hasPendingAndroidSelectionChange.current = true;
+      scheduleAndroidSelectionProcessing(doc, index);
+      return;
+    }
+
     processPendingSelectionChange(doc, index);
   };
   const handleScroll = () => {
@@ -326,12 +377,21 @@ export const useTextSelector = (
   };
 
   const handleShowPopup = (showPopup: boolean) => {
-    setTimeout(() => {
-      if (showPopup && !isPopuped.current) {
+    if (popupTimerRef.current) {
+      clearTimeout(popupTimerRef.current);
+      popupTimerRef.current = null;
+    }
+    if (showPopup) {
+      if (!isPopuped.current) {
         isUpToPopup.current = false;
       }
-      isPopuped.current = showPopup;
-    }, 500);
+      isPopuped.current = true;
+      return;
+    }
+    popupTimerRef.current = setTimeout(() => {
+      isPopuped.current = false;
+      popupTimerRef.current = null;
+    }, 100);
   };
 
   const handleUpToPopup = () => {
@@ -350,6 +410,13 @@ export const useTextSelector = (
     }
     return;
   };
+
+  useEffect(() => {
+    return () => {
+      clearAndroidSelectionTimer();
+      if (popupTimerRef.current) clearTimeout(popupTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const handleSingleClick = (): boolean => {
@@ -391,6 +458,7 @@ export const useTextSelector = (
     handleSelectionchange,
     handleShowPopup,
     handleUpToPopup,
+    clearPendingSelectionProcessing: clearAndroidSelectionTimer,
     handleContextmenu,
   };
 };

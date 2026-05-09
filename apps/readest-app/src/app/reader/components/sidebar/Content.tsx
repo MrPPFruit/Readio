@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import { BookDoc } from '@/libs/document';
 import { useReaderStore } from '@/store/readerStore';
@@ -26,6 +26,7 @@ const SidebarContent: React.FC<{
   const [activeTab, setActiveTab] = useState(config?.viewSettings?.sideBarTab || 'toc');
   const [fade, setFade] = useState(false);
   const [targetTab, setTargetTab] = useState(activeTab);
+  const tabTransitionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMobile = window.innerWidth < 640 || window.innerHeight < 640;
   const aiEnabled = settings?.aiSettings?.enabled ?? false;
 
@@ -36,16 +37,33 @@ const SidebarContent: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sideBarBookKey]);
 
+  useEffect(() => {
+    return () => {
+      if (tabTransitionTimeoutRef.current) clearTimeout(tabTransitionTimeoutRef.current);
+    };
+  }, []);
+
   // reset to toc if history tab was active but AI is now disabled
   useEffect(() => {
     if ((activeTab === 'history' || targetTab === 'history') && !aiEnabled) {
+      if (tabTransitionTimeoutRef.current) {
+        clearTimeout(tabTransitionTimeoutRef.current);
+        tabTransitionTimeoutRef.current = null;
+      }
+      setFade(false);
       setActiveTab('toc');
       setTargetTab('toc');
     }
   }, [aiEnabled, activeTab, targetTab]);
 
   const handleTabChange = (tab: string) => {
+    if (tabTransitionTimeoutRef.current) {
+      clearTimeout(tabTransitionTimeoutRef.current);
+      tabTransitionTimeoutRef.current = null;
+    }
+
     if (activeTab === tab) {
+      setFade(false);
       if (isMobile) {
         setHoveredBookKey(sideBarBookKey);
         setSideBarVisible(false);
@@ -54,11 +72,11 @@ const SidebarContent: React.FC<{
     }
 
     setFade(true);
-    const timeout = setTimeout(() => {
+    tabTransitionTimeoutRef.current = setTimeout(() => {
       setTargetTab(tab);
       setFade(false);
       setConfig(sideBarBookKey!, config);
-      clearTimeout(timeout);
+      tabTransitionTimeoutRef.current = null;
     }, 300);
 
     setActiveTab(tab);
@@ -75,7 +93,14 @@ const SidebarContent: React.FC<{
         )}
       >
         {targetTab === 'history' ? (
-          <ChatHistoryView bookKey={sideBarBookKey} />
+          <div
+            className={clsx('min-h-0 flex-1 transition-opacity duration-300 ease-in-out', {
+              'opacity-0': fade,
+              'opacity-100': !fade,
+            })}
+          >
+            <ChatHistoryView bookKey={sideBarBookKey} />
+          </div>
         ) : (
           <OverlayScrollbarsComponent
             className='min-h-0 flex-1'

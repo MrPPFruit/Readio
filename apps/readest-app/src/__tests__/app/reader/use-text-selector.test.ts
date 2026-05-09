@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isProbablyInvalidAndroidSelection,
   shouldHandleSelectionChange,
   shouldProcessPendingAndroidSelection,
 } from '@/app/reader/hooks/useTextSelector';
@@ -92,5 +93,26 @@ describe('useTextSelector', () => {
         lastSelectionInputAt: 7_000,
       }),
     ).toBe(false);
+  });
+
+  it('keeps intentional single-character Android selections valid', () => {
+    expect(
+      isProbablyInvalidAndroidSelection({ text: '字', bounds: { width: 12, height: 20 } }),
+    ).toBe(false);
+  });
+
+  it('rejects obviously oversized Android selections', () => {
+    expect(
+      isProbablyInvalidAndroidSelection({
+        text: '字'.repeat(2001),
+        bounds: { width: 320, height: 1200 },
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects Android selections with unusable bounds', () => {
+    expect(
+      isProbablyInvalidAndroidSelection({ text: '有效文本', bounds: { width: 0, height: 0 } }),
+    ).toBe(true);
   });
 });
