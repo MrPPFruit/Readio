@@ -15,6 +15,42 @@ export const findParentPath = (toc: TOCItem[], href: string): TOCItem[] => {
   return [];
 };
 
+interface TocLabelItem {
+  label: string;
+  href?: string;
+  subitems?: TocLabelItem[];
+}
+
+const isPartLikeLabel = (label: string) =>
+  /^第[\d一二三四五六七八九十百千万零〇两]+[部卷篇册]/.test(label.trim()) ||
+  /^(part|volume|book)\s+\S+/i.test(label.trim());
+
+const findLabelPath = (toc: TocLabelItem[], href: string): TocLabelItem[] => {
+  for (const item of toc) {
+    if (item.href === href) return [item];
+    if (item.subitems) {
+      const path = findLabelPath(item.subitems, href);
+      if (path.length) return [item, ...path];
+    }
+  }
+  return [];
+};
+
+export const getTocDisplayLabel = (
+  toc: TocLabelItem[] | undefined,
+  currentItem: TocLabelItem | null | undefined,
+): string | undefined => {
+  if (!currentItem?.label) return undefined;
+  if (!toc?.length || !currentItem.href) return currentItem.label;
+
+  const path = findLabelPath(toc, currentItem.href);
+  const parent = path.length >= 2 ? path[path.length - 2] : null;
+  if (!parent?.label || !isPartLikeLabel(parent.label)) return currentItem.label;
+  if (currentItem.label.includes(parent.label)) return currentItem.label;
+
+  return `${parent.label} · ${currentItem.label}`;
+};
+
 const findInSubitems = (item: TOCItem, cfi: string): TOCItem | null => {
   if (!item.subitems?.length) return null;
   return findTocItemBS(item.subitems, cfi);

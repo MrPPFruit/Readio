@@ -224,7 +224,7 @@ describe('indexBook metadata freshness', () => {
     expect(mocks.saveChunks).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
-          chapterTitle: '第五章 线索',
+          chapterTitle: '第一部 小丑 · 第五章 线索',
           href: 'chapter-5.xhtml',
           cfi: 'epubcfi(/6/10)',
         }),

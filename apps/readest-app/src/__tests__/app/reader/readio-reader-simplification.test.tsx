@@ -93,6 +93,7 @@ const readerStoreMock = vi.hoisted(() => ({
   setViewSettings: vi.fn(),
   setPaginationRecalculating: vi.fn(),
   getViewState: vi.fn(() => ({ syncing: false })),
+  getProgress: vi.fn(() => null),
 }));
 
 const bookDataStoreMock = vi.hoisted(() => ({

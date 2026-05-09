@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { BookDoc, SectionItem, TOCItem } from '@/libs/document';
-import { computeBookNav } from '@/services/nav';
+import { computeBookNav, getTocDisplayLabel } from '@/services/nav';
 
 // Polyfill CSS.escape for jsdom — matches book-nav-cache.test.ts.
 if (typeof globalThis['CSS'] === 'undefined') {
@@ -85,6 +85,50 @@ const NAV_WITH_SIX_CHAPTERS = `<?xml version="1.0" encoding="UTF-8"?>
 // Thresholds: section count > 64 AND section count > 8 × flatTocCount.
 const LARGE_SECTION_COUNT = 100;
 const SMALL_SECTION_COUNT = 40;
+
+describe('getTocDisplayLabel', () => {
+  it('includes a part-like parent for nested chapter labels', () => {
+    const toc: TOCItem[] = [
+      {
+        id: 0,
+        label: '第一部 小丑',
+        href: 'part-1.xhtml',
+        index: 0,
+        subitems: [{ id: 1, label: '第五章 线索', href: 'chapter-5.xhtml', index: 1 }],
+      },
+    ];
+
+    expect(getTocDisplayLabel(toc, toc[0]!.subitems![0]!)).toBe('第一部 小丑 · 第五章 线索');
+  });
+
+  it('keeps chapter labels unchanged for ordinary nested parents', () => {
+    const toc: TOCItem[] = [
+      {
+        id: 0,
+        label: '正文',
+        href: 'body.xhtml',
+        index: 0,
+        subitems: [{ id: 1, label: '第五章 线索', href: 'chapter-5.xhtml', index: 1 }],
+      },
+    ];
+
+    expect(getTocDisplayLabel(toc, toc[0]!.subitems![0]!)).toBe('第五章 线索');
+  });
+
+  it('does not duplicate a parent label already included in the child label', () => {
+    const toc: TOCItem[] = [
+      {
+        id: 0,
+        label: '第一部 小丑',
+        href: 'part-1.xhtml',
+        index: 0,
+        subitems: [{ id: 1, label: '第一部 小丑 第五章 线索', href: 'chapter-5.xhtml', index: 1 }],
+      },
+    ];
+
+    expect(getTocDisplayLabel(toc, toc[0]!.subitems![0]!)).toBe('第一部 小丑 第五章 线索');
+  });
+});
 
 describe('computeBookNav nav-enrichment fallback', () => {
   it('adds embedded <nav> items when sections >> flat TOC', async () => {

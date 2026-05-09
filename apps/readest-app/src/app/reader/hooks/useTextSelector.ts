@@ -10,6 +10,7 @@ import { useInstantAnnotation } from './useInstantAnnotation';
 
 const SELECTION_INPUT_GRACE_MS = 1_200;
 const ANDROID_SELECTION_STABILITY_MS = 100;
+const ANDROID_NATIVE_TOUCH_UI_GRACE_MS = 300;
 const ANDROID_MAX_SELECTION_TEXT_LENGTH = 2_000;
 
 export const isProbablyInvalidAndroidSelection = ({
@@ -26,6 +27,27 @@ export const isProbablyInvalidAndroidSelection = ({
   return false;
 };
 
+export const isReaderContentTouchTarget = ({
+  frame,
+  topElement,
+  x,
+  y,
+  now = 0,
+  lastNonReaderTouchAt = 0,
+}: {
+  frame?: Element | null;
+  topElement?: Element | null;
+  x: number;
+  y: number;
+  now?: number;
+  lastNonReaderTouchAt?: number;
+}) => {
+  const rect = frame?.getBoundingClientRect();
+  if (!frame || !rect || topElement !== frame) return false;
+  if (now - lastNonReaderTouchAt <= ANDROID_NATIVE_TOUCH_UI_GRACE_MS) return false;
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+};
+
 export const shouldHandleSelectionChange = ({
   osPlatform,
   isAndroidApp,
@@ -33,6 +55,7 @@ export const shouldHandleSelectionChange = ({
   now,
   lastSelectionInputAt,
   hasCompletedSelectionInput = true,
+  hasActiveReaderSelectionGesture = true,
 }: {
   osPlatform: string;
   isAndroidApp?: boolean;
@@ -40,11 +63,14 @@ export const shouldHandleSelectionChange = ({
   now: number;
   lastSelectionInputAt: number;
   hasCompletedSelectionInput?: boolean;
+  hasActiveReaderSelectionGesture?: boolean;
 }) => {
   const isRecentSelectionInput = now - lastSelectionInputAt <= SELECTION_INPUT_GRACE_MS;
   const isTouchInput = lastPointerType === 'touch' || lastPointerType === 'pen';
   const isAndroid = osPlatform === 'android' && isAndroidApp;
-  if (isAndroid) return isRecentSelectionInput && hasCompletedSelectionInput;
+  if (isAndroid) {
+    return isRecentSelectionInput && hasCompletedSelectionInput && hasActiveReaderSelectionGesture;
+  }
   return isRecentSelectionInput && isTouchInput;
 };
 
@@ -93,6 +119,7 @@ export const useTextSelector = (
   const lastSelectionInputAt = useRef(0);
   const hasCompletedSelectionInput = useRef(false);
   const hasPendingAndroidSelectionChange = useRef(false);
+  const hasActiveReaderSelectionGesture = useRef(false);
   const androidSelectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInstantAnnotating = useRef(false);
@@ -257,13 +284,6 @@ export const useTextSelector = (
       }
     }
   };
-  const handleTouchStart = () => {
-    isTouchStarted.current = true;
-    lastPointerType.current = 'touch';
-    lastSelectionInputAt.current = Date.now();
-    hasCompletedSelectionInput.current = false;
-    hasPendingAndroidSelectionChange.current = false;
-  };
   const handleTouchMove = (ev: TouchEvent) => {
     if (isInstantAnnotating.current) {
       ev.preventDefault();
@@ -298,6 +318,29 @@ export const useTextSelector = (
     androidSelectionTimerRef.current = null;
   };
 
+  const resetSelectionInputTracking = () => {
+    isTouchStarted.current = false;
+    lastPointerType.current = 'mouse';
+    lastSelectionInputAt.current = 0;
+    hasCompletedSelectionInput.current = false;
+    hasPendingAndroidSelectionChange.current = false;
+    hasActiveReaderSelectionGesture.current = false;
+    clearAndroidSelectionTimer();
+  };
+
+  const handleTouchStart = (isReaderContentTouch = true) => {
+    if (!isReaderContentTouch) {
+      resetSelectionInputTracking();
+      return;
+    }
+    isTouchStarted.current = true;
+    lastPointerType.current = 'touch';
+    lastSelectionInputAt.current = Date.now();
+    hasCompletedSelectionInput.current = false;
+    hasPendingAndroidSelectionChange.current = false;
+    hasActiveReaderSelectionGesture.current = true;
+  };
+
   const scheduleAndroidSelectionProcessing = (doc: Document, index: number) => {
     clearAndroidSelectionTimer();
     androidSelectionTimerRef.current = setTimeout(() => {
@@ -308,6 +351,7 @@ export const useTextSelector = (
   };
 
   const handleTouchEnd = (doc: Document, index: number) => {
+    if (!hasActiveReaderSelectionGesture.current) return;
     isTouchStarted.current = false;
     hasCompletedSelectionInput.current = true;
     if (
@@ -340,6 +384,7 @@ export const useTextSelector = (
         now,
         lastSelectionInputAt: lastSelectionInputAt.current,
         hasCompletedSelectionInput: hasCompletedSelectionInput.current,
+        hasActiveReaderSelectionGesture: hasActiveReaderSelectionGesture.current,
       })
     ) {
       hasPendingAndroidSelectionChange.current = shouldProcessPendingAndroidSelection({
@@ -459,6 +504,7 @@ export const useTextSelector = (
     handleShowPopup,
     handleUpToPopup,
     clearPendingSelectionProcessing: clearAndroidSelectionTimer,
+    resetSelectionInputTracking,
     handleContextmenu,
   };
 };

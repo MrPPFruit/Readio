@@ -12,7 +12,7 @@ import { bakeLocationsAndCfis, sortTocItems } from './locations';
 import { buildSectionFragments } from './fragments';
 import { enrichTocFromNavElements } from './enrichment';
 
-export { findParentPath, findTocItemBS } from './lookup';
+export { findParentPath, findTocItemBS, getTocDisplayLabel } from './lookup';
 export type { SectionFragment };
 
 // -----------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isProbablyInvalidAndroidSelection,
+  isReaderContentTouchTarget,
   shouldHandleSelectionChange,
   shouldProcessPendingAndroidSelection,
 } from '@/app/reader/hooks/useTextSelector';
@@ -19,7 +20,7 @@ describe('useTextSelector', () => {
     ).toBe(false);
   });
 
-  it('handles Android selectionchange events after a completed recent touch selection gesture', () => {
+  it('handles Android selectionchange events after a completed recent reader touch selection gesture', () => {
     expect(
       shouldHandleSelectionChange({
         osPlatform: 'android',
@@ -28,8 +29,49 @@ describe('useTextSelector', () => {
         now: 10_000,
         lastSelectionInputAt: 9_400,
         hasCompletedSelectionInput: true,
+        hasActiveReaderSelectionGesture: true,
       }),
     ).toBe(true);
+  });
+
+  it('ignores Android selectionchange events after non-reader UI touches', () => {
+    expect(
+      shouldHandleSelectionChange({
+        osPlatform: 'android',
+        isAndroidApp: true,
+        lastPointerType: 'touch',
+        now: 10_000,
+        lastSelectionInputAt: 9_400,
+        hasCompletedSelectionInput: true,
+        hasActiveReaderSelectionGesture: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects native touches covered by a reader overlay even when coordinates are inside the iframe', () => {
+    const frame = document.createElement('iframe');
+    const overlay = document.createElement('div');
+    frame.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 500, bottom: 800, width: 500, height: 800 }) as DOMRect;
+
+    expect(isReaderContentTouchTarget({ frame, topElement: overlay, x: 250, y: 400 })).toBe(false);
+  });
+
+  it('rejects native touches shortly after a captured non-reader UI touch', () => {
+    const frame = document.createElement('iframe');
+    frame.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 500, bottom: 800, width: 500, height: 800 }) as DOMRect;
+
+    expect(
+      isReaderContentTouchTarget({
+        frame,
+        topElement: frame,
+        x: 250,
+        y: 400,
+        now: 10_000,
+        lastNonReaderTouchAt: 9_950,
+      }),
+    ).toBe(false);
   });
 
   it('ignores Android selectionchange events before touchend to avoid restored WebView selections', () => {

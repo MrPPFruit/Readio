@@ -518,6 +518,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
   };
 
   const showReaderAIButton = settings.aiSettings.showReaderAIEntrypoints;
+  const sectionLabel = useReaderStore.getState().getProgress(bookKey)?.sectionLabel;
 
   return (
     <>
@@ -527,6 +528,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
           source={source}
           gridInsets={gridInsets}
           initialQuestion={initialQuestion}
+          sectionLabel={sectionLabel}
           suggestions={suggestions}
           spoilerProtection={spoilerProtection}
           onSpoilerProtectionChange={setSpoilerProtection}

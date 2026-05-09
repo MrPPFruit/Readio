@@ -55,11 +55,13 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
   const { settings } = useSettingsStore();
   const { isTrafficLightVisible } = useTrafficLight();
   const { trafficLightInFullscreen, setTrafficLightVisibility } = useTrafficLightStore();
-  const { bookKeys, hoveredBookKey } = useReaderStore();
+  const { bookKeys, hoveredBookKey, getProgress } = useReaderStore();
   const { isDarkMode, systemUIVisible, statusBarHeight } = useThemeStore();
   const { isSideBarVisible, getIsSideBarVisible } = useSidebarStore();
   const { getView, getViewSettings, setHoveredBookKey } = useReaderStore();
   const viewSettings = getViewSettings(bookKey);
+  const sectionLabel = getProgress(bookKey)?.sectionLabel;
+  const titleLabel = sectionLabel ? `${bookTitle} - ${sectionLabel}` : bookTitle;
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [headerWidth, setHeaderWidth] = useState(0);
@@ -253,7 +255,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
 
         <div
           role='contentinfo'
-          aria-label={_('Title') + ' - ' + bookTitle}
+          aria-label={_('Title') + ' - ' + titleLabel}
           className={clsx(
             'header-title z-15 bg-base-100 pointer-events-none hidden flex-1 items-center justify-center sm:flex',
             !windowButtonVisible && 'absolute inset-0',
@@ -263,11 +265,16 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
           <div
             aria-hidden='true'
             className={clsx(
-              'line-clamp-1 text-center text-xs font-semibold',
+              'flex min-w-0 flex-col items-center text-center font-sans text-xs leading-tight',
               !windowButtonVisible && 'max-w-[50%]',
             )}
           >
-            {bookTitle}
+            <span className='line-clamp-1 max-w-full font-semibold'>{bookTitle}</span>
+            {sectionLabel && (
+              <span className='text-base-content/60 line-clamp-1 max-w-full text-[11px] font-normal'>
+                {sectionLabel}
+              </span>
+            )}
           </div>
         </div>
 

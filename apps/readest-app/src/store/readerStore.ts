@@ -13,7 +13,13 @@ import { Insets } from '@/types/misc';
 import { EnvConfigType } from '@/services/environment';
 import { FoliateView } from '@/types/view';
 import { DocumentLoader, TOCItem } from '@/libs/document';
-import { BOOK_NAV_VERSION, computeBookNav, hydrateBookNav, updateToc } from '@/services/nav';
+import {
+  BOOK_NAV_VERSION,
+  computeBookNav,
+  getTocDisplayLabel,
+  hydrateBookNav,
+  updateToc,
+} from '@/services/nav';
 import { formatTitle, getMetadataHash, getPrimaryLanguage } from '@/utils/book';
 import { getBaseFilename } from '@/utils/path';
 import { SUPPORTED_LANGNAMES } from '@/services/constants';
@@ -475,7 +481,7 @@ export const useReaderStore = create<ReaderStore>((set, get) => ({
               ...viewState.progress,
               location,
               sectionHref: tocItem?.href,
-              sectionLabel: tocItem?.label,
+              sectionLabel: getTocDisplayLabel(bookData.bookDoc?.toc, tocItem) ?? tocItem?.label,
               section,
               pageinfo,
               timeinfo,

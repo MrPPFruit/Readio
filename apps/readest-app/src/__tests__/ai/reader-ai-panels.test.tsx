@@ -36,6 +36,25 @@ describe('Reader AI panels', () => {
     expect(switchControl.textContent).not.toContain('只根据你已读到的位置回答');
   });
 
+  it('shows the current section label in the ask box when provided', () => {
+    render(
+      <ReaderAIAskBox
+        source='control'
+        sectionLabel='第一部 小丑 · 第五章 线索'
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('当前位置：第一部 小丑 · 第五章 线索')).toBeTruthy();
+  });
+
+  it('does not show current section copy when the ask box has no section label', () => {
+    render(<ReaderAIAskBox source='control' onSubmit={vi.fn()} onClose={vi.fn()} />);
+
+    expect(screen.queryByText(/当前位置/)).toBeNull();
+  });
+
   it('lets the user turn off spoiler protection in the ask box', () => {
     const onSpoilerProtectionChange = vi.fn();
     render(

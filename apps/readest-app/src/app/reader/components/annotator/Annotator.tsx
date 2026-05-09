@@ -20,7 +20,7 @@ import { useFoliateEvents } from '../../hooks/useFoliateEvents';
 import { useNotesSync } from '../../hooks/useNotesSync';
 import { useReadwiseSync } from '../../hooks/useReadwiseSync';
 import { useHardcoverSync } from '../../hooks/useHardcoverSync';
-import { useTextSelector } from '../../hooks/useTextSelector';
+import { isReaderContentTouchTarget, useTextSelector } from '../../hooks/useTextSelector';
 import { Point, Position, TextSelection } from '@/utils/sel';
 import { getPopupPosition, getPosition, getTextFromRange } from '@/utils/sel';
 import { eventDispatcher } from '@/utils/event';
@@ -96,6 +96,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     settings.globalReadSettings.highlightStyles[selectedStyle],
   );
   const androidTouchEndRef = useRef(false);
+  const lastNonReaderTouchAtRef = useRef(0);
   const loadCleanupRef = useRef<(() => void)[]>([]);
 
   const cleanupLoadListeners = useCallback(() => {
@@ -242,6 +243,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     handleShowPopup,
     handleUpToPopup,
     clearPendingSelectionProcessing,
+    resetSelectionInputTracking,
     handleContextmenu,
   } = useTextSelector(
     bookKey,
@@ -266,6 +268,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     const loadedDoc = detail.doc as Document | undefined;
     const renderer = view?.renderer;
 
+    const handleDocTouchStart = () => handleTouchStart(true);
     const handleTouchmove = (ev: TouchEvent) => {
       // Available on iOS, on Android not fired
       // To make the popup not follow the selection while dragging
@@ -282,12 +285,31 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     const handleDocPointerUp = (ev: PointerEvent) => handlePointerUp(doc, index, ev);
     const handleDocSelectionChange = () => handleSelectionchange(doc, index);
     const handleRendererRepositionScroll = () => repositionPopups();
+    const handleRootTouchStart = (event: TouchEvent) => {
+      const frame = loadedDoc?.defaultView?.frameElement;
+      if (event.target !== frame) lastNonReaderTouchAtRef.current = Date.now();
+    };
+
+    const isInsideReaderContent = (ev: NativeTouchEventType) =>
+      isReaderContentTouchTarget({
+        frame: loadedDoc?.defaultView?.frameElement,
+        topElement: document.elementFromPoint(ev.x, ev.y),
+        x: ev.x,
+        y: ev.y,
+        now: Date.now(),
+        lastNonReaderTouchAt: lastNonReaderTouchAtRef.current,
+      });
 
     const handleNativeTouch = (event: CustomEvent) => {
       const ev = event.detail as NativeTouchEventType;
       if (ev.type === 'touchstart') {
         androidTouchEndRef.current = false;
-        handleTouchStart();
+        const isReaderContentTouch = isInsideReaderContent(ev);
+        if (!isReaderContentTouch) {
+          resetSelectionInputTracking();
+          return;
+        }
+        handleTouchStart(true);
       } else if (ev.type === 'touchend') {
         androidTouchEndRef.current = true;
         handleTouchEnd(doc, index);
@@ -312,7 +334,11 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     }
 
     const opts = { passive: false };
-    loadedDoc?.addEventListener('touchstart', handleTouchStart, opts);
+    document.addEventListener('touchstart', handleRootTouchStart, { capture: true, passive: true });
+    loadCleanupRef.current.push(() =>
+      document.removeEventListener('touchstart', handleRootTouchStart, true),
+    );
+    loadedDoc?.addEventListener('touchstart', handleDocTouchStart, opts);
     loadedDoc?.addEventListener('touchmove', handleTouchmove, opts);
     loadedDoc?.addEventListener('touchend', handleDocTouchEnd);
     loadedDoc?.addEventListener('pointerdown', handleDocPointerDown, opts);
@@ -323,7 +349,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
 
     if (loadedDoc) {
       loadCleanupRef.current.push(() => {
-        loadedDoc.removeEventListener('touchstart', handleTouchStart);
+        loadedDoc.removeEventListener('touchstart', handleDocTouchStart);
         loadedDoc.removeEventListener('touchmove', handleTouchmove);
         loadedDoc.removeEventListener('touchend', handleDocTouchEnd);
         loadedDoc.removeEventListener('pointerdown', handleDocPointerDown);

@@ -14,6 +14,7 @@ interface ReaderAIAskBoxProps {
   source: ReaderAIEntrySource;
   gridInsets?: Insets;
   initialQuestion?: string;
+  sectionLabel?: string;
   suggestions?: string[];
   spoilerProtection?: boolean;
   onSpoilerProtectionChange?: (enabled: boolean) => void;
@@ -28,6 +29,7 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
   source,
   gridInsets,
   initialQuestion = '',
+  sectionLabel,
   suggestions: generatedSuggestions,
   spoilerProtection = true,
   onSpoilerProtectionChange,
@@ -138,6 +140,11 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
             >
               默认只根据你读到的位置回答。
             </p>
+            {sectionLabel && (
+              <p className='text-base-content/60 mt-1 line-clamp-1 font-sans text-xs leading-5'>
+                当前位置：{sectionLabel}
+              </p>
+            )}
           </div>
           <div className='flex shrink-0 items-center gap-1'>
             <ReaderAISpoilerGuard

@@ -7,6 +7,7 @@ import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { aiLogger } from './logger';
 import { BM25_VERSION, getCurrentPageContextChunks } from './search/bm25';
+import { getTocDisplayLabel } from '@/services/nav';
 import type {
   AISettings,
   TextChunk,
@@ -150,7 +151,7 @@ function getChapterTitle(
     const hrefMatch = [...candidates]
       .reverse()
       .find((item) => item.href?.split('#')[0] === sectionHref);
-    if (hrefMatch) return hrefMatch.label;
+    if (hrefMatch) return getTocDisplayLabel(toc, hrefMatch) ?? hrefMatch.label;
   }
   return candidates[candidates.length - 1]?.label || `Section ${sectionIndex + 1}`;
 }
