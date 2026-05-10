@@ -34,6 +34,7 @@ export const isReaderContentTouchTarget = ({
   y,
   now = 0,
   lastNonReaderTouchAt = 0,
+  isReaderOverlayVisible = false,
 }: {
   frame?: Element | null;
   topElement?: Element | null;
@@ -41,9 +42,10 @@ export const isReaderContentTouchTarget = ({
   y: number;
   now?: number;
   lastNonReaderTouchAt?: number;
+  isReaderOverlayVisible?: boolean;
 }) => {
   const rect = frame?.getBoundingClientRect();
-  if (!frame || !rect || topElement !== frame) return false;
+  if (isReaderOverlayVisible || !frame || !rect || topElement !== frame) return false;
   if (now - lastNonReaderTouchAt <= ANDROID_NATIVE_TOUCH_UI_GRACE_MS) return false;
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 };

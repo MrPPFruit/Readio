@@ -74,6 +74,22 @@ describe('useTextSelector', () => {
     ).toBe(false);
   });
 
+  it('rejects native touches while reader overlays are visible', () => {
+    const frame = document.createElement('iframe');
+    frame.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 500, bottom: 800, width: 500, height: 800 }) as DOMRect;
+
+    expect(
+      isReaderContentTouchTarget({
+        frame,
+        topElement: frame,
+        x: 250,
+        y: 400,
+        isReaderOverlayVisible: true,
+      }),
+    ).toBe(false);
+  });
+
   it('ignores Android selectionchange events before touchend to avoid restored WebView selections', () => {
     expect(
       shouldHandleSelectionChange({

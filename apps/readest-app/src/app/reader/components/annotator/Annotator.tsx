@@ -12,6 +12,7 @@ import { useThemeStore } from '@/store/themeStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useReaderStore } from '@/store/readerStore';
+import { useSidebarStore } from '@/store/sidebarStore';
 import { useNotebookStore } from '@/store/notebookStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useResponsiveSize } from '@/hooks/useResponsiveSize';
@@ -50,6 +51,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   const { isDarkMode } = useThemeStore();
   const { getConfig, saveConfig, getBookData, updateBooknotes } = useBookDataStore();
   const { getProgress, getView, getViewsById, getViewSettings } = useReaderStore();
+  const { getIsSideBarVisible } = useSidebarStore();
   const { setNotebookVisible, setNotebookNewAnnotation } = useNotebookStore();
   const { listenToNativeTouchEvents } = useDeviceControlStore();
 
@@ -298,6 +300,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
         y: ev.y,
         now: Date.now(),
         lastNonReaderTouchAt: lastNonReaderTouchAtRef.current,
+        isReaderOverlayVisible: getIsSideBarVisible(),
       });
 
     const handleNativeTouch = (event: CustomEvent) => {
