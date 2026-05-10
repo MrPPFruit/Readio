@@ -11,6 +11,7 @@ import { useInstantAnnotation } from './useInstantAnnotation';
 const SELECTION_INPUT_GRACE_MS = 1_200;
 const ANDROID_SELECTION_STABILITY_MS = 100;
 const ANDROID_NATIVE_TOUCH_UI_GRACE_MS = 300;
+const ANDROID_SELECTION_SUPPRESSION_MS = 700;
 const ANDROID_MAX_SELECTION_TEXT_LENGTH = 2_000;
 
 export const isProbablyInvalidAndroidSelection = ({
@@ -46,8 +47,45 @@ export const isReaderContentTouchTarget = ({
 }) => {
   const rect = frame?.getBoundingClientRect();
   if (isReaderOverlayVisible || !frame || !rect || topElement !== frame) return false;
-  if (now - lastNonReaderTouchAt <= ANDROID_NATIVE_TOUCH_UI_GRACE_MS) return false;
+  if (lastNonReaderTouchAt > 0 && now - lastNonReaderTouchAt <= ANDROID_NATIVE_TOUCH_UI_GRACE_MS) {
+    return false;
+  }
   return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+};
+
+export const shouldSuppressAndroidSelection = ({
+  now,
+  selectionSuppressedUntil = 0,
+}: {
+  now: number;
+  selectionSuppressedUntil?: number;
+}) => now < selectionSuppressedUntil;
+
+export const shouldClearAndroidSelectionOnIgnoredChange = ({
+  osPlatform,
+  isAndroidApp,
+  now,
+  selectionSuppressedUntil = 0,
+}: {
+  osPlatform: string;
+  isAndroidApp?: boolean;
+  now: number;
+  selectionSuppressedUntil?: number;
+}) =>
+  osPlatform === 'android' &&
+  !!isAndroidApp &&
+  shouldSuppressAndroidSelection({ now, selectionSuppressedUntil });
+
+export const clearAndroidNativeSelection = (
+  view?: {
+    deselect: () => void;
+    renderer?: { getContents?: () => { doc: Document }[] };
+  } | null,
+) => {
+  for (const { doc } of view?.renderer?.getContents?.() || []) {
+    doc.getSelection()?.removeAllRanges();
+  }
+  view?.deselect();
 };
 
 export const shouldHandleSelectionChange = ({
@@ -58,6 +96,7 @@ export const shouldHandleSelectionChange = ({
   lastSelectionInputAt,
   hasCompletedSelectionInput = true,
   hasActiveReaderSelectionGesture = true,
+  selectionSuppressedUntil = 0,
 }: {
   osPlatform: string;
   isAndroidApp?: boolean;
@@ -66,12 +105,18 @@ export const shouldHandleSelectionChange = ({
   lastSelectionInputAt: number;
   hasCompletedSelectionInput?: boolean;
   hasActiveReaderSelectionGesture?: boolean;
+  selectionSuppressedUntil?: number;
 }) => {
   const isRecentSelectionInput = now - lastSelectionInputAt <= SELECTION_INPUT_GRACE_MS;
   const isTouchInput = lastPointerType === 'touch' || lastPointerType === 'pen';
   const isAndroid = osPlatform === 'android' && isAndroidApp;
   if (isAndroid) {
-    return isRecentSelectionInput && hasCompletedSelectionInput && hasActiveReaderSelectionGesture;
+    return (
+      !shouldSuppressAndroidSelection({ now, selectionSuppressedUntil }) &&
+      isRecentSelectionInput &&
+      hasCompletedSelectionInput &&
+      hasActiveReaderSelectionGesture
+    );
   }
   return isRecentSelectionInput && isTouchInput;
 };
@@ -83,6 +128,7 @@ export const shouldProcessPendingAndroidSelection = ({
   lastPointerType,
   now,
   lastSelectionInputAt,
+  selectionSuppressedUntil = 0,
 }: {
   osPlatform: string;
   isAndroidApp?: boolean;
@@ -90,11 +136,13 @@ export const shouldProcessPendingAndroidSelection = ({
   lastPointerType: string;
   now: number;
   lastSelectionInputAt: number;
+  selectionSuppressedUntil?: number;
 }) =>
   osPlatform === 'android' &&
   !!isAndroidApp &&
   hasPendingSelectionChange &&
   lastPointerType === 'touch' &&
+  !shouldSuppressAndroidSelection({ now, selectionSuppressedUntil }) &&
   now - lastSelectionInputAt <= SELECTION_INPUT_GRACE_MS;
 
 export const useTextSelector = (
@@ -122,6 +170,7 @@ export const useTextSelector = (
   const hasCompletedSelectionInput = useRef(false);
   const hasPendingAndroidSelectionChange = useRef(false);
   const hasActiveReaderSelectionGesture = useRef(false);
+  const androidSelectionSuppressedUntil = useRef(0);
   const androidSelectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInstantAnnotating = useRef(false);
@@ -330,9 +379,19 @@ export const useTextSelector = (
     clearAndroidSelectionTimer();
   };
 
+  const suppressAndroidSelection = (durationMs = ANDROID_SELECTION_SUPPRESSION_MS) => {
+    if (!appService?.isAndroidApp) return;
+    androidSelectionSuppressedUntil.current = Date.now() + durationMs;
+    clearAndroidNativeSelection(view);
+    setTimeout(() => clearAndroidNativeSelection(view), 50);
+    setTimeout(() => clearAndroidNativeSelection(view), 200);
+    setTimeout(() => clearAndroidNativeSelection(view), durationMs);
+    resetSelectionInputTracking();
+  };
+
   const handleTouchStart = (isReaderContentTouch = true) => {
     if (!isReaderContentTouch) {
-      resetSelectionInputTracking();
+      suppressAndroidSelection();
       return;
     }
     isTouchStarted.current = true;
@@ -347,6 +406,15 @@ export const useTextSelector = (
     clearAndroidSelectionTimer();
     androidSelectionTimerRef.current = setTimeout(() => {
       androidSelectionTimerRef.current = null;
+      if (
+        shouldSuppressAndroidSelection({
+          now: Date.now(),
+          selectionSuppressedUntil: androidSelectionSuppressedUntil.current,
+        })
+      ) {
+        hasPendingAndroidSelectionChange.current = false;
+        return;
+      }
       processPendingSelectionChange(doc, index);
       hasPendingAndroidSelectionChange.current = false;
     }, ANDROID_SELECTION_STABILITY_MS);
@@ -364,6 +432,7 @@ export const useTextSelector = (
         lastPointerType: lastPointerType.current,
         now: Date.now(),
         lastSelectionInputAt: lastSelectionInputAt.current,
+        selectionSuppressedUntil: androidSelectionSuppressedUntil.current,
       })
     ) {
       scheduleAndroidSelectionProcessing(doc, index);
@@ -387,8 +456,19 @@ export const useTextSelector = (
         lastSelectionInputAt: lastSelectionInputAt.current,
         hasCompletedSelectionInput: hasCompletedSelectionInput.current,
         hasActiveReaderSelectionGesture: hasActiveReaderSelectionGesture.current,
+        selectionSuppressedUntil: androidSelectionSuppressedUntil.current,
       })
     ) {
+      if (
+        shouldClearAndroidSelectionOnIgnoredChange({
+          osPlatform,
+          isAndroidApp: appService?.isAndroidApp,
+          now,
+          selectionSuppressedUntil: androidSelectionSuppressedUntil.current,
+        })
+      ) {
+        clearAndroidNativeSelection(view);
+      }
       hasPendingAndroidSelectionChange.current = shouldProcessPendingAndroidSelection({
         osPlatform,
         isAndroidApp: appService?.isAndroidApp,
@@ -396,6 +476,7 @@ export const useTextSelector = (
         lastPointerType: lastPointerType.current,
         now,
         lastSelectionInputAt: lastSelectionInputAt.current,
+        selectionSuppressedUntil: androidSelectionSuppressedUntil.current,
       });
       return;
     }
@@ -459,7 +540,10 @@ export const useTextSelector = (
   };
 
   useEffect(() => {
+    const handleAndroidSelectionSuppress = () => suppressAndroidSelection();
+    eventDispatcher.on('android-selection-suppress', handleAndroidSelectionSuppress);
     return () => {
+      eventDispatcher.off('android-selection-suppress', handleAndroidSelectionSuppress);
       clearAndroidSelectionTimer();
       if (popupTimerRef.current) clearTimeout(popupTimerRef.current);
     };
