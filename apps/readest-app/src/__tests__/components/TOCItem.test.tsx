@@ -1,16 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fireEvent, render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 
 import { StaticListRow } from '@/app/reader/components/sidebar/TOCItem';
 import { TOCItem } from '@/libs/document';
-
-const eventDispatcherMock = vi.hoisted(() => ({
-  dispatch: vi.fn(),
-}));
-
-vi.mock('@/utils/event', () => ({
-  eventDispatcher: eventDispatcherMock,
-}));
 
 vi.mock('@/utils/misc', () => ({
   getContentMd5: (s: string) => s,
@@ -40,75 +32,7 @@ const defaultProps = {
   onItemClick: vi.fn(),
 };
 
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
-});
-
-describe('TOCItem Android selection suppression', () => {
-  it('dispatches selection suppression before clicking a leaf item', () => {
-    const item = makeLeafItem();
-    const calls: string[] = [];
-    eventDispatcherMock.dispatch.mockImplementation(() => calls.push('dispatch'));
-    const onItemClick = vi.fn(() => calls.push('click'));
-
-    render(
-      <StaticListRow
-        {...defaultProps}
-        onItemClick={onItemClick}
-        flatItem={{ item, depth: 0, index: 0 }}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('treeitem'));
-
-    expect(eventDispatcherMock.dispatch).toHaveBeenCalledWith('android-selection-suppress');
-    expect(onItemClick).toHaveBeenCalledWith(item);
-    expect(calls).toEqual(['dispatch', 'click']);
-  });
-
-  it('dispatches selection suppression before toggling a parent item', () => {
-    const item = makeParentItem();
-    const calls: string[] = [];
-    eventDispatcherMock.dispatch.mockImplementation(() => calls.push('dispatch'));
-    const onToggleExpand = vi.fn(() => calls.push('toggle'));
-
-    render(
-      <StaticListRow
-        {...defaultProps}
-        onToggleExpand={onToggleExpand}
-        flatItem={{ item, depth: 0, index: 0, isExpanded: false }}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button'));
-
-    expect(eventDispatcherMock.dispatch).toHaveBeenCalledWith('android-selection-suppress');
-    expect(onToggleExpand).toHaveBeenCalledWith(item);
-    expect(calls).toEqual(['dispatch', 'toggle']);
-  });
-
-  it('dispatches selection suppression before keyboard navigation on a leaf item', () => {
-    const item = makeLeafItem();
-    const calls: string[] = [];
-    eventDispatcherMock.dispatch.mockImplementation(() => calls.push('dispatch'));
-    const onItemClick = vi.fn(() => calls.push('click'));
-
-    render(
-      <StaticListRow
-        {...defaultProps}
-        onItemClick={onItemClick}
-        flatItem={{ item, depth: 0, index: 0 }}
-      />,
-    );
-
-    fireEvent.keyDown(screen.getByRole('treeitem'), { key: 'Enter' });
-
-    expect(eventDispatcherMock.dispatch).toHaveBeenCalledWith('android-selection-suppress');
-    expect(onItemClick).toHaveBeenCalledWith(item);
-    expect(calls).toEqual(['dispatch', 'click']);
-  });
-});
+afterEach(() => cleanup());
 
 describe('TOCItem accessibility', () => {
   it('treeitem has aria-label containing the chapter title', () => {

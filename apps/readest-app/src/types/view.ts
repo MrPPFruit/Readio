@@ -38,7 +38,11 @@ export interface Renderer extends HTMLElement {
   setStyles?: (css: string) => void;
   primaryIndex: number;
   getContents: () => { doc: Document; index?: number; overlayer?: unknown }[];
-  scrollToAnchor?: (anchor: number | Range, reason?: string, smooth?: boolean) => void;
+  scrollToAnchor?: (
+    anchor: number | Range | Element,
+    reasonOrSelect?: string | boolean,
+    smooth?: boolean,
+  ) => void | Promise<void>;
   addEventListener: (
     type: string,
     listener: EventListener,

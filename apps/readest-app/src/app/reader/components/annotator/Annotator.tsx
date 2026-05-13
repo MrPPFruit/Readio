@@ -245,6 +245,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     handleShowPopup,
     handleUpToPopup,
     clearPendingSelectionProcessing,
+    resetSelectionInputTracking,
     handleContextmenu,
   } = useTextSelector(
     bookKey,
@@ -308,15 +309,13 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
         androidTouchEndRef.current = false;
         const isReaderContentTouch = isInsideReaderContent(ev);
         if (!isReaderContentTouch) {
-          handleTouchStart(false);
+          resetSelectionInputTracking();
           return;
         }
         handleTouchStart(true);
       } else if (ev.type === 'touchend') {
         androidTouchEndRef.current = true;
         handleTouchEnd(doc, index);
-      } else if (ev.type === 'touchcancel') {
-        handleTouchStart(false);
       }
     };
 

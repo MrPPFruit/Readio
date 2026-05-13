@@ -1,13 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
-  clearAndroidNativeSelection,
   isProbablyInvalidAndroidSelection,
   isReaderContentTouchTarget,
-  shouldClearAndroidSelectionOnIgnoredChange,
   shouldHandleSelectionChange,
   shouldProcessPendingAndroidSelection,
-  shouldSuppressAndroidSelection,
 } from '@/app/reader/hooks/useTextSelector';
 
 describe('useTextSelector', () => {
@@ -51,94 +48,6 @@ describe('useTextSelector', () => {
     ).toBe(false);
   });
 
-  it('ignores Android selectionchange events during an app UI suppression window', () => {
-    expect(
-      shouldHandleSelectionChange({
-        osPlatform: 'android',
-        isAndroidApp: true,
-        lastPointerType: 'touch',
-        now: 10_000,
-        lastSelectionInputAt: 9_400,
-        hasCompletedSelectionInput: true,
-        hasActiveReaderSelectionGesture: true,
-        selectionSuppressedUntil: 10_500,
-      }),
-    ).toBe(false);
-  });
-
-  it('clears Android native selection on ignored selectionchange events during suppression', () => {
-    expect(
-      shouldClearAndroidSelectionOnIgnoredChange({
-        osPlatform: 'android',
-        isAndroidApp: true,
-        now: 10_000,
-        selectionSuppressedUntil: 10_500,
-      }),
-    ).toBe(true);
-  });
-
-  it('does not clear Android native selection on ignored selectionchange events after suppression', () => {
-    expect(
-      shouldClearAndroidSelectionOnIgnoredChange({
-        osPlatform: 'android',
-        isAndroidApp: true,
-        now: 10_600,
-        selectionSuppressedUntil: 10_500,
-      }),
-    ).toBe(false);
-  });
-
-  it('handles Android selectionchange events after suppression expires for a completed reader gesture', () => {
-    expect(
-      shouldHandleSelectionChange({
-        osPlatform: 'android',
-        isAndroidApp: true,
-        lastPointerType: 'touch',
-        now: 10_600,
-        lastSelectionInputAt: 10_100,
-        hasCompletedSelectionInput: true,
-        hasActiveReaderSelectionGesture: true,
-        selectionSuppressedUntil: 10_500,
-      }),
-    ).toBe(true);
-  });
-
-  it('suppresses Android selection while inside the suppression window', () => {
-    expect(shouldSuppressAndroidSelection({ now: 10_000, selectionSuppressedUntil: 10_500 })).toBe(
-      true,
-    );
-  });
-
-  it('stops suppressing Android selection after the suppression window', () => {
-    expect(shouldSuppressAndroidSelection({ now: 10_600, selectionSuppressedUntil: 10_500 })).toBe(
-      false,
-    );
-  });
-
-  it('clears Android native selection ranges from reader contents when suppressing app UI touches', () => {
-    const removeAllRanges = vi.fn();
-    const doc = {
-      getSelection: () => ({ removeAllRanges }),
-    } as unknown as Document;
-    const view = {
-      deselect: vi.fn(),
-      renderer: { getContents: () => [{ doc }] },
-    };
-
-    clearAndroidNativeSelection(view);
-
-    expect(removeAllRanges).toHaveBeenCalledOnce();
-    expect(view.deselect).toHaveBeenCalledOnce();
-  });
-
-  it('accepts native touches on the reader iframe when there is no recent non-reader UI touch', () => {
-    const frame = document.createElement('iframe');
-    frame.getBoundingClientRect = () =>
-      ({ left: 0, top: 0, right: 500, bottom: 800, width: 500, height: 800 }) as DOMRect;
-
-    expect(isReaderContentTouchTarget({ frame, topElement: frame, x: 250, y: 400 })).toBe(true);
-  });
-
   it('rejects native touches covered by a reader overlay even when coordinates are inside the iframe', () => {
     const frame = document.createElement('iframe');
     const overlay = document.createElement('div');
@@ -146,14 +55,6 @@ describe('useTextSelector', () => {
       ({ left: 0, top: 0, right: 500, bottom: 800, width: 500, height: 800 }) as DOMRect;
 
     expect(isReaderContentTouchTarget({ frame, topElement: overlay, x: 250, y: 400 })).toBe(false);
-  });
-
-  it('rejects native touches outside the reader iframe bounds', () => {
-    const frame = document.createElement('iframe');
-    frame.getBoundingClientRect = () =>
-      ({ left: 0, top: 0, right: 500, bottom: 800, width: 500, height: 800 }) as DOMRect;
-
-    expect(isReaderContentTouchTarget({ frame, topElement: frame, x: 600, y: 400 })).toBe(false);
   });
 
   it('rejects native touches shortly after a captured non-reader UI touch', () => {
@@ -237,20 +138,6 @@ describe('useTextSelector', () => {
         lastSelectionInputAt: 9_500,
       }),
     ).toBe(true);
-  });
-
-  it('ignores pending Android selections during an app UI suppression window', () => {
-    expect(
-      shouldProcessPendingAndroidSelection({
-        osPlatform: 'android',
-        isAndroidApp: true,
-        hasPendingSelectionChange: true,
-        lastPointerType: 'touch',
-        now: 10_000,
-        lastSelectionInputAt: 9_500,
-        selectionSuppressedUntil: 10_500,
-      }),
-    ).toBe(false);
   });
 
   it('ignores pending Android selections from stale gestures', () => {

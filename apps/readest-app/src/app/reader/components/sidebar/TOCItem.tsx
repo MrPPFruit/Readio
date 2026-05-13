@@ -1,7 +1,6 @@
 import clsx from 'clsx';
 import React, { useCallback } from 'react';
 import { TOCItem } from '@/libs/document';
-import { eventDispatcher } from '@/utils/event';
 import { getContentMd5 } from '@/utils/misc';
 
 const createExpanderIcon = (isExpanded: boolean) => {
@@ -56,7 +55,6 @@ const TOCItemView = React.memo<{
     (event: React.MouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      eventDispatcher.dispatch('android-selection-suppress');
       onToggleExpand(item);
     },
     [item, onToggleExpand],
@@ -65,7 +63,6 @@ const TOCItemView = React.memo<{
   const handleClickItem = useCallback(
     (event: React.MouseEvent | React.KeyboardEvent) => {
       event.preventDefault();
-      eventDispatcher.dispatch('android-selection-suppress');
       onItemClick(item);
     },
     [item, onItemClick],
