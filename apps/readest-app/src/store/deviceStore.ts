@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import { interceptKeys, getScreenBrightness, setScreenBrightness } from '@/utils/bridge';
+import {
+  interceptKeys,
+  getScreenBrightness,
+  setScreenBrightness,
+  hasWriteSettingsPermission,
+  requestWriteSettingsPermission,
+} from '@/utils/bridge';
 import { eventDispatcher } from '@/utils/event';
 import { NativeTouchEventType } from '@/types/system';
 
@@ -27,6 +33,8 @@ type DeviceControlState = {
   backKeyInterceptionCount: number;
   getScreenBrightness: () => Promise<number>; // 0.0 to 1.0
   setScreenBrightness: (brightness: number) => Promise<void>; // brightness: 0.0 to 1.0
+  hasWriteSettingsPermission: () => Promise<boolean>;
+  requestWriteSettingsPermission: () => Promise<boolean>;
   acquireVolumeKeyInterception: () => void;
   releaseVolumeKeyInterception: () => void;
   acquireBackKeyInterception: () => void;
@@ -93,5 +101,15 @@ export const useDeviceControlStore = create<DeviceControlState>((set, get) => ({
 
   setScreenBrightness: async (brightness: number) => {
     await setScreenBrightness({ brightness });
+  },
+
+  hasWriteSettingsPermission: async () => {
+    const res = await hasWriteSettingsPermission();
+    return res.granted;
+  },
+
+  requestWriteSettingsPermission: async () => {
+    const res = await requestWriteSettingsPermission();
+    return res.success;
   },
 }));

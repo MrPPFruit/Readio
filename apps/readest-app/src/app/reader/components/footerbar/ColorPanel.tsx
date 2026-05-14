@@ -32,7 +32,12 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
   const { settings } = useSettingsStore();
-  const { getScreenBrightness, setScreenBrightness } = useDeviceControlStore();
+  const {
+    getScreenBrightness,
+    setScreenBrightness,
+    hasWriteSettingsPermission,
+    requestWriteSettingsPermission,
+  } = useDeviceControlStore();
   const { themeMode, themeColor, isDarkMode, setThemeMode, setThemeColor } = useThemeStore();
 
   const [screenBrightnessValue, setScreenBrightnessValue] = useState(
@@ -54,7 +59,6 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
     () =>
       debounce(async (value: number) => {
         saveSysSettings(envConfig, 'screenBrightness', value);
-        saveSysSettings(envConfig, 'autoScreenBrightness', false);
         await setScreenBrightness(value / 100);
       }, 100),
     [envConfig, setScreenBrightness],
@@ -65,9 +69,23 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
       if (!appService?.isMobileApp) return;
 
       setScreenBrightnessValue(value);
+
+      if (appService?.isAndroidApp) {
+        const granted = await hasWriteSettingsPermission();
+        if (!granted) {
+          await requestWriteSettingsPermission();
+          return;
+        }
+      }
+
       debouncedSetScreenBrightness(value);
     },
-    [appService, debouncedSetScreenBrightness],
+    [
+      appService,
+      debouncedSetScreenBrightness,
+      hasWriteSettingsPermission,
+      requestWriteSettingsPermission,
+    ],
   );
 
   const themeModeOptions = [

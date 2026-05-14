@@ -497,19 +497,11 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
     fun get_screen_brightness(invoke: Invoke) {
         val ret = JSObject()
         try {
-            val window = activity.window
-            val layoutParams = window.attributes
-            val brightness = layoutParams.screenBrightness
-
-            if (brightness >= 0.0f) {
-                ret.put("brightness", brightness.toDouble())
-            } else {
-                val systemBrightness = Settings.System.getInt(
-                    activity.contentResolver,
-                    Settings.System.SCREEN_BRIGHTNESS
-                )
-                ret.put("brightness", systemBrightness / 255.0)
-            }
+            val systemBrightness = Settings.System.getInt(
+                activity.contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS
+            )
+            ret.put("brightness", systemBrightness / 255.0)
         } catch (e: Exception) {
             ret.put("error", e.message)
             ret.put("brightness", -1.0)
@@ -523,25 +515,64 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         val ret = JSObject()
         try {
             val brightness = args.brightness?.toFloat()
-            val layoutParams = activity.window.attributes
 
             if (brightness == null || brightness < 0.0) {
-                layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-            } else {
-                if (brightness > 1.0) {
-                    invoke.reject("Brightness must be between 0.0 and 1.0, or null to use system brightness")
-                    return
-                }
-                layoutParams.screenBrightness = brightness
+                invoke.reject("Brightness must be between 0.0 and 1.0")
+                return
+            }
+            if (brightness > 1.0) {
+                invoke.reject("Brightness must be between 0.0 and 1.0")
+                return
             }
 
+            if (!Settings.System.canWrite(activity)) {
+                invoke.reject("WRITE_SETTINGS permission not granted")
+                return
+            }
+
+            val systemValue = (brightness * 255).toInt().coerceIn(0, 255)
+            Settings.System.putInt(
+                activity.contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS,
+                systemValue
+            )
+
+            // Also update window brightness so the change is immediately visible
+            val layoutParams = activity.window.attributes
+            layoutParams.screenBrightness = brightness
             activity.window.attributes = layoutParams
+
             ret.put("success", true)
         } catch (e: Exception) {
             ret.put("success", false)
             ret.put("error", e.message)
         }
         invoke.resolve(ret)
+    }
+
+    @Command
+    fun has_write_settings_permission(invoke: Invoke) {
+        val ret = JSObject()
+        ret.put("granted", Settings.System.canWrite(activity))
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun request_write_settings_permission(invoke: Invoke) {
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                data = Uri.parse("package:${activity.packageName}")
+            }
+            activity.startActivity(intent)
+            val ret = JSObject()
+            ret.put("success", true)
+            invoke.resolve(ret)
+        } catch (e: Exception) {
+            val ret = JSObject()
+            ret.put("success", false)
+            ret.put("error", e.message)
+            invoke.resolve(ret)
+        }
     }
 
     @Command
