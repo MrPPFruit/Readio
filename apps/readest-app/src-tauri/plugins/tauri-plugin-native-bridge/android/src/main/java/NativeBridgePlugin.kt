@@ -497,16 +497,11 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
     fun get_screen_brightness(invoke: Invoke) {
         val ret = JSObject()
         try {
-            val windowBrightness = activity.window.attributes.screenBrightness
-            if (windowBrightness >= 0f) {
-                ret.put("brightness", windowBrightness.toDouble())
-            } else {
-                val systemBrightness = Settings.System.getInt(
-                    activity.contentResolver,
-                    Settings.System.SCREEN_BRIGHTNESS
-                )
-                ret.put("brightness", systemBrightness / 255.0)
-            }
+            val systemBrightness = Settings.System.getInt(
+                activity.contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS
+            )
+            ret.put("brightness", systemBrightness / 255.0)
         } catch (e: Exception) {
             ret.put("error", e.message)
             ret.put("brightness", -1.0)
@@ -521,19 +516,24 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
         try {
             val brightness = args.brightness?.toFloat()
 
-            if (brightness == null || brightness < 0.0) {
-                invoke.reject("Brightness must be between 0.0 and 1.0")
-                return
-            }
-            if (brightness > 1.0) {
+            if (brightness == null || brightness < 0.0 || brightness > 1.0) {
                 invoke.reject("Brightness must be between 0.0 and 1.0")
                 return
             }
 
-            val layoutParams = activity.window.attributes
-            layoutParams.screenBrightness = brightness
-            activity.window.attributes = layoutParams
+            if (!Settings.System.canWrite(activity)) {
+                ret.put("success", false)
+                ret.put("error", "no_write_settings_permission")
+                invoke.resolve(ret)
+                return
+            }
 
+            val systemValue = (brightness * 255).toInt().coerceIn(0, 255)
+            Settings.System.putInt(
+                activity.contentResolver,
+                Settings.System.SCREEN_BRIGHTNESS,
+                systemValue
+            )
             ret.put("success", true)
         } catch (e: Exception) {
             ret.put("success", false)
@@ -549,6 +549,30 @@ class NativeBridgePlugin(private val activity: Activity): Plugin(activity) {
             val layoutParams = activity.window.attributes
             layoutParams.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             activity.window.attributes = layoutParams
+            ret.put("success", true)
+        } catch (e: Exception) {
+            ret.put("success", false)
+            ret.put("error", e.message)
+        }
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun check_write_settings_permission(invoke: Invoke) {
+        val ret = JSObject()
+        ret.put("granted", Settings.System.canWrite(activity))
+        invoke.resolve(ret)
+    }
+
+    @Command
+    fun request_write_settings_permission(invoke: Invoke) {
+        val ret = JSObject()
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                data = Uri.parse("package:${activity.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            activity.startActivity(intent)
             ret.put("success", true)
         } catch (e: Exception) {
             ret.put("success", false)
