@@ -216,26 +216,14 @@ export async function setScreenBrightness(
   return result;
 }
 
-export interface WriteSettingsPermissionResponse {
-  granted: boolean;
-  error?: string;
-}
-
-export interface RequestWriteSettingsPermissionResponse {
+interface ResetScreenBrightnessResponse {
   success: boolean;
   error?: string;
 }
 
-export async function hasWriteSettingsPermission(): Promise<WriteSettingsPermissionResponse> {
-  const result = await invoke<WriteSettingsPermissionResponse>(
-    'plugin:native-bridge|has_write_settings_permission',
-  );
-  return result;
-}
-
-export async function requestWriteSettingsPermission(): Promise<RequestWriteSettingsPermissionResponse> {
-  const result = await invoke<RequestWriteSettingsPermissionResponse>(
-    'plugin:native-bridge|request_write_settings_permission',
+export async function resetScreenBrightness(): Promise<ResetScreenBrightnessResponse> {
+  const result = await invoke<ResetScreenBrightnessResponse>(
+    'plugin:native-bridge|reset_screen_brightness',
   );
   return result;
 }

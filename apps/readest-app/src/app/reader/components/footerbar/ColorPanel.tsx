@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PiSun, PiMoon } from 'react-icons/pi';
-import { TbSunMoon } from 'react-icons/tb';
+import { TbSunMoon, TbSunHigh } from 'react-icons/tb';
 import { useEnv } from '@/context/EnvContext';
 import { useThemeStore } from '@/store/themeStore';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -32,28 +32,27 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
   const { settings } = useSettingsStore();
-  const {
-    getScreenBrightness,
-    setScreenBrightness,
-    hasWriteSettingsPermission,
-    requestWriteSettingsPermission,
-  } = useDeviceControlStore();
+  const { getScreenBrightness, setScreenBrightness, resetScreenBrightness } =
+    useDeviceControlStore();
   const { themeMode, themeColor, isDarkMode, setThemeMode, setThemeColor } = useThemeStore();
 
   const [screenBrightnessValue, setScreenBrightnessValue] = useState(
     settings.screenBrightness >= 0 ? settings.screenBrightness : SCREEN_BRIGHTNESS_LIMITS.DEFAULT,
   );
+  const [autoBrightness, setAutoBrightness] = useState(settings.autoScreenBrightness);
+
   useEffect(() => {
     if (!appService?.isMobileApp) return;
     if (actionTab !== 'color') return;
 
-    getScreenBrightness().then((brightness) => {
-      if (brightness >= 0.0 && brightness <= 1.0) {
-        const screenBrightness = Math.round(brightness * 100);
-        setScreenBrightnessValue(screenBrightness);
-      }
-    });
-  }, [actionTab, appService, getScreenBrightness]);
+    if (autoBrightness) {
+      getScreenBrightness().then((brightness) => {
+        if (brightness >= 0.0 && brightness <= 1.0) {
+          setScreenBrightnessValue(Math.round(brightness * 100));
+        }
+      });
+    }
+  }, [actionTab, appService, autoBrightness, getScreenBrightness]);
 
   const debouncedSetScreenBrightness = useMemo(
     () =>
@@ -70,23 +69,39 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
 
       setScreenBrightnessValue(value);
 
-      if (appService?.isAndroidApp) {
-        const granted = await hasWriteSettingsPermission();
-        if (!granted) {
-          await requestWriteSettingsPermission();
-          return;
-        }
+      if (autoBrightness) {
+        setAutoBrightness(false);
+        saveSysSettings(envConfig, 'autoScreenBrightness', false);
       }
 
       debouncedSetScreenBrightness(value);
     },
-    [
-      appService,
-      debouncedSetScreenBrightness,
-      hasWriteSettingsPermission,
-      requestWriteSettingsPermission,
-    ],
+    [appService, autoBrightness, envConfig, debouncedSetScreenBrightness],
   );
+
+  const handleAutoBrightnessToggle = useCallback(async () => {
+    const next = !autoBrightness;
+    setAutoBrightness(next);
+    saveSysSettings(envConfig, 'autoScreenBrightness', next);
+
+    if (next) {
+      await resetScreenBrightness();
+      const brightness = await getScreenBrightness();
+      if (brightness >= 0.0 && brightness <= 1.0) {
+        setScreenBrightnessValue(Math.round(brightness * 100));
+      }
+    } else {
+      await setScreenBrightness(screenBrightnessValue / 100);
+      saveSysSettings(envConfig, 'screenBrightness', screenBrightnessValue);
+    }
+  }, [
+    autoBrightness,
+    envConfig,
+    screenBrightnessValue,
+    getScreenBrightness,
+    resetScreenBrightness,
+    setScreenBrightness,
+  ]);
 
   const themeModeOptions = [
     { mode: 'light' as const, label: _('Light Mode'), Icon: PiSun },
@@ -112,32 +127,43 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
       }}
     >
       {appService?.hasScreenBrightness && (
-        <Slider
-          label={_('Screen Brightness')}
-          initialValue={screenBrightnessValue}
-          bubbleLabel={`${screenBrightnessValue}`}
-          minIcon={<PiSun size={16} />}
-          maxIcon={<PiSun size={24} />}
-          onChange={handleScreenBrightnessChange}
-          min={SCREEN_BRIGHTNESS_LIMITS.MIN}
-          max={SCREEN_BRIGHTNESS_LIMITS.MAX}
-          valueToPosition={(value: number, min: number, max: number): number => {
-            if (value <= min) return 0;
-            if (value >= max) return 100;
-            // Use exponential mapping: position = 100 * ((value/max)^0.5)
-            const normalized = value / max;
-            const position = Math.pow(normalized, 0.5) * 100;
-            return position;
-          }}
-          positionToValue={(position: number, min: number, max: number): number => {
-            if (position <= 0) return min;
-            if (position >= 100) return max;
-            // Inverse of the above: value = max * (position/100)^2
-            const normalized = position / 100;
-            const value = Math.pow(normalized, 2) * max;
-            return Math.max(min, Math.min(max, value));
-          }}
-        />
+        <div className='flex w-full items-center gap-2 px-2'>
+          <div className={clsx('min-w-0 flex-1', autoBrightness && 'opacity-40')}>
+            <Slider
+              label={_('Screen Brightness')}
+              initialValue={screenBrightnessValue}
+              bubbleLabel={`${screenBrightnessValue}`}
+              minIcon={<PiSun size={16} />}
+              maxIcon={<PiSun size={24} />}
+              onChange={handleScreenBrightnessChange}
+              min={SCREEN_BRIGHTNESS_LIMITS.MIN}
+              max={SCREEN_BRIGHTNESS_LIMITS.MAX}
+              valueToPosition={(value: number, min: number, max: number): number => {
+                if (value <= min) return 0;
+                if (value >= max) return 100;
+                const normalized = value / max;
+                return Math.pow(normalized, 0.5) * 100;
+              }}
+              positionToValue={(position: number, min: number, max: number): number => {
+                if (position <= 0) return min;
+                if (position >= 100) return max;
+                const normalized = position / 100;
+                return Math.max(min, Math.min(max, Math.pow(normalized, 2) * max));
+              }}
+            />
+          </div>
+          <button
+            type='button'
+            onClick={handleAutoBrightnessToggle}
+            className={clsx(
+              'flex flex-shrink-0 flex-col items-center justify-center rounded-lg px-2 py-1 text-[10px] transition-all',
+              autoBrightness ? 'bg-primary/20 text-primary' : 'bg-base-100 text-base-content/60',
+            )}
+          >
+            <TbSunHigh size={14} />
+            <span className='mt-0.5'>{_('Auto')}</span>
+          </button>
+        </div>
       )}
 
       <div className='w-full'>

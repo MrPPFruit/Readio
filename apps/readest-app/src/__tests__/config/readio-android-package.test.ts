@@ -57,9 +57,9 @@ describe('Readio Android package identity', () => {
     ) as { bundle: { android: { versionCode: number } } };
     const gitignore = readFileSync(resolve(projectRoot, '.gitignore'), 'utf8');
 
-    expect(packageJson.version).toBe('0.1.0-alpha.12');
+    expect(packageJson.version).toBe('0.1.0-alpha.13');
     expect(packageJson.scripts['build-readio-apk']).toBe('bash scripts/build-readio-apk.sh');
-    expect(tauriConfig.bundle.android.versionCode).toBe(1001012);
+    expect(tauriConfig.bundle.android.versionCode).toBe(1001013);
     expect(gitignore).toContain('/apks/');
     expect(gitignore).toContain('/artifacts/');
   });

@@ -63,7 +63,7 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
   const { sideBarBookKey } = useSidebarStore();
   const { hoveredBookKey } = useReaderStore();
   const { showSystemUI, dismissSystemUI } = useThemeStore();
-  const { setScreenBrightness } = useDeviceControlStore();
+  const { setScreenBrightness, resetScreenBrightness } = useDeviceControlStore();
   const { acquireBackKeyInterception, releaseBackKeyInterception } = useDeviceControlStore();
   const { isSideBarVisible, isSideBarPinned } = useSidebarStore();
   const { getIsSideBarVisible, setSideBarVisible } = useSidebarStore();
@@ -87,8 +87,12 @@ const Reader: React.FC<{ ids?: string }> = ({ ids }) => {
   useEffect(() => {
     const brightness = settings.screenBrightness;
     const autoBrightness = settings.autoScreenBrightness;
-    if (appService?.hasScreenBrightness && !autoBrightness && brightness >= 0) {
-      setScreenBrightness(brightness / 100);
+    if (appService?.hasScreenBrightness) {
+      if (autoBrightness) {
+        resetScreenBrightness();
+      } else if (brightness >= 0) {
+        setScreenBrightness(brightness / 100);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appService]);
