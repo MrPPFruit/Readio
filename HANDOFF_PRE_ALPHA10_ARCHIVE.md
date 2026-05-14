@@ -1,0 +1,354 @@
+# HANDOFF archive before alpha.10 concise rewrite
+
+Archived on 2026-05-14. This preserves the long pre-alpha.10 handoff history that was replaced by the concise current-state HANDOFF.md.
+
+Source: git HEAD version of HANDOFF.md before this working-tree rewrite.
+
+---
+
+# HANDOFF
+
+## APK 发布校验规则
+
+- GitHub Release asset 是公开分发 APK 的 source of truth。
+- 每次上传 APK 后，必须从 GitHub Release 下载回来并校验 SHA-256；下载包 hash 与上传前本地包一致，才算发布完成。
+- 不要用后续重新构建后的本地 `apks/` 文件反推已发布包；Android APK 可能不是 byte-for-byte 可复现构建，本地产物也会被下一次构建覆盖。
+- 回归测试若面向用户分发包，应安装 GitHub Release 下载包，而不是默认使用本地 `apks/` 最新文件。
+- 当前已验证 release：`v0.1.0-alpha.10`，asset `readio-v0.1.0-alpha.10-android-arm64-release.apk`，GitHub SHA-256 `d8ebcf40edb698d0dd1c9f7c1cf4fbe5291079200345898ae81a584db6ff8769`。
+
+## 2026-05-07 最新状态
+
+- alpha.9 Reader AI 改进批次已实现并完成模拟器验证，尚未提交/发布。
+- 当前 APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.9-android-arm64-release.apk`，大小约 53M，mtime `May 7 01:01`。
+- APK 构建成功，签名验证通过：v2=true、v3=true、signers=1。
+- 已安装到 `emulator-5554`：`adb install -r ...alpha.9...apk` 输出 `Success`；`com.ppg.readio/.MainActivity` 可启动。
+- 基础 UI 验证通过：首页显示 Continue Reading 与 Alice 图书；进入 Alice 阅读器成功。
+- Reader AI 入口验证通过：阅读器控制层打开后，实际设备坐标约 `980,1696` 点击 AI 按钮，底部 Reader AI Ask Sheet 正常弹出；最终截图证据 `/tmp/readio_review_fixed_ai_panel_2.png`。
+- 关键修复：Android WebView 内阅读器控制层会在 `pointerup/click` 前收起浮动按钮，因此 `ReaderAIButton` 改为主键 `onPointerDown` 立即打开 AI，并在后续 `click` 中去重，避免双触发；非主键 pointerdown 不打开 AI。
+- Code Reviewer 后追加修复：同位置引用来源保持服务排序，避免 citation `[1]` 跳错源；Android selectionchange 在长按/拖拽过程中先缓存，touchend 后处理，避免真实长按选区被丢弃。
+- 验证证据：Vitest 实际跑全量 `189 files / 3475 tests passed`；`pnpm --filter @readest/readest-app lint` 通过，`808 files checked`；`pnpm --filter @readest/readest-app exec tsgo --noEmit` 通过；APK rebuild/install/smoke test 通过。
+- 当前工作树包含 Reader AI/RAG/selection/annotator 相关未提交改动，以及未跟踪 `.codepilot-uploads/`；提交前需复查 diff，避免误提交无关上传目录。
+- GitHub 默认分支已于 2026-04-28 切换为 `readio/restart-readest-base`；该分支是 Readio 后续主线。旧默认分支 `feature/m0-spikes` 保留为 M0 spike 历史归档，不再作为 PR/release 基准。
+
+## 当前目标与进度
+
+- Readio 主线已迁移到 Readest-based 独立工作区：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest`。
+- 当前分支：`readio/restart-readest-base`。
+- Readest 上游基线 commit：`528a13e36aaba55b03ccf4b1039c5d8e91060f11`。
+- Phase 1 基线验证已完成：依赖安装、vendor setup、lint、Next export build、Tauri Android debug APK build、模拟器安装与启动均通过。
+- Phase 2 AGPL 合规基线已完成：保留 `LICENSE`，新增 `NOTICE`，更新 README 与 About 中的 Readest/AGPL attribution。
+- Phase 3 第一批功能减法已完成：通过 `apps/readest-app/src/config/features.ts` 隐藏 auth/cloud sync/commerce/AI/OPDS/TTS/annotations/notebook/proofreading/translation/parallel read/updater/telemetry/advanced settings 等入口，同时保留本地书库、导入、阅读器与基础阅读设置。
+- Phase 4 最小品牌化已完成：可见 app shell、PWA metadata、About/menu/help/update/window title、Android launcher/activity label 改为 Readio；Android package id/namespace/identifier、deep-link scheme、updater endpoints、icons、storage/data dir 常量保持不变。
+- Phase 5 本地 EPUB 阅读闭环已完成：用 `/Users/ppg/Downloads/《诡秘之主》精校版全本[完美排版].epub` 在 Android 模拟器完成真实文件选择器导入、书库展示、阅读器打开、字号重排、目录跳转、重启后恢复阅读位置。
+- Phase 6 第一批 Readio MVP 定制已开始：书库首页新增“继续阅读”优先入口，基于未完成阅读进度自动选择最近阅读书籍；空书库改为本地导入优先的 Readio 首次使用入口，并增加 EPUB 优先、PDF 基础支持的边界提示；阅读设置已进一步收敛为中文小说核心项，默认隐藏高级 Font Face、英文 Hyphenation、列宽/列数、底部电量等高级布局项；源文件缺失时的阅读器打开失败提示已产品化为“重新导入本地书后继续阅读”的恢复建议，并将 toast 阅读时间从 2 秒延长到 5 秒；继续阅读的微小进度显示已修正为开始阅读但未读完时至少显示 1%，并同步到卡片进度条；禁用的 auth/account 直达路由已在 layout 层导回本地书库，避免隐藏入口后仍能进入账号/订阅流程；禁用的 AI/TTS/OPDS/commerce API route 已返回 404，避免隐藏入口后仍可直接调用后端能力；middleware 已对禁用功能 API 的 preflight 返回 404；启动层已硬化：auth/telemetry/cloudSync/updater 禁用时不再初始化 Supabase auth、PostHog session、transfer manager、books sync 或 updater/release-notes 网络检查。这些改动均通过目标测试、type check、lint、cleaned-env Next export build 验证。
+- 已生成浅层 APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/readio-readest-debug.apk`，Phase 6 最新重建后大小 859,727,731 bytes。
+- Phase 7 第一批小步修复已完成：Android package id/namespace/Tauri identifier 从上游 `com.bilingify.readest` 切换为 `com.ppg.readio`，可与原 Readest 共存安装；空书库首屏 Readio 本地导入引导补齐 zh-CN/zh-TW 翻译；已生成签名 release APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/readio-phase7-package-i18n-release-signed.apk`，大小 52.6 MB。
+- 导入图书后的首页 polish 已完成：当 `readioFeatures.cloudSync=false` 时，书籍卡片不再显示上传/下载云图标与传输进度入口；右上角菜单的 `Always Show Status Bar` 已收进 `advancedSettings`，Readio MVP 默认隐藏，避免用户在书库页看到无明显效果的状态栏开关。
+- 阅读模式第一批减法已完成：隐藏已禁用的 KOReader/Readwise/Hardcover Sync、Proofread、Export Annotations、Parallel Read 菜单项；阅读页顶部隐藏翻译/语言按钮与画笔/快捷动作按钮；长按选中文本弹出的工具仅保留复制、划线、笔记，隐藏搜索、词典、百科、翻译、朗读。已通过 TDD、lint、代码审查、cleaned-env Next build、Android debug APK 构建、模拟器安装与截图验证。
+- 版本与 APK 产物规则已建立：当前 Readio 版本为 `0.1.0-alpha.4`，Android `versionCode=1001004`；后续默认用 `pnpm --filter @readest/readest-app build-readio-apk` 构建签名 release 小包，统一输出到 `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/`。
+- 版本更新规则：每个可给用户安装/真机测试的 APK 都必须递增 `apps/readest-app/package.json` 的 prerelease 号与 `apps/readest-app/src-tauri/tauri.conf.json` 的 Android `versionCode`；开发中小改可累计在当前 alpha，不必每次提交都 bump；一旦 APK 已发给用户或完成模拟器验收并准备进入下一批功能，下一包必须升到下一个 alpha；`versionCode` 使用 `major*1000000 + minor*10000 + patch*1000 + alphaN`，例如 `0.1.0-alpha.4` 对应 `1001004`。
+- Readio UI 设计规范已落地到 `READIO_UI_DESIGN.md`。后续 UI 必须优先使用现有 DaisyUI/主题 token（`base-*`、`primary`、`text-base-content/*`、`border-base-content/10`、`ring-primary` 等），禁止普通 UI 定死色调；阅读器正文使用 `--theme-bg-color` / `--theme-fg-color` / `--theme-primary-color`，React 外壳使用 `data-theme` 下的 DaisyUI class。AI 助手必须按阅读器内底部 sheet / 完整面板方向实现，不得退回通用聊天页或系统弹窗风格。
+- 已生成并安装验证小包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.1-android-arm64-release.apk`，大小 52.6 MB；APK 元信息为 `package=com.ppg.readio`、`versionName=0.1.0-alpha.1`、`versionCode=1001001`，签名 v2/v3 验证通过，模拟器 `adb install -r` 成功。
+- M1.1 阅读器精简收口 + 翻页唯一化已完成：`scrolled` / `noContinuousScroll` 在 serializer、settings store、reader store、book data store、settings service、viewer renderer 与 command registry/UI 测试中被锁定为分页模式；模拟器从书库继续阅读进入阅读页后，右侧点击翻到下一页，行为设置页只显示“翻页/点击翻页/点击两侧翻页”等分页项，无滚动模式入口。本批还包含前序阅读 UI 精简延续改动，提交/交付时不要描述成纯滚动模式修复。
+- 2026-04-26 alpha.2 已冻结为可交付测试包：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.2-android-arm64-release.apk`。签名 v2/v3 验证通过，模拟器安装/启动通过，书架渲染、继续阅读进入正文、本地 EPUB 导入、导入后打开阅读均通过。
+- 2026-04-27 alpha.3 TXT 导入 + 文件过滤批次已实现并验证：本地导入 Android picker 传入 `SUPPORTED_BOOK_EXTS`，TXT 文件先经 `convertTxtToEpubWithFallback` 转 EPUB 再进入 `DocumentLoader`；Android `content://.../document/msf%3A42` 这类 URI 由原生 bridge 查询 `OpenableColumns.DISPLAY_NAME` 获取真实文件名（如 `sample.txt`），避免被 URI 尾段 `msf:42` 误判为非 TXT 后提示“文件已损坏”。版本已 bump 到 `0.1.0-alpha.3` / Android `versionCode=1001003`。已构建签名 release APK：`/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.3-android-arm64-release.apk`，签名 v2/v3 通过，模拟器安装/启动通过，书库可见真实 TXT 导入书 `雪中悍刀行`。
+
+## 已尝试路径
+
+### 有效
+
+- `pnpm install` 成功安装 monorepo 依赖。
+- `pnpm --filter @readest/readest-app setup-vendors` 成功准备 PDF.js / SimpleCC vendor assets。
+- `pnpm --filter @readest/readest-app lint` 通过。
+- 清理宿主 Next 私有环境变量后，`pnpm --filter @readest/readest-app build` 通过：需要 unset `__NEXT_PRIVATE_STANDALONE_CONFIG`、`__NEXT_PRIVATE_ORIGIN`、`NEXT_PRIVATE_STANDALONE`、`TURBOPACK`。
+- 安装 Rust/rustup、Android Rust targets、Android SDK 36、NDK `29.0.13846066` 后，Tauri Rust/NDK 链路通过。
+- Android APK 构建需显式避开 Tauri 自动 Android 环境安装检测，并确保 cargo 在 PATH：`PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir apps/readest-app exec tauri android build --debug --apk -t aarch64`。
+- `tauri android init --ci --skip-targets-install` 生成缺失的 Android Gradle root 文件后，Gradle 工程可识别。
+- Gradle TLS 依赖解析失败通过停止 daemon 并用 `--no-daemon --refresh-dependencies` 重新解析解决。
+- Android resource linking 失败通过修正 `apps/readest-app/src-tauri/gen/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` 中 launcher background 引用解决：`@color/ic_launcher_background` → `@drawable/ic_launcher_background`。
+- Android 文件选择器真实导入 EPUB 成功；针对 `content://com.android.externalstorage.documents/...` open-with/import 失败，已用 TDD 修复 `apps/readest-app/src/services/nativeAppService.ts`：content URI 先复制到 app cache，再通过 `NativeFile` 打开。
+- Android TXT 导入失败的根因是 `content://com.android.providers.downloads.documents/document/msf%3A42` 这类 URI 没有扩展名，旧逻辑用 URI 尾段 `msf:42` 作为文件名，导致 `.txt` 检测失败并把原始 TXT 送进 `DocumentLoader`，最终映射成“文件已损坏”；有效修复是 Android 原生 bridge 通过 `OpenableColumns.DISPLAY_NAME` 查询真实 display name，复制到 cache 后把真实路径和文件名返回给 JS。
+- React 组件测试的 `React.act is not a function` 根因是宿主 `NODE_ENV=production` 让 `react-dom/test-utils` 加载 production build；已在 `apps/readest-app/vitest.setup.ts` 将 Vitest 环境固定为 `NODE_ENV=test`，目标组件测试恢复通过。
+
+### 无效 / 已排除
+
+- 原始 `next build` 失败不是 `next.config.mjs` 本身问题，而是宿主 `__NEXT_PRIVATE_STANDALONE_CONFIG` 污染导致 Next 读取错误 standalone config。
+- Gradle TLS 失败不是全局断网；Python/Java 单独访问相关 POM 返回 200。
+- Android build 失败不是 Rust/NDK 缺失；当前已越过前端、Rust、Gradle 依赖和资源链接阶段。
+- 后台任务 `bj4w1mhpu` 失败输出为 `failed to ensure Android environment: Skipping Android Studio command line tools installation`，根因是该任务触发了 Tauri 的 Android 环境 ensure 流程；这不是项目代码编译失败，后续已用显式 cargo PATH + cleaned env 的构建命令绕过自动安装检测并成功出 APK。
+- 系统 Gradle 9.4.1 会触发 generated Android `buildSrc` Kotlin DSL 编译错误（`Unresolved reference 'exec'/'workingDir'/'executable'/'args'`）；当前工程应使用 `apps/readest-app/src-tauri/gen/android/gradlew` 的 Gradle 8.14.3 wrapper 或通过 Tauri 调用 wrapper。
+
+## 当前阻塞与风险
+
+- 当前没有 Phase 1/2/3/4/5 技术阻塞。
+- 构建命令必须继续清理宿主 Next 私有环境变量，否则可能复现 `generate is not a function`。
+- Android 构建命令必须继续带上 stable toolchain 的 cargo PATH，否则可能复现 `cargo metadata` 找不到 cargo；同时避免再次触发 Tauri 自动 Android command line tools 安装检测。给用户体验安装包时默认使用 `apps/readest-app/scripts/build-readio-apk.sh`，不要再给 400MB+ debug APK，除非专门需要调试符号。
+- Android generated files 可能被后续 `tauri android init` 或 icon 命令重写；`ic_launcher.xml` 的一行修正、`res/values/strings.xml` 的 Readio label 需要在后续重生成后复查。
+- `adb shell am start --grant-read-uri-permission` 不能模拟真实 DocumentsUI 授权，会报 `UID 2000 does not have permission ...`; Phase 5 真实验证应使用系统文件选择器导入。
+- 功能减法已覆盖 UI / command palette / route entry、auth/account layout、AI/TTS/OPDS/Stripe/IAP API route、middleware preflight 与 startup provider 副作用；后续如要进一步瘦身，应单独评估移除 auth/sync/payment/AI/TTS 依赖与包体影响。
+- 源文件缺失提示当前仍沿用 Toast 的超时 callback 自动回书库行为，只是把阅读时间延长到 5 秒；如用户实测困惑，后续应改为显式操作按钮，而不是自动跳转。
+- Android package id 已改为 `com.ppg.readio`，用于避免与已安装的上游 Readest (`com.bilingify.readest`) 冲突；后续若再改为更正式的 `io.readio.app` 必须单独批次验证。
+
+## 下一步可执行动作
+
+1. `0.1.0-alpha.4` 是当前下一测试批次版本号；进入新功能/体验 polish 时继续在此版本上迭代，出包前按版本规则确认是否需要再 bump。
+2. alpha.3 TXT 导入 + 文件过滤已完成；签名 APK 已安装到模拟器并通过最小验收。下一步让用户真机复验 TXT 导入。
+3. 优先按用户实测反馈做阅读模式用户视角 polish；可重点看笔记/书签入口优先级、阅读设置文案、更多菜单信息密度，以及更接近多看的阅读控制布局。
+4. 可选深化：继续检查 auth/sync/telemetry providers 和支付/AI/TTS 依赖是否需要更硬的 no-op/移除，以减少包体与运行期表面积。
+5. 后续独立批次：如需要更正式发布命名，可从当前 `com.ppg.readio` 迁移到 `io.readio.app`，并重新验证安装/启动/文件关联。
+
+## 关键文件路径
+
+- `package.json`
+- `apps/readest-app/package.json`
+- `apps/readest-app/.env.tauri`
+- `apps/readest-app/next.config.mjs`
+- `apps/readest-app/src-tauri/tauri.conf.json`
+- `apps/readest-app/src-tauri/gen/android/build.gradle.kts`
+- `apps/readest-app/src-tauri/gen/android/buildSrc/build.gradle.kts`
+- `apps/readest-app/src-tauri/gen/android/app/build.gradle.kts`
+- `apps/readest-app/src-tauri/gen/android/app/src/main/AndroidManifest.xml`
+- `apps/readest-app/src-tauri/gen/android/app/src/main/java/com/ppg/readio/MainActivity.kt`
+- `apps/readest-app/src-tauri/gen/android/app/src/main/java/com/ppg/readio/generated/TauriActivity.kt`
+- `apps/readest-app/src/__tests__/config/readio-android-package.test.ts`
+- `apps/readest-app/src/__tests__/i18n/readio-empty-library-translations.test.ts`
+- `apps/readest-app/public/locales/zh-CN/translation.json`
+- `apps/readest-app/public/locales/zh-TW/translation.json`
+- `apps/readest-app/src-tauri/gen/android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`
+- `apps/readest-app/src-tauri/gen/android/app/src/main/res/values/strings.xml`
+- `apps/readest-app/public/manifest.json`
+- `apps/readest-app/src/pages/_app.tsx`
+- `apps/readest-app/src/app/layout.tsx`
+- `apps/readest-app/src/middleware.ts`
+- `apps/readest-app/src/app/auth/layout.tsx`
+- `apps/readest-app/src/app/user/layout.tsx`
+- `apps/readest-app/src/config/features.ts`
+- `apps/readest-app/src/app/library/components/SettingsMenu.tsx`
+- `apps/readest-app/src/app/library/components/BookItem.tsx`
+- `apps/readest-app/src/__tests__/app/library/readio-home-polish.test.tsx`
+- `apps/readest-app/src/app/library/components/ImportMenu.tsx`
+- `apps/readest-app/src/app/library/components/ContinueReadingCard.tsx`
+- `apps/readest-app/src/app/library/components/ReadingProgress.tsx`
+- `apps/readest-app/src/app/library/components/LibraryEmptyState.tsx`
+- `apps/readest-app/src/app/library/utils/libraryUtils.ts`
+- `apps/readest-app/src/__tests__/app/library/continue-reading-card.test.tsx`
+- `apps/readest-app/src/__tests__/app/library/reading-progress.test.tsx`
+- `apps/readest-app/src/__tests__/app/library/library-empty-state.test.tsx`
+- `apps/readest-app/src/__tests__/app/library/library-utils-extended.test.ts`
+- `apps/readest-app/src/__tests__/app/disabled-route-layouts.test.tsx`
+- `apps/readest-app/src/__tests__/app/api/disabled-feature-routes.test.ts`
+- `apps/readest-app/src/__tests__/middleware.test.ts`
+- `apps/readest-app/src/__tests__/components/settings/readio-reader-settings.test.tsx`
+- `apps/readest-app/src/services/errors.ts`
+- `apps/readest-app/src/__tests__/services/errors.test.ts`
+- `apps/readest-app/src/app/reader/components/ReaderContent.tsx`
+- `apps/readest-app/src/app/reader/components/HeaderBar.tsx`
+- `apps/readest-app/src/app/reader/components/sidebar/BookMenu.tsx`
+- `apps/readest-app/src/app/reader/components/annotator/AnnotationTools.tsx`
+- `apps/readest-app/src/__tests__/app/reader/reader-content-open-error.test.tsx`
+- `apps/readest-app/src/__tests__/app/reader/readio-reader-simplification.test.tsx`
+- `apps/readest-app/vitest.setup.ts`
+- `apps/readest-app/src/components/settings/SettingsDialog.tsx`
+- `apps/readest-app/src/services/commandRegistry.ts`
+- `apps/readest-app/src/services/nativeAppService.ts`
+- `apps/readest-app/src/hooks/useFileSelector.ts`
+- `apps/readest-app/src/services/bookService.ts`
+- `apps/readest-app/src/__tests__/services/native-app-service-open-file.test.ts`
+- `apps/readest-app/src/__tests__/services/import-txt.test.ts`
+- `apps/readest-app/src/__tests__/hooks/use-file-selector.test.ts`
+- `apps/readest-app/src/components/AboutWindow.tsx`
+- `apps/readest-app/src/components/SupportLinks.tsx`
+- `apps/readest-app/src/components/UpdaterWindow.tsx`
+- `apps/readest-app/src/utils/nav.ts`
+- `apps/readest-app/src-tauri/src/lib.rs`
+- `apps/readest-app/src-tauri/src/macos/menu.rs`
+- `NOTICE`
+- `readio-readest-debug.apk`
+- `readio-phase4-final-home.png`
+- `readio-phase5-after-picker-import.png`
+- `readio-phase5-reader-open.png`
+- `readio-phase5-font-size-changed.png`
+- `readio-phase5-toc-panel.png`
+- `readio-phase5-restored-position.png`
+- `readio-phase6-home.png`
+- `readio-phase6-latest-home.png`
+- `readio-reader-simplification-debug.apk`
+- `readio-reader-simplification-toolbar.png`
+- `readio-reader-simplification-overflow-open.png`
+- `readio-reader-simplification-selection.png`
+
+## 验证证据
+
+- PASS: `pnpm install`
+- PASS: `pnpm --filter @readest/readest-app setup-vendors`
+- PASS: `pnpm --filter @readest/readest-app lint`
+- PASS: cleaned-env `pnpm --filter @readest/readest-app build`
+- PASS: `tauri android init --ci --skip-targets-install`
+- PASS: cleaned-env `pnpm --dir apps/readest-app exec tauri android build --debug --apk -t aarch64`
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
+  - Shallow copy: `readio-readest-debug.apk`，Phase 4 复验后约 819.9 MB。
+- PASS: Phase 4 spec review returned `SPEC_APPROVED` after excluding Phase 1/2/3 out-of-scope changes.
+- PASS: Phase 4 code quality review returned `QUALITY_APPROVED`.
+- PASS: `adb install -r readio-readest-debug.apk` 输出 `Success`。
+- PASS: `adb shell am start -n com.bilingify.readest/.MainActivity` 可启动。
+- PASS: `adb shell pm list packages | grep -E 'readest|readio'` 显示 `package:com.bilingify.readest`。
+- PASS: `adb shell cmd package resolve-activity --brief com.bilingify.readest` resolves `com.bilingify.readest/.MainActivity`.
+- PASS manual screenshot: `readio-phase4-final-home.png` 显示 Phase 4 APK 可启动到 library empty state 与 Import Books 按钮。
+- PASS source checks: `tauri.conf.json` productName 为 Readio，identifier/deep-link/updater endpoints 未改；Android `build.gradle.kts` namespace/applicationId 仍为 `com.bilingify.readest`。
+- PASS TDD RED: `pnpm --dir apps/readest-app exec vitest run src/__tests__/services/native-app-service-open-file.test.ts --reporter=verbose` 初始失败于 `path does not have a basename`，复现 Android document content URI bug。
+- PASS TDD GREEN: 同一目标测试通过，验证 Android document `content://` 会复制到 cache 后打开。
+- PASS Phase 5 lint/build: cleaned-env `pnpm --filter @readest/readest-app lint`、cleaned-env `pnpm --filter @readest/readest-app build` 均通过。
+- PASS Phase 5 Android build: cleaned-env `pnpm --dir apps/readest-app exec tauri android build --debug --apk -t aarch64` 通过，并复制到 `readio-readest-debug.apk`。
+- PASS Phase 5 install: `adb install -r readio-readest-debug.apk` 输出 `Success`。
+- PASS real EPUB import: 通过 Android 系统文件选择器选中测试 EPUB，书库显示《诡秘之主》，toast 显示 `Successfully imported 1 book`；截图 `readio-phase5-after-picker-import.png`。
+- PASS reader open: `readio-phase5-reader-open.png` 显示 EPUB 封面页成功进入阅读器。
+- PASS text rendering: `readio-phase5-text-page.png` 显示中文正文/版权页渲染正常。
+- PASS font setting: `readio-phase5-font-size-changed.png` 显示字号从 16 调到 29 后页面重排生效。
+- PASS TOC: `readio-phase5-toc-panel.png` 显示目录可打开并列出章节。
+- PASS progress restore: `readio-phase5-restored-position.png` 显示重启后重新打开书恢复到第 4 / 10397 页附近。
+- PASS Phase 6 RED selector test: `getContinueReadingBook is not a function`，证明继续阅读选择器测试先失败。
+- PASS Phase 6 GREEN selector/card tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/library-utils-extended.test.ts src/__tests__/app/library/continue-reading-card.test.tsx --reporter=verbose`，40 tests passed。
+- PASS Phase 6 RED empty-state test: 缺少 `LibraryEmptyState` 组件时，`library-empty-state.test.tsx` import resolution 失败。
+- PASS Phase 6 GREEN library tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/library-empty-state.test.tsx src/__tests__/app/library/continue-reading-card.test.tsx src/__tests__/app/library/library-utils-extended.test.ts --reporter=verbose`，41 tests passed。
+- PASS Phase 6 RED PDF hint test: `library-empty-state.test.tsx` 找不到 EPUB/PDF 边界提示文本。
+- PASS Phase 6 GREEN PDF hint test: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/library-empty-state.test.tsx --reporter=verbose` 通过。
+- PASS Phase 6 RED settings simplification test: `readio-reader-settings.test.tsx` 初始失败于 Font Face 与 Hyphenation 仍可见，证明测试能捕捉设置未收敛问题。
+- PASS Phase 6 GREEN settings simplification test: `pnpm --dir apps/readest-app exec vitest run src/__tests__/components/settings/readio-reader-settings.test.tsx --reporter=verbose`，2 tests passed。
+- PASS Phase 6 focused tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/components/settings/readio-reader-settings.test.tsx src/__tests__/app/library/library-empty-state.test.tsx src/__tests__/app/library/continue-reading-card.test.tsx src/__tests__/app/library/library-utils-extended.test.ts --reporter=verbose`，43 tests passed。
+- PASS Phase 6 RED source recovery unit test: `errors.test.ts` 初始失败于 `getReaderOpenErrorMessage is not a function`，证明缺少 reader-open 错误文案映射。
+- PASS Phase 6 GREEN source recovery unit test: `pnpm --dir apps/readest-app exec vitest run src/__tests__/services/errors.test.ts --reporter=verbose`，2 tests passed。
+- PASS Phase 6 RED ReaderContent recovery integration test: `reader-content-open-error.test.tsx` 初始失败，实际 toast 仍为 `Unable to open book`。
+- PASS Phase 6 GREEN ReaderContent recovery tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/services/errors.test.ts src/__tests__/app/reader/reader-content-open-error.test.tsx --reporter=verbose`，3 tests passed。
+- PASS Phase 6 expanded focused tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/services/errors.test.ts src/__tests__/app/reader/reader-content-open-error.test.tsx src/__tests__/components/settings/readio-reader-settings.test.tsx src/__tests__/app/library/library-empty-state.test.tsx src/__tests__/app/library/continue-reading-card.test.tsx src/__tests__/app/library/library-utils-extended.test.ts --reporter=verbose`，46 tests passed。
+- PASS Phase 6 type check: `pnpm --dir apps/readest-app exec tsgo --noEmit`。
+- PASS Phase 6 lint: `pnpm --filter @readest/readest-app lint`，742 files checked。
+- PASS Phase 6 build: cleaned-env `pnpm --filter @readest/readest-app build`，Next export build compiled and exported successfully。
+- PASS Phase 6 code review: Code Reviewer returned `APPROVED`，仅保留 P3 UX note：Toast callback 仍会 5 秒后自动回书库，当前因 reader 内无法恢复而暂不扩成显式按钮。
+- PASS Phase 6 Android build: cleaned-env + explicit cargo PATH `pnpm --dir apps/readest-app exec tauri android build --debug --apk -t aarch64` 通过。
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
+  - Shallow copy: `readio-readest-debug.apk`，859,727,403 bytes。
+- PASS Phase 6 APK stat: generated APK 与 shallow copy 均为 859,727,403 bytes。
+- PASS Phase 6 install: `adb install -r readio-readest-debug.apk` 输出 `Success`。
+- PASS Phase 6 launch: `adb shell am start -n com.bilingify.readest/.MainActivity` 可启动；`adb shell pidof com.bilingify.readest` 返回进程号；`adb shell cmd package resolve-activity --brief com.bilingify.readest` resolves `com.bilingify.readest/.MainActivity`。
+- PASS Phase 6 screenshot: `readio-phase6-home.png` 显示已安装 APK 启动到书库首页，并出现 Continue Reading 卡片、书籍封面、导入入口；同时暴露第 4 / 10397 页仍显示 `0%` 的微小进度 UX 问题。
+- PASS Phase 6 RED reading progress test: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/reading-progress.test.tsx --reporter=verbose` 初始失败，DOM 显示 `aria-label="0%"` 与 `<span>0%</span>`，证明微小进度会被四舍五入为 0%。
+- PASS Phase 6 GREEN reading progress tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/reading-progress.test.tsx src/__tests__/app/library/continue-reading-card.test.tsx src/__tests__/app/library/library-utils-extended.test.ts --reporter=verbose`，3 files passed / 42 tests passed；文本进度与卡片进度条在已开始但未读完时至少显示 1%。
+- PASS Phase 6 updated focused tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/reading-progress.test.tsx src/__tests__/app/library/continue-reading-card.test.tsx src/__tests__/app/library/library-empty-state.test.tsx src/__tests__/app/library/library-utils-extended.test.ts src/__tests__/services/errors.test.ts src/__tests__/app/reader/reader-content-open-error.test.tsx src/__tests__/components/settings/readio-reader-settings.test.tsx --reporter=verbose`，7 files passed / 48 tests passed。
+- PASS Phase 6 updated type check: `pnpm --dir apps/readest-app exec tsgo --noEmit`。
+- PASS Phase 6 updated lint: `pnpm --dir Program_Readio_Readest --filter @readest/readest-app lint`，743 files checked。
+- PASS Phase 6 updated build: cleaned-env `pnpm --dir Program_Readio_Readest --filter @readest/readest-app build`，Next export build compiled and exported successfully。
+- PASS Phase 6 RED disabled account route test: `disabled-route-layouts.test.tsx` 初始失败，`ProfileLayout` 仍渲染 `Account route`，证明 `/user` 直达路由未被功能开关硬化。
+- PASS Phase 6 GREEN disabled route layout test: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/disabled-route-layouts.test.tsx --reporter=verbose`，1 file passed / 2 tests passed；`/auth/*` 与 `/user/*` layout 在 auth/commerce 禁用时返回 null 并 `router.replace('/library')`。
+- PASS Phase 6 disabled route regression tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/disabled-route-layouts.test.tsx src/__tests__/app/library/reading-progress.test.tsx src/__tests__/app/library/continue-reading-card.test.tsx src/__tests__/app/library/library-empty-state.test.tsx src/__tests__/app/library/library-utils-extended.test.ts src/__tests__/services/errors.test.ts src/__tests__/app/reader/reader-content-open-error.test.tsx src/__tests__/components/settings/readio-reader-settings.test.tsx --reporter=verbose`，8 files passed / 50 tests passed。
+- PASS Phase 6 disabled route type check: `pnpm --dir apps/readest-app exec tsgo --noEmit`。
+- PASS Phase 6 disabled route lint: `pnpm --dir Program_Readio_Readest --filter @readest/readest-app lint`，745 files checked。
+- PASS Phase 6 disabled route build: cleaned-env `pnpm --dir Program_Readio_Readest --filter @readest/readest-app build`，Next export build compiled and exported successfully。
+- PASS Phase 6 latest Android build: cleaned-env + explicit cargo PATH `pnpm --dir apps/readest-app exec tauri android build --debug --apk -t aarch64` 通过。
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
+  - Shallow copy: `readio-readest-debug.apk`，859,727,731 bytes。
+- PASS Phase 6 latest APK install: `adb install -r readio-readest-debug.apk` 输出 `Success`。
+- PASS Phase 6 latest launch: `adb shell am start -n com.bilingify.readest/.MainActivity` 可启动；`adb shell pidof com.bilingify.readest` 返回 `22366`；`adb shell cmd package resolve-activity --brief com.bilingify.readest` resolves `com.bilingify.readest/.MainActivity`。
+- PASS Phase 6 latest screenshot: `readio-phase6-latest-home.png` 显示新版 APK 启动到书库首页，Continue Reading 卡片与书架条目均显示 `1%`，卡片进度条也有可见起点。
+- PASS Phase 6 RED disabled feature API route test: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/api/disabled-feature-routes.test.ts --reporter=verbose` 初始失败，AI 返回 401、TTS/OPDS 返回 200、Stripe plans 返回 500，证明隐藏功能 API 仍可直达或进入后端逻辑。
+- PASS Phase 6 GREEN disabled feature API route test: 同一命令通过，1 file passed / 4 tests passed；AI/TTS/OPDS/Stripe/IAP 禁用时返回 404 `{ error: 'Feature disabled' }`。
+- PASS Phase 6 API hardening type check: `pnpm --dir apps/readest-app exec tsgo --noEmit`。
+- PASS Phase 6 API hardening lint: `pnpm --dir Program_Readio_Readest --filter @readest/readest-app lint`，746 files checked。
+- PASS Phase 6 API hardening build: cleaned-env `pnpm --dir Program_Readio_Readest --filter @readest/readest-app build`，Next export build compiled and exported successfully。
+- PASS Phase 6 RED middleware preflight test: `pnpm --dir apps/readest-app exec vitest run src/__tests__/middleware.test.ts --reporter=verbose` 初始失败，`OPTIONS /api/opds/proxy` 在 middleware 层返回 200，证明真实 preflight 会绕过 route-level guard。
+- PASS Phase 6 GREEN middleware/API tests: `pnpm --dir apps/readest-app exec vitest run src/__tests__/middleware.test.ts src/__tests__/app/api/disabled-feature-routes.test.ts --reporter=verbose`，2 files passed / 5 tests passed；middleware 对禁用 feature API preflight 返回 404。
+- PASS Phase 6 middleware hardening type check: `pnpm --dir apps/readest-app exec tsgo --noEmit`。
+- PASS Phase 6 middleware hardening lint: `pnpm --dir Program_Readio_Readest --filter @readest/readest-app lint`，747 files checked。
+- PASS Phase 6 middleware hardening build: cleaned-env `pnpm --dir Program_Readio_Readest --filter @readest/readest-app build`，Next export build compiled and exported successfully。
+- PASS Phase 6 startup hardening tests: `pnpm --dir apps/readest-app exec dotenv -e .env -e .env.test.local -- vitest run src/__tests__/context/auth-context.test.tsx src/__tests__/context/ph-context.test.tsx src/__tests__/hooks/use-transfer-queue-disabled.test.tsx src/__tests__/app/library/use-books-sync-disabled.test.tsx src/__tests__/helpers/updater-disabled.test.ts`，5 files passed / 8 tests passed；auth/telemetry/cloudSync/updater 禁用时不初始化对应启动副作用。
+- PASS Phase 6 updater regression tests: `pnpm --dir apps/readest-app exec dotenv -e .env -e .env.test.local -- vitest run src/__tests__/helpers/updater.test.ts src/__tests__/helpers/updater-disabled.test.ts`，2 files passed / 28 tests passed；保留 updater enabled 行为测试，并验证 disabled 时无网络检查。
+- PASS Phase 6 startup hardening lint: `pnpm --dir Program_Readio_Readest --filter @readest/readest-app lint`，`tsgo --noEmit && biome check .` 通过，751 files checked。
+- PASS Phase 6 startup hardening build: cleaned-env `pnpm --dir Program_Readio_Readest --filter @readest/readest-app build`，Next export build compiled and exported successfully。
+- PASS Android SDK/NDK setup: background task `ba965xbii` installed Android SDK Platform 36 and NDK side-by-side `29.0.13846066` with exit code 0.
+- PASS Tauri Android root init: background task `bu9n9kxiq` ran Android project generation and ended with `Project generated successfully!`.
+- PASS Gradle dependency recovery: background task `bi0bn8dw9` retried Gradle dependency resolution without daemon and completed with `BUILD SUCCESSFUL in 2m 1s`.
+- PASS launcher resource fix build: background task `bc1ym2urq` rebuilt the APK after correcting launcher background resource reference.
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`.
+- PASS emulator install after launcher fix: background task `bxbq6x67p` installed the debug APK with `Performing Streamed Install` / `Success`.
+- PASS attribution lint: background task `bgd5jvmbv` completed lint after attribution changes, `Checked 733 files in 160ms. No fixes applied.`
+- PASS attribution build: background task `blxvpzvx9` completed app build after attribution changes, `Compiled successfully` and exported static output.
+- PASS cleaned lint recovery: background task `bwojof2ky` previously failed with stale `MobileFooterBar` missing `ttsEnabled`; current source already passes, and rerun task `bo2zih48b` completed cleaned lint with `Checked 734 files in 149ms. No fixes applied.`
+- PASS command palette gating lint: background task `bchs85rsv` completed lint with `Checked 734 files in 136ms. No fixes applied.`
+- PASS transfer queue gating lint: background task `bczrm06cz` completed lint with `Checked 734 files in 139ms. No fixes applied.`
+- PASS feature hiding app build: background task `b9fdsm96o` completed cleaned app build, `Compiled successfully in 6.7s`, generated 17 static pages, and exported output.
+- PASS feature hiding Android build: background task `bczqso3n8` completed Android APK build.
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`.
+- PASS feature hiding emulator install: background task `bsaqa5wob` installed the updated APK with `Performing Streamed Install` / `Success`.
+- PASS Phase 4 Android debug APK rebuild: background task `b0d3duqh7` completed cleaned Next export and Rust Android build, generating `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`.
+- PASS settings simplification review follow-up: added `advancedSettings=true` regression coverage in `readio-reader-settings.test.tsx` for Font Face / Serif Font / Sans-Serif Font / Monospace Font and Hyphenation / column / battery controls.
+  - RED verification: temporarily forcing `showAdvancedFontFace=false` and `showAdvancedLayoutSettings=false` made the new tests fail on missing `Font Face` and `Hyphenation`.
+  - GREEN verification: restored `readioFeatures.advancedSettings` gates and `pnpm --dir apps/readest-app exec vitest run src/__tests__/components/settings/readio-reader-settings.test.tsx --reporter=verbose` passed, 1 file / 4 tests.
+  - Product follow-ups left open intentionally: decide whether Custom Fonts management is core Chinese-reader UX or advanced-only; decide whether Reset means all reader view settings or only visible settings.
+- PASS Phase 6 code review: background agent `ab2a3513ede07c692` returned `APPROVED` with clean scope and no blocking issues.
+  - Focused verification checked by reviewer: `pnpm --dir apps/readest-app exec vitest run src/__tests__/services/errors.test.ts src/__tests__/app/reader/reader-content-open-error.test.tsx src/__tests__/components/settings/readio-reader-settings.test.tsx --reporter=verbose` passed, 3 files / 5 tests.
+  - Non-blocking P3 UX note remains: `ReaderContent` missing-file toast still auto-navigates back to library after 5s because Toast callbacks run on timeout; keep unless user reports confusion, then replace timed navigation with explicit action.
+- PASS Phase 6 Android APK rebuild after cargo PATH fix: background task `b6ku4i6xu` completed with exit code 0.
+  - Next export evidence: `Compiled successfully in 6.8s`, `Finished TypeScript in 10.9s`, generated static pages `17/17`, exported `4/4`.
+  - Rust/Tauri evidence: `Finished dev profile` for `Readest v0.2.2`, symlinked `libreadestlib.so` into `jniLibs/arm64-v8a`.
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`.
+- PASS Phase 6 rebuilt APK emulator install: background task `b311cbdvp` completed with `Performing Streamed Install` / `Success`.
+- PASS latest fixes Android debug APK build: background task `bvnffvrro` completed with exit code 0.
+  - Next export evidence: `Compiled successfully in 7.6s`, `Finished TypeScript in 11.0s`, generated static pages `17/17`, exported `4/4`.
+  - Rust/Tauri evidence: `Finished dev profile` for `Readest v0.2.2`, symlinked `libreadestlib.so` into `jniLibs/arm64-v8a`.
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`.
+- PASS Phase 6 review follow-up test hardening: added direct `getProgressPercentage` boundary coverage and isolated disabled-route layout tests from global feature defaults.
+  - RED verification: temporarily allowing unfinished progress to clamp to `100` and removing the disabled auth layout `null` return made the focused tests fail on expected 99% clamp and hidden auth route rendering.
+  - GREEN verification: restored production behavior and `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/reading-progress.test.tsx src/__tests__/app/disabled-route-layouts.test.tsx --reporter=verbose` passed, 2 files / 11 tests.
+  - Remaining P3 notes intentionally not changed: duplicate `/auth` page-level guard is harmless defense-in-depth for now; `/user` metadata loss is acceptable while `/user/*` is deactivated for Readio MVP and should be revisited only if auth/commerce returns.
+- PASS Phase 7 package/id i18n RED-GREEN tests:
+  - Android package test initially failed on old `com.bilingify.readest` identifier, then on missing `com/ppg/readio/MainActivity.kt`, then on stale old-package generated sources, then on duplicate root `TauriActivity.kt`; final focused test passes and locks `com.ppg.readio`, `applicationId`, generated source layout, and absence of stale old package sources.
+  - Empty library translation test initially failed on missing zh-CN/zh-TW Readio empty-card keys; final test passes for `Readio Library`, `Start with a local book`, import description, EPUB/PDF hint, and `Import Local Books`.
+  - Final focused command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/config/readio-android-package.test.ts src/__tests__/i18n/readio-empty-library-translations.test.ts --reporter=verbose` passed, 2 files / 3 tests.
+- PASS Phase 7 release APK build: cleaned env + explicit cargo PATH `pnpm --dir apps/readest-app exec tauri android build --apk -t aarch64` completed exit code 0.
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk`.
+  - Signed shallow copy: `readio-phase7-package-i18n-release-signed.apk`, 52.6 MB.
+- PASS Phase 7 APK identity: `aapt dump badging readio-phase7-package-i18n-release-signed.apk` reports `package: name='com.ppg.readio'` and `application-label:'Readio'`.
+- PASS Phase 7 APK signature: `apksigner verify --verbose --print-certs readio-phase7-package-i18n-release-signed.apk` reports `Verifies`, v2=true, v3=true, 1 signer (`Android Debug`).
+- PASS homepage polish RED: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/app/library/readio-home-polish.test.tsx` initially failed because `Upload Book` and `Always Show Status Bar` were still rendered.
+- PASS homepage polish GREEN: same focused command passed, 1 file / 2 tests, after gating `BookItem` cloud UI by `readioFeatures.cloudSync` and `SettingsMenu` status bar toggle by `readioFeatures.advancedSettings`.
+- PASS related regression tests: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/app/library/readio-home-polish.test.tsx src/__tests__/app/library/library-empty-state.test.tsx src/__tests__/components/settings/readio-reader-settings.test.tsx` passed, 3 files / 7 tests.
+- PASS reader simplification RED: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app test --run src/__tests__/app/reader/readio-reader-simplification.test.tsx` 初始失败于 selection tools 仍包含 search/dictionary/wikipedia/translate/tts/proofread、sidebar 仍显示 Parallel Read、HeaderBar 仍显示 Toggle Translation，证明测试覆盖目标问题。
+- PASS reader simplification GREEN: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app test --run src/__tests__/app/library/readio-home-polish.test.tsx src/__tests__/app/reader/readio-reader-simplification.test.tsx` passed, 2 files / 5 tests；验证隐藏禁用 reader/sidebar 菜单项、顶部翻译/画笔按钮，并将选择工具收敛为 copy/highlight/annotate。
+- PASS reader simplification lint: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app lint` 通过，`tsgo --noEmit && biome check .`，755 files checked。
+- PASS reader simplification code review: `superpowers:code-reviewer` returned no Critical/Important/Minor findings，Ready to proceed。
+- PASS reader simplification build: cleaned-env `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build` 通过；需 unset `TURBOPACK`、`__NEXT_PRIVATE_STANDALONE_CONFIG`、`__NEXT_PRIVATE_ORIGIN`、`NEXT_PRIVATE_STANDALONE`。
+- PASS reader simplification Android debug build: cleaned-env + explicit cargo PATH `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app exec tauri android build --debug --apk -t aarch64` 通过。
+  - APK output: `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`。
+  - Shallow copy: `readio-reader-simplification-debug.apk`，约 414.8 MB。
+- PASS reader simplification emulator install/launch: `adb install -r .../app-universal-debug.apk` 输出 `Success`；`adb shell am start -n com.ppg.readio/.MainActivity` 可启动。
+- PASS reader simplification manual screenshots: `readio-reader-simplification-toolbar.png` 确认顶部无翻译/画笔快捷动作；`readio-reader-simplification-overflow-open.png` 确认菜单无 Sync/Proofread/Export/Parallel Read；`readio-reader-simplification-selection.png` 确认长按选中文本只显示复制、划线、笔记三项。
+- PASS M1.1 pagination-only focused tests: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app test --run src/__tests__/utils/serializer.test.ts src/__tests__/store/reader-store.test.ts src/__tests__/store/settings-store.test.ts src/__tests__/store/book-data-store.test.ts src/__tests__/services/command-registry-extended.test.ts src/__tests__/components/settings/readio-reader-settings.test.tsx` passed, 6 files / 119 tests.
+- PASS M1.1 fresh release APK build: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app build-readio-apk` completed with exit code 0 on 2026-04-26 17:16; output copied to `apks/readio-v0.1.0-alpha.1-android-arm64-release.apk`.
+  - Next export evidence: `Compiled successfully in 7.6s`, TypeScript finished, generated static pages `17/17`, exported `4/4`.
+  - Rust/Tauri evidence: release profile finished for `Readest v0.2.2`, APK generated at `apps/readest-app/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk`.
+  - APK file stat after rebuild: `55118448 bytes`, mtime `Apr 26 17:16:44 2026`.
+- PASS M1.1 type check: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app exec tsgo --noEmit` passed.
+- PASS M1.1 lint: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app lint` passed, `Checked 757 files in 193ms. No fixes applied.`
+- PASS M1.1 release APK signature: `/Users/ppg/Library/Android/sdk/build-tools/35.0.0/apksigner verify --verbose apks/readio-v0.1.0-alpha.1-android-arm64-release.apk` reports `Verifies`, v2=true, v3=true, 1 signer. First attempted build-tools `36.0.0/apksigner` path did not exist; actual installed apksigner is under `35.0.0`.
+- PASS M1.1 emulator install/version/launch: `adb devices` shows `emulator-5554 device`; first install/launch returned process `12548`; after fresh rebuild, `adb install -r apks/readio-v0.1.0-alpha.1-android-arm64-release.apk` returned `Performing Incremental Install` / `Success`, `adb shell am start -n com.ppg.readio/.MainActivity` launched, `adb shell pidof com.ppg.readio` returned `13001`, and `adb shell dumpsys package com.ppg.readio | grep -E 'versionName|versionCode'` reports `versionCode=1001001 minSdk=26 targetSdk=36` and `versionName=0.1.0-alpha.1`.
+- PASS M1.1 manual emulator reading path screenshots in `artifacts/emulator-validation/`:
+  - `readio-launch.png` / `readio-rebuilt-launch.png`: library launches with Continue Reading card for 《诡秘之主》 at 39%.
+  - `readio-reader-open-later.png` / `readio-rebuilt-reader-open-later.png`: continue reading opens Chinese text reader page.
+  - `readio-reader-after-page-tap.png` / `readio-rebuilt-after-page-tap.png`: tapping right reading area advances to the next page rather than entering scroll mode.
+  - `readio-reader-settings-panel.png`: compact font/settings panel opens from reader.
+  - `readio-reader-control-settings.png`: behavior settings show only pagination controls (`点击翻页`, `点击两侧翻页`, `交换点击区域`, `禁用双击`, `音量键翻页`, `显示翻页按钮`); no scroll mode controls are visible.
+- PASS M1.1 UI hierarchy evidence: `artifacts/emulator-validation/readio-reader-control-settings.xml` contains pagination controls and no visible `Scrolled Mode` / `Single Section Scroll` / `Overlap Pixels` / scrollbar setting text; WebView hierarchy marks the book content root as `scrollable="false"` during the validated reader/settings state.
+- PASS alpha.2 release APK build: `pnpm -C /Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest --filter @readest/readest-app build-readio-apk` completed with exit code 0 and produced `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.2-android-arm64-release.apk` (53 MB). Next/Tauri/Gradle release build completed; expected warnings were limited to Next static export route/header warnings, Rust unused-code warnings in vendored Tauri code, and Gradle 9 deprecation notice.
+- PASS alpha.2 APK signature: apksigner output reported `Verifies`, v2=true, v3=true, 1 signer.
+- PASS alpha.2 emulator install/launch: `adb install -r .../readio-v0.1.0-alpha.2-android-arm64-release.apk` returned `Success`; package is `com.ppg.readio`; launch activity resolves to `com.ppg.readio/.MainActivity`; `adb shell am start -n com.ppg.readio/.MainActivity` launched and process stayed running.
+- PASS alpha.2 library/continue-reading validation: screenshot `/tmp/readio-launch.png` showed Readio library with search/import controls, Continue Reading card, and existing 《诡秘之主》 progress at 39%; tapping Continue Reading opened readable Chinese text page (`/tmp/readio-reader-2.png`) with progress `4057 / 10397`; Android back returned to library (`/tmp/readio-back-library.png`).
+- PASS alpha.2 local EPUB import validation: pushed test fixture `sample-alice.epub` to emulator Downloads; Android DocumentsUI opened from Readio import menu; selecting the file added `Alice's Adventures in Wonderland` to the shelf; tapping the imported book opened its reader cover page (`/tmp/readio-alice-reader.png`) with progress `1 / 112`.
+- REVIEW NOTE M1.1: `FootnotePopup.tsx` still sets its internal footnote popup renderer to `flow='scrolled'`. This is intentionally treated as a non-reading-mode exception for footnote content, because it has no user settings/command entry and does not persist `scrolled` / `noContinuousScroll`. If future product requirement becomes “no renderer may ever scroll,” handle footnote behavior in a separate focused batch.
+- REVIEW NOTE M1.1: current working tree includes reading UI simplification continuation beyond pure pagination hardening (for example progress preview / annotation popup / hiding additional advanced controls). Commit/PR wording should describe the batch as “M1.1 reader simplification closeout + pagination-only hardening,” or split commits if a tighter history is desired.
+- PASS alpha.3 TXT import/file filtering RED: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app test -- src/__tests__/services/native-app-service-open-file.test.ts --runInBand` initially failed for `content://com.android.providers.downloads.documents/document/msf%3A42`, showing raw URI basename `msf:42` could be used instead of native display name `sample.txt`.
+- PASS alpha.3 TXT import/file filtering GREEN: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app test -- src/__tests__/services/native-app-service-open-file.test.ts src/__tests__/services/import-txt.test.ts src/__tests__/hooks/use-file-selector.test.ts --runInBand` passed; observed Vitest still ran broad suite: 155 files passed / 2 skipped, 3247 tests passed / 7 skipped.
+- PASS alpha.3 version/TXT focused tests after bump: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/services/native-app-service-open-file.test.ts src/__tests__/services/import-txt.test.ts src/__tests__/hooks/use-file-selector.test.ts src/__tests__/config/readio-android-package.test.ts --reporter=dot` passed, 4 files / 6 tests. After native display-name bridge hardening, the same command passed again on 2026-04-27 15:15, 4 files / 6 tests.
+- PASS alpha.3 lint: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app lint` passed with `tsgo --noEmit && biome check .`, 759 files checked. After native display-name bridge hardening, the same lint command passed again with 759 files checked and no fixes applied.
+- PASS alpha.3 release APK build/signature: `pnpm -C "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest" --filter @readest/readest-app build-readio-apk` completed exit code 0; APK copied to `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.3-android-arm64-release.apk`; apksigner reports `Verifies`, v2=true, v3=true, 1 signer. After native display-name bridge hardening, the APK was rebuilt again on 2026-04-27 15:16 with the same output path and signature verification passed.
+- PASS alpha.3 emulator TXT import/open validation: pushed `/private/tmp/readio-txt-import-msf42-regression.txt` to emulator Downloads, launched `android.intent.action.SEND -t text/plain` into `com.ppg.readio/.MainActivity`, captured `/private/tmp/readio-screen.png` and `/private/tmp/readio-txt-open.png`; TXT-derived item appeared in shelf and opened readable content without “文件已损坏”.
+- PASS alpha.3 real TXT fixture validation: `/Users/ppg/Downloads/雪中悍刀行.txt` is UTF-8 text, 14,387,160 bytes; local `TxtToEpubConverter` produced `雪中悍刀行.epub` (8,060,251 bytes, 1192 chapters, language `zh`) and `DocumentLoader` opened it as EPUB with 1192 sections/toc entries. Emulator import/open also passed: shelf shows `雪中悍刀行`, reader UI shows title `雪中悍刀行`, chapter `1`, body `第一卷`.
+- PASS alpha.3 installed APK validation: `adb install -r /Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.3-android-arm64-release.apk` returned `Success`; `adb shell dumpsys package com.ppg.readio` reports `versionCode=1001003` and `versionName=0.1.0-alpha.3`; `adb shell am start -n com.ppg.readio/.MainActivity` launches; UI hierarchy shows Readio library with `导入书籍` and shelf entries including `雪中悍刀行`. After native display-name bridge hardening, the rebuilt APK was reinstalled successfully and the same version/startup/library UI checks passed.
