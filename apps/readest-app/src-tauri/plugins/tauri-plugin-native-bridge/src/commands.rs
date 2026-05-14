@@ -152,6 +152,13 @@ pub(crate) async fn set_screen_brightness<R: Runtime>(
 }
 
 #[command]
+pub(crate) async fn reset_screen_brightness<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<ResetScreenBrightnessResponse> {
+    app.native_bridge().reset_screen_brightness()
+}
+
+#[command]
 pub(crate) async fn get_external_sdcard_path<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<GetExternalSDCardPathResponse> {

@@ -200,6 +200,13 @@ pub struct SetScreenBrightnessResponse {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ResetScreenBrightnessResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetExternalSDCardPathResponse {
     pub path: Option<String>,
     pub error: Option<String>,

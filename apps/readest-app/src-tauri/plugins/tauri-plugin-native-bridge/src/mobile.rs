@@ -198,6 +198,14 @@ impl<R: Runtime> NativeBridge<R> {
 }
 
 impl<R: Runtime> NativeBridge<R> {
+    pub fn reset_screen_brightness(&self) -> crate::Result<ResetScreenBrightnessResponse> {
+        self.0
+            .run_mobile_plugin("reset_screen_brightness", ())
+            .map_err(Into::into)
+    }
+}
+
+impl<R: Runtime> NativeBridge<R> {
     pub fn get_external_sdcard_path(&self) -> crate::Result<GetExternalSDCardPathResponse> {
         self.0
             .run_mobile_plugin("get_external_sdcard_path", ())

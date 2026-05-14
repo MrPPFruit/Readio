@@ -122,6 +122,10 @@ impl<R: Runtime> NativeBridge<R> {
         Err(crate::Error::UnsupportedPlatformError)
     }
 
+    pub fn reset_screen_brightness(&self) -> crate::Result<ResetScreenBrightnessResponse> {
+        Err(crate::Error::UnsupportedPlatformError)
+    }
+
     pub fn get_external_sdcard_path(&self) -> crate::Result<GetExternalSDCardPathResponse> {
         Err(crate::Error::UnsupportedPlatformError)
     }

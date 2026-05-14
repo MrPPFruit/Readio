@@ -74,6 +74,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             commands::get_safe_area_insets,
             commands::get_screen_brightness,
             commands::set_screen_brightness,
+            commands::reset_screen_brightness,
             commands::get_external_sdcard_path,
             commands::open_external_url,
             commands::select_directory,
