@@ -132,7 +132,8 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
             <Slider
               label={_('Screen Brightness')}
               initialValue={screenBrightnessValue}
-              bubbleLabel={autoBrightness ? _('Auto') : `${screenBrightnessValue}`}
+              bubbleLabel={`${screenBrightnessValue}`}
+              bubbleClassName={autoBrightness ? 'text-primary' : ''}
               minIcon={<PiSun size={16} />}
               maxIcon={<PiSun size={24} />}
               onChange={handleScreenBrightnessChange}
