@@ -14,22 +14,23 @@ const readSourceFile = async (relativePath: string) => {
 
 describe('Readio settings source simplification', () => {
   it('keeps behavior settings focused on pagination and screen brightness', async () => {
-    const source = await readSourceFile('src/components/settings/ControlPanel.tsx');
+    const controlSource = await readSourceFile('src/components/settings/ControlPanel.tsx');
+    const colorSource = await readSourceFile('src/components/settings/ColorPanel.tsx');
 
-    expect(source).toContain("_('Pagination')");
-    expect(source).toContain("_('System Screen Brightness')");
+    expect(controlSource).toContain("_('Pagination')");
+    expect(colorSource).toContain("_('System Screen Brightness')");
 
-    expect(source).not.toContain("_('Scroll')");
-    expect(source).not.toContain("_('Scrolled Mode')");
-    expect(source).not.toContain("_('Single Section Scroll')");
-    expect(source).not.toContain("_('Overlap Pixels')");
-    expect(source).not.toContain("_('Hide Scrollbar')");
-    expect(source).not.toContain("'scrolled'");
-    expect(source).not.toContain("'noContinuousScroll'");
-    expect(source).not.toContain("_('Animation')");
-    expect(source).not.toContain("_('Paging Animation')");
-    expect(source).not.toContain("_('E-Ink Mode')");
-    expect(source).not.toContain("_('Color E-Ink Mode')");
+    expect(controlSource).not.toContain("_('Scroll')");
+    expect(controlSource).not.toContain("_('Scrolled Mode')");
+    expect(controlSource).not.toContain("_('Single Section Scroll')");
+    expect(controlSource).not.toContain("_('Overlap Pixels')");
+    expect(controlSource).not.toContain("_('Hide Scrollbar')");
+    expect(controlSource).not.toContain("'scrolled'");
+    expect(controlSource).not.toContain("'noContinuousScroll'");
+    expect(controlSource).not.toContain("_('Animation')");
+    expect(controlSource).not.toContain("_('Paging Animation')");
+    expect(controlSource).not.toContain("_('E-Ink Mode')");
+    expect(controlSource).not.toContain("_('Color E-Ink Mode')");
   });
 
   it('hides code highlighting from the full color settings', async () => {

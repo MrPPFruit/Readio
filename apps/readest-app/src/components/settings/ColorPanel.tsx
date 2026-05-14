@@ -14,7 +14,7 @@ import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useResetViewSettings } from '@/hooks/useResetSettings';
 import { useCustomTextureStore } from '@/store/customTextureStore';
-import { saveViewSettings } from '@/helpers/settings';
+import { saveViewSettings, saveSysSettings } from '@/helpers/settings';
 import { SettingsPanelPanelProp } from './SettingsDialog';
 import { useFileSelector } from '@/hooks/useFileSelector';
 import { PREDEFINED_TEXTURES } from '@/styles/textures';
@@ -63,6 +63,7 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
   const [readingRulerLines, setReadingRulerLines] = useState(viewSettings.readingRulerLines);
   const [readingRulerOpacity, setReadingRulerOpacity] = useState(viewSettings.readingRulerOpacity);
   const [readingRulerColor, setReadingRulerColor] = useState(viewSettings.readingRulerColor);
+  const [autoScreenBrightness, setAutoScreenBrightness] = useState(settings.autoScreenBrightness);
 
   const {
     textures: customTextures,
@@ -174,6 +175,12 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
     saveViewSettings(envConfig, bookKey, 'readingRulerColor', readingRulerColor, false, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readingRulerColor]);
+
+  useEffect(() => {
+    if (autoScreenBrightness === settings.autoScreenBrightness) return;
+    saveSysSettings(envConfig, 'autoScreenBrightness', autoScreenBrightness);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScreenBrightness]);
 
   const applyBackgroundTexture = () => {
     applyTexture(envConfig, selectedTextureId);
@@ -288,6 +295,21 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
             onThemeModeChange={setThemeMode}
             data-setting-id='settings.color.themeMode'
           />
+
+          {appService?.isMobileApp && (
+            <div
+              data-setting-id='settings.color.autoScreenBrightness'
+              className='flex items-center justify-between'
+            >
+              <h2 className='font-medium'>{_('System Screen Brightness')}</h2>
+              <input
+                type='checkbox'
+                className='toggle'
+                checked={autoScreenBrightness}
+                onChange={() => setAutoScreenBrightness(!autoScreenBrightness)}
+              />
+            </div>
+          )}
 
           <div
             data-setting-id='settings.color.invertImageInDarkMode'

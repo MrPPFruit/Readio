@@ -38,7 +38,6 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
   const [screenBrightnessValue, setScreenBrightnessValue] = useState(
     settings.screenBrightness >= 0 ? settings.screenBrightness : SCREEN_BRIGHTNESS_LIMITS.DEFAULT,
   );
-
   useEffect(() => {
     if (!appService?.isMobileApp) return;
     if (actionTab !== 'color') return;

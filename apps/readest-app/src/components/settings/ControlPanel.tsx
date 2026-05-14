@@ -7,7 +7,7 @@ import { useBookDataStore } from '@/store/bookDataStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useResetViewSettings } from '@/hooks/useResetSettings';
 import { useEinkMode } from '@/hooks/useEinkMode';
-import { saveSysSettings, saveViewSettings } from '@/helpers/settings';
+import { saveViewSettings } from '@/helpers/settings';
 import { shouldEnablePageTurnAnimation } from '@/utils/pageAnimation';
 import { SettingsPanelPanelProp } from './SettingsDialog';
 import { annotationToolQuickActions } from '@/app/reader/components/annotator/AnnotationTools';
@@ -43,7 +43,6 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
   const [animated, setAnimated] = useState(viewSettings.animated);
   const [isEink, setIsEink] = useState(viewSettings.isEink);
   const [isColorEink] = useState(viewSettings.isColorEink);
-  const [autoScreenBrightness, setAutoScreenBrightness] = useState(settings.autoScreenBrightness);
   const [allowScript, setAllowScript] = useState(viewSettings.allowScript);
 
   const resetToDefaults = useResetViewSettings();
@@ -143,12 +142,6 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
     saveViewSettings(envConfig, bookKey, 'isColorEink', isColorEink);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isColorEink]);
-
-  useEffect(() => {
-    if (autoScreenBrightness === settings.autoScreenBrightness) return;
-    saveSysSettings(envConfig, 'autoScreenBrightness', autoScreenBrightness);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoScreenBrightness]);
 
   useEffect(() => {
     if (viewSettings.allowScript === allowScript) return;
@@ -307,27 +300,6 @@ const ControlPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterRes
                     className='toggle'
                     checked={copyToNotebook}
                     onChange={() => setCopyToNotebook(!copyToNotebook)}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {(appService?.isMobileApp || appService?.appPlatform === 'web') && (
-        <div className='w-full' data-setting-id='settings.control.einkMode'>
-          <h2 className='mb-2 font-medium'>{_('Device')}</h2>
-          <div className='card border-base-200 bg-base-100 border shadow'>
-            <div className='divide-base-200 divide-y'>
-              {appService?.isMobileApp && (
-                <div className='config-item'>
-                  <span className=''>{_('System Screen Brightness')}</span>
-                  <input
-                    type='checkbox'
-                    className='toggle'
-                    checked={autoScreenBrightness}
-                    onChange={() => setAutoScreenBrightness(!autoScreenBrightness)}
                   />
                 </div>
               )}
