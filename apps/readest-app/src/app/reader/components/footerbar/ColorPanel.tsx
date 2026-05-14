@@ -32,13 +32,8 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
   const { settings } = useSettingsStore();
-  const {
-    getScreenBrightness,
-    setScreenBrightness,
-    resetScreenBrightness,
-    checkWriteSettingsPermission,
-    requestWriteSettingsPermission,
-  } = useDeviceControlStore();
+  const { getScreenBrightness, setScreenBrightness, resetScreenBrightness } =
+    useDeviceControlStore();
   const { themeMode, themeColor, isDarkMode, setThemeMode, setThemeColor } = useThemeStore();
 
   const [screenBrightnessValue, setScreenBrightnessValue] = useState(
@@ -61,15 +56,9 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
     () =>
       debounce(async (value: number) => {
         saveSysSettings(envConfig, 'screenBrightness', value);
-        const success = await setScreenBrightness(value / 100);
-        if (!success) {
-          const granted = await checkWriteSettingsPermission();
-          if (!granted) {
-            await requestWriteSettingsPermission();
-          }
-        }
+        await setScreenBrightness(value / 100);
       }, 100),
-    [envConfig, setScreenBrightness, checkWriteSettingsPermission, requestWriteSettingsPermission],
+    [envConfig, setScreenBrightness],
   );
 
   const handleScreenBrightnessChange = useCallback(
@@ -100,15 +89,8 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
         setScreenBrightnessValue(Math.round(brightness * 100));
       }
     } else {
-      const success = await setScreenBrightness(screenBrightnessValue / 100);
-      if (!success) {
-        const granted = await checkWriteSettingsPermission();
-        if (!granted) {
-          await requestWriteSettingsPermission();
-        }
-      } else {
-        saveSysSettings(envConfig, 'screenBrightness', screenBrightnessValue);
-      }
+      await setScreenBrightness(screenBrightnessValue / 100);
+      saveSysSettings(envConfig, 'screenBrightness', screenBrightnessValue);
     }
   }, [
     autoBrightness,
@@ -117,8 +99,6 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
     getScreenBrightness,
     resetScreenBrightness,
     setScreenBrightness,
-    checkWriteSettingsPermission,
-    requestWriteSettingsPermission,
   ]);
 
   const themeModeOptions = [

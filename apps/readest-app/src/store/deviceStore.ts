@@ -4,8 +4,6 @@ import {
   getScreenBrightness,
   setScreenBrightness,
   resetScreenBrightness,
-  checkWriteSettingsPermission,
-  requestWriteSettingsPermission,
 } from '@/utils/bridge';
 import { eventDispatcher } from '@/utils/event';
 import { NativeTouchEventType } from '@/types/system';
@@ -33,10 +31,8 @@ type DeviceControlState = {
   volumeKeysInterceptionCount: number;
   backKeyInterceptionCount: number;
   getScreenBrightness: () => Promise<number>; // 0.0 to 1.0
-  setScreenBrightness: (brightness: number) => Promise<boolean>; // returns false if no permission
+  setScreenBrightness: (brightness: number) => Promise<void>; // brightness: 0.0 to 1.0
   resetScreenBrightness: () => Promise<void>;
-  checkWriteSettingsPermission: () => Promise<boolean>;
-  requestWriteSettingsPermission: () => Promise<void>;
   acquireVolumeKeyInterception: () => void;
   releaseVolumeKeyInterception: () => void;
   acquireBackKeyInterception: () => void;
@@ -102,19 +98,10 @@ export const useDeviceControlStore = create<DeviceControlState>((set, get) => ({
   },
 
   setScreenBrightness: async (brightness: number) => {
-    const res = await setScreenBrightness({ brightness });
-    return res.success;
+    await setScreenBrightness({ brightness });
   },
 
   resetScreenBrightness: async () => {
     await resetScreenBrightness();
-  },
-
-  checkWriteSettingsPermission: async () => {
-    return await checkWriteSettingsPermission();
-  },
-
-  requestWriteSettingsPermission: async () => {
-    await requestWriteSettingsPermission();
   },
 }));

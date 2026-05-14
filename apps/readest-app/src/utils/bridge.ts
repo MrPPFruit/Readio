@@ -228,29 +228,6 @@ export async function resetScreenBrightness(): Promise<ResetScreenBrightnessResp
   return result;
 }
 
-interface CheckWriteSettingsPermissionResponse {
-  granted: boolean;
-}
-
-export async function checkWriteSettingsPermission(): Promise<boolean> {
-  const result = await invoke<CheckWriteSettingsPermissionResponse>(
-    'plugin:native-bridge|check_write_settings_permission',
-  );
-  return result.granted;
-}
-
-interface RequestWriteSettingsPermissionResponse {
-  success: boolean;
-  error?: string;
-}
-
-export async function requestWriteSettingsPermission(): Promise<RequestWriteSettingsPermissionResponse> {
-  const result = await invoke<RequestWriteSettingsPermissionResponse>(
-    'plugin:native-bridge|request_write_settings_permission',
-  );
-  return result;
-}
-
 export async function getExternalSDCardPath(): Promise<GetExternalSDCardPathResponse> {
   const result = await invoke<GetExternalSDCardPathResponse>(
     'plugin:native-bridge|get_external_sdcard_path',
