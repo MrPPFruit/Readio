@@ -23,6 +23,7 @@ Default permissions for the plugin
 - `allow-get-safe-area-insets`
 - `allow-get-screen-brightness`
 - `allow-set-screen-brightness`
+- `allow-reset-screen-brightness`
 - `allow-get-external-sdcard-path`
 - `allow-open-external-url`
 - `allow-select-directory`
@@ -795,6 +796,32 @@ Enables the request_permissions command without any pre-configured scope.
 <td>
 
 Denies the request_permissions command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`native-bridge:allow-reset-screen-brightness`
+
+</td>
+<td>
+
+Enables the reset_screen_brightness command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`native-bridge:deny-reset-screen-brightness`
+
+</td>
+<td>
+
+Denies the reset_screen_brightness command without any pre-configured scope.
 
 </td>
 </tr>

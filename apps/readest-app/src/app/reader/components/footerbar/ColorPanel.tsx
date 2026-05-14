@@ -44,13 +44,16 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
   useEffect(() => {
     if (!appService?.isMobileApp) return;
     if (actionTab !== 'color') return;
+    // When following system brightness, don't read back — the native value
+    // can be stale on devices with auto-brightness enabled.
+    if (settings.autoScreenBrightness) return;
 
     getScreenBrightness().then((brightness) => {
       if (brightness >= 0.0 && brightness <= 1.0) {
         setScreenBrightnessValue(Math.round(brightness * 100));
       }
     });
-  }, [actionTab, appService, getScreenBrightness]);
+  }, [actionTab, appService, settings.autoScreenBrightness, getScreenBrightness]);
 
   const debouncedSetScreenBrightness = useMemo(
     () =>
@@ -83,11 +86,11 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
     saveSysSettings(envConfig, 'autoScreenBrightness', next);
 
     if (next) {
+      // Reset window brightness override so the system controls brightness.
+      // Don't read back — Settings.System.SCREEN_BRIGHTNESS can be stale when
+      // auto-brightness is active, producing a wrong slider position.
       await resetScreenBrightness();
-      const brightness = await getScreenBrightness();
-      if (brightness >= 0.0 && brightness <= 1.0) {
-        setScreenBrightnessValue(Math.round(brightness * 100));
-      }
+      saveSysSettings(envConfig, 'screenBrightness', -1);
     } else {
       await setScreenBrightness(screenBrightnessValue / 100);
       saveSysSettings(envConfig, 'screenBrightness', screenBrightnessValue);
@@ -96,7 +99,6 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
     autoBrightness,
     envConfig,
     screenBrightnessValue,
-    getScreenBrightness,
     resetScreenBrightness,
     setScreenBrightness,
   ]);
@@ -130,7 +132,7 @@ export const ColorPanel: React.FC<ColorPanelProps> = ({
             <Slider
               label={_('Screen Brightness')}
               initialValue={screenBrightnessValue}
-              bubbleLabel={`${screenBrightnessValue}`}
+              bubbleLabel={autoBrightness ? _('Auto') : `${screenBrightnessValue}`}
               minIcon={<PiSun size={16} />}
               maxIcon={<PiSun size={24} />}
               onChange={handleScreenBrightnessChange}

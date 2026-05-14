@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-reset-screen-brightness"
+description = "Enables the reset_screen_brightness command without any pre-configured scope."
+commands.allow = ["reset_screen_brightness"]
+
+[[permission]]
+identifier = "deny-reset-screen-brightness"
+description = "Denies the reset_screen_brightness command without any pre-configured scope."
+commands.deny = ["reset_screen_brightness"]

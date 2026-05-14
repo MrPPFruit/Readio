@@ -20,6 +20,7 @@ permissions = [
   "allow-get-safe-area-insets",
   "allow-get-screen-brightness",
   "allow-set-screen-brightness",
+  "allow-reset-screen-brightness",
   "allow-get-external-sdcard-path",
   "allow-open-external-url",
   "allow-select-directory",
