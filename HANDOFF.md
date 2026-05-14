@@ -1,5 +1,13 @@
 # HANDOFF
 
+## APK 发布校验规则
+
+- GitHub Release asset 是公开分发 APK 的 source of truth。
+- 每次上传 APK 后，必须从 GitHub Release 下载回来并校验 SHA-256；下载包 hash 与上传前本地包一致，才算发布完成。
+- 不要用后续重新构建后的本地 `apks/` 文件反推已发布包；Android APK 可能不是 byte-for-byte 可复现构建，本地产物也会被下一次构建覆盖。
+- 回归测试若面向用户分发包，应安装 GitHub Release 下载包，而不是默认使用本地 `apks/` 最新文件。
+- 当前已验证 release：`v0.1.0-alpha.10`，asset `readio-v0.1.0-alpha.10-android-arm64-release.apk`，GitHub SHA-256 `d8ebcf40edb698d0dd1c9f7c1cf4fbe5291079200345898ae81a584db6ff8769`。
+
 ## 2026-05-07 最新状态
 
 - alpha.9 Reader AI 改进批次已实现并完成模拟器验证，尚未提交/发布。
