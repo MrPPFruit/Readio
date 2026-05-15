@@ -142,17 +142,6 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
           controller.enqueue({ type: 'stream-start', warnings: [] });
           controller.enqueue({ type: 'text-start', id: textId });
           const reader = response.body?.getReader();
-          if (!reader) {
-            controller.enqueue({ type: 'text-end', id: textId });
-            controller.enqueue({
-              type: 'finish',
-              finishReason: { unified: 'stop', raw: 'stop' },
-              usage: usageFrom(),
-            });
-            controller.close();
-            return;
-          }
-
           const decoder = new TextDecoder();
           let buffer = '';
           let usage: Usage | undefined;
@@ -181,10 +170,17 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
           };
 
           try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() ?? '';
+                for (const line of lines) processLine(line);
+              }
+            } else if (typeof response.text === 'function') {
+              buffer = await response.text();
               const lines = buffer.split('\n');
               buffer = lines.pop() ?? '';
               for (const line of lines) processLine(line);

@@ -470,6 +470,18 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
           userMessage,
           { ...assistantMessage, content: answer, sources: answerSources },
         ]);
+      } else if (!controller.signal.aborted) {
+        setGenerationStatus('error');
+        const emptyAnswerMessage = 'AI 没有返回正文，请重试或切换模型。';
+        setError(emptyAnswerMessage);
+        setMessages((currentMessages) =>
+          currentMessages.map((message) =>
+            message.id === assistantMessage.id
+              ? { ...message, content: emptyAnswerMessage, sources: answerSources }
+              : message,
+          ),
+        );
+        inFlightMessageIdsRef.current = null;
       }
     } catch (streamError) {
       clearTimeout(timeoutId);

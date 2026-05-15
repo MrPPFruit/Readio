@@ -34,12 +34,20 @@
   - Same-conversation spoiler toggle regression test passed; subsequent full Vitest run reported `191 files / 3508 tests passed`.
   - `pnpm -C "./apps/readest-app" lint` passed after final blocker fix; `tsgo --noEmit && biome check .`, `811 files checked`.
 - Reader AI/RAG Phase B classifier + prompt/context metadata verification (2026-05-15):
-  - Current work is local/uncommitted until explicitly committed.
+  - Committed as `fbf9f215 feat(ai): add reader question intent and scope routing`.
   - Added deterministic `intent + scope` classifier and passed classification metadata through `readerChatService`, `TauriChatAdapter`, and `/api/ai/chat` reader context validation into `buildSystemPrompt`.
   - Review fixes: API validation rejects classification scopes that conflict with effective spoiler protection; whole-book prompts use `source_scope="whole_book_allowed" reading_position="..."` instead of current `page_limit` metadata; high-risk spoiler wording now still routes through read-so-far retrieval/prompting instead of an early canned return; empty whole-book prompts no longer claim page-limited context.
   - `pnpm -C "./apps/readest-app" test -- --watch=false src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/api-chat-route.test.ts src/__tests__/ai/question-routing.test.ts src/__tests__/ai/tauri-chat-adapter.test.ts` passed; Vitest selected the full app suite and reported `192 files / 3514 tests passed`, `2 files / 7 tests skipped`.
   - `pnpm -C "./apps/readest-app" lint` passed; `tsgo --noEmit && biome check .`, `813 files checked`.
   - Final code review approved after blocker fixes.
+- Reader AI Android/Tauri empty-answer fix verification (2026-05-15):
+  - Root cause: local retrieval could surface citations before provider text, while Tauri native HTTP may return stream text via `response.text()` without a readable `body`; this produced an AI answer panel with citations but no answer body.
+  - Fixed `openAICompatibleModel.ts` to parse OpenAI-compatible SSE from `response.text()` when a Tauri response has no readable stream body.
+  - Fixed `ReaderAIAssistant.tsx` to show `AI 没有返回正文，请重试或切换模型。` when generation completes with sources but no answer text.
+  - Focused tests passed: `openai-compatible-model.test.ts` reported `4 passed`; `reader-ai-assistant.test.tsx` reported `29 passed`.
+  - AI test suite passed: `pnpm -C "./apps/readest-app" test src/__tests__/ai -- --runInBand`, `21 files / 212 tests passed`.
+  - Lint/type check passed: `pnpm -C "./apps/readest-app" lint`, `tsgo --noEmit && biome check .`, `813 files checked`.
+  - Rebuilt signed APK at `./apks/readio-v0.1.0-alpha.13-android-arm64-release.apk`, installed on `emulator-5554`, opened Reader AI in 《诡秘之主》 page `2868 / 14955`, asked `总结本章到这里`, and verified DOM contained the clear empty-answer message plus citations and the original question. Recent logcat showed no app crash.
 - Previous alpha.10/alpha.13 release evidence:
   - Full Vitest run passed: `189 files / 3475 tests passed`.
   - App lint passed: `pnpm --filter @readest/readest-app lint`, `809 files checked`.
@@ -80,7 +88,8 @@
 ## Current blockers and risks
 
 - Reader AI/RAG Phase A source changes are committed.
-- Phase B classifier + prompt/context metadata work is implemented and verified locally, but not committed yet.
+- Phase B classifier + prompt/context metadata work is committed.
+- Android/Tauri empty-answer fix has focused test, lint, rebuilt APK install, and emulator DOM verification evidence; commit it before starting unrelated work if not already committed.
 - Phase B design decision: spoiler protection is not a question intent. Treat it as a source scope (`read_so_far` vs `whole_book_allowed`) that applies to every question intent.
 - Next RAG work should use `intent + scope` to vary retrieval strategy, starting with entity lookup, selected-text explanation, and current recap.
 - No known alpha.13 release blocker at this handoff.
@@ -91,7 +100,7 @@
 
 ## Next actions
 
-1. If continuing Reader AI/RAG quality work, commit the verified Phase B classifier + prompt/context metadata batch if desired, then route retrieval based on `intent + scope` instead of treating spoiler risk as a standalone intent.
+1. If committing current work, stage only the Android/Tauri empty-answer fix files and `HANDOFF.md`; do not stage `.codepilot-uploads/` or unrelated `temp/` helpers by default.
 2. For the next Phase B retrieval-routing increment, add tests first for entity lookup, selected-text explanation, and current recap under both `read_so_far` and `whole_book_allowed` where relevant.
 3. If continuing alpha.13 stabilization, start from targeted tests around brightness, Reader AI, and citation ordering; then run type check, lint, and focused emulator validation.
 4. If extending Reader AI retrieval/RAG beyond Phase B, read `./READIO_AI_RETRIEVAL_ROADMAP.md` first; discuss before introducing heavier embedding, long preprocessing, or deep-analysis defaults.

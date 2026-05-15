@@ -582,6 +582,34 @@ describe('ReaderAIAssistant integration safeguards', () => {
     expect(mocks.addMessage).not.toHaveBeenCalled();
   });
 
+  it('shows a clear message when generation returns sources but no answer text', async () => {
+    mocks.streamReaderAIAnswer.mockImplementation(
+      ({ onSources }: { onSources?: (sources: unknown[]) => void }) => {
+        onSources?.([
+          {
+            id: 'rag-source',
+            chapterTitle: '第四章 占卜',
+            sectionIndex: 4,
+            snippet: '克莱恩正在梳理当前章节的信息。',
+            confidence: 'approximate',
+          },
+        ]);
+        return streamChunks([]);
+      },
+    );
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('messages').textContent).toContain(
+        'AI 没有返回正文，请重试或切换模型。',
+      ),
+    );
+    expect(mocks.addMessage).not.toHaveBeenCalled();
+  });
+
   it('keeps selected text out of assistant source references', async () => {
     mocks.streamReaderAIAnswer.mockImplementation(
       ({ onSources }: { onSources?: (sources: unknown[]) => void }) => {

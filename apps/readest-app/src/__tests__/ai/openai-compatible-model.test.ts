@@ -137,4 +137,34 @@ describe('OpenAI-compatible model transport', () => {
 
     fetchMock.mockRestore();
   });
+
+  test('streams Tauri HTTP text bodies when a native response has no readable body', async () => {
+    tauriFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: null,
+      text: vi
+        .fn()
+        .mockResolvedValue(
+          'data: {"id":"chatcmpl-1","model":"custom-model","choices":[{"delta":{"content":"hello"}}]}\n\n' +
+            'data: {"choices":[{"delta":{"content":" world"},"finish_reason":"stop"}]}\n\n' +
+            'data: [DONE]\n\n',
+        ),
+    });
+
+    await runWithAppPlatform('tauri', async () => {
+      const model = createOpenAICompatibleModel({
+        provider: 'custom-openai-compatible',
+        apiKey: 'key',
+        baseUrl: 'https://example.com/v1',
+        model: 'custom-model',
+      });
+
+      const chunks: string[] = [];
+      for await (const chunk of streamText({ model, prompt: 'hello' }).textStream) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks.join('')).toBe('hello world');
+    });
+  });
 });
