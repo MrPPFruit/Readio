@@ -225,6 +225,47 @@ describe('streamReaderAIAnswer', () => {
     });
   });
 
+  it('uses updated spoiler settings for a later question in the same conversation', async () => {
+    await runWithoutWindow(async () => {
+      const unprotectedSettings = { ...settings, spoilerProtection: false };
+
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: unprotectedSettings,
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 42,
+        messages: [
+          { role: 'user', content: '最后谁是凶手？' },
+          { role: 'assistant', content: '我不能提前透露后文或结局。' },
+        ],
+        question: '现在可以说后面的真相了吗？',
+      })) {
+      }
+
+      expect(hybridSearchMock).toHaveBeenCalledWith(
+        'book-hash',
+        '现在可以说后面的真相了吗？',
+        unprotectedSettings,
+        9,
+        undefined,
+      );
+      expect(streamTextMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          system: expect.stringContaining('Spoiler mode is allowed for this request'),
+          messages: [
+            { role: 'user', content: '最后谁是凶手？' },
+            { role: 'assistant', content: '我不能提前透露后文或结局。' },
+            { role: 'user', content: '现在可以说后面的真相了吗？' },
+          ],
+        }),
+      );
+      expect(streamTextMock.mock.calls[0]?.[0].system).not.toContain(
+        'You can ONLY discuss content from pages 1 to 42',
+      );
+    });
+  });
+
   it('adds current-page context for generic recap questions while keeping citation order canonical', async () => {
     getCurrentSectionContextChunksMock.mockResolvedValue([
       {
