@@ -121,7 +121,7 @@ const currentMeta: BookIndexMeta = {
   totalChunks: 3,
   embeddingModel: 'text-embedding-3-small',
   indexVersion: 1,
-  chunkerVersion: 2,
+  chunkerVersion: 3,
   bm25Version: 1,
   estimatedBytes: 4096,
   lastUpdated: 1,
@@ -187,7 +187,7 @@ describe('indexBook metadata freshness', () => {
     expect(mocks.saveMeta).toHaveBeenCalledWith(
       expect.objectContaining({
         indexVersion: 1,
-        chunkerVersion: 2,
+        chunkerVersion: 3,
         bm25Version: 1,
         estimatedBytes: expect.any(Number),
       }),

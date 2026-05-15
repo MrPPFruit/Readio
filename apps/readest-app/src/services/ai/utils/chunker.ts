@@ -1,6 +1,6 @@
 import { TextChunk } from '../types';
 
-export const CHUNKER_VERSION = 2;
+export const CHUNKER_VERSION = 3;
 
 // same formula as toc.ts - 1500 chars = 1 page
 export const SIZE_PER_PAGE = 1500;
@@ -16,6 +16,36 @@ const DEFAULT_OPTIONS: ChunkingOptions = {
   overlapSize: 50,
   minChunkSize: 100,
 };
+
+const getEstimatedPage = (absoluteOffset: number): number =>
+  Math.floor(absoluteOffset / SIZE_PER_PAGE);
+
+const getEstimatedEndPage = (cumulativeSizeBeforeSection: number, endOffset: number): number =>
+  getEstimatedPage(cumulativeSizeBeforeSection + Math.max(0, endOffset - 1));
+
+const createChunk = (
+  text: string,
+  sectionIndex: number,
+  chapterTitle: string,
+  bookHash: string,
+  cumulativeSizeBeforeSection: number,
+  startOffset: number,
+  endOffset: number,
+  chunkIndex: number,
+): TextChunk => ({
+  id: `${bookHash}-${sectionIndex}-${chunkIndex}`,
+  bookHash,
+  sectionIndex,
+  chapterTitle,
+  text,
+  pageNumber: getEstimatedPage(cumulativeSizeBeforeSection + startOffset),
+  sortIndex: cumulativeSizeBeforeSection + startOffset,
+  startOffset,
+  endOffset,
+  charCount: text.length,
+  endPageNumber: getEstimatedEndPage(cumulativeSizeBeforeSection, endOffset),
+  chunkIndex,
+});
 
 export function extractTextFromDocument(doc: Document): string {
   const body = doc.body || doc.documentElement;
@@ -55,17 +85,19 @@ export function chunkText(
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   if (!text || text.length < opts.minChunkSize) {
-    return text
+    const trimmedText = text.trim();
+    return trimmedText
       ? [
-          {
-            id: `${bookHash}-${sectionIndex}-0`,
-            bookHash,
+          createChunk(
+            trimmedText,
             sectionIndex,
             chapterTitle,
-            text: text.trim(),
-            pageNumber: Math.floor(cumulativeSizeBeforeSection / SIZE_PER_PAGE),
-            sortIndex: cumulativeSizeBeforeSection,
-          },
+            bookHash,
+            cumulativeSizeBeforeSection,
+            0,
+            text.length,
+            0,
+          ),
         ]
       : [];
   }
@@ -80,17 +112,24 @@ export function chunkText(
     if (chunkEnd >= text.length) {
       const remaining = text.slice(position).trim();
       if (remaining.length >= opts.minChunkSize) {
-        chunks.push({
-          id: `${bookHash}-${sectionIndex}-${chunkIndex}`,
-          bookHash,
-          sectionIndex,
-          chapterTitle,
-          text: remaining,
-          pageNumber: Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
-          sortIndex: cumulativeSizeBeforeSection + position,
-        });
+        chunks.push(
+          createChunk(
+            remaining,
+            sectionIndex,
+            chapterTitle,
+            bookHash,
+            cumulativeSizeBeforeSection,
+            position,
+            text.length,
+            chunkIndex,
+          ),
+        );
       } else if (chunks.length > 0) {
-        chunks[chunks.length - 1]!.text += ' ' + remaining;
+        const previous = chunks[chunks.length - 1]!;
+        previous.text += ' ' + remaining;
+        previous.endOffset = text.length;
+        previous.charCount = previous.text.length;
+        previous.endPageNumber = getEstimatedEndPage(cumulativeSizeBeforeSection, text.length);
       }
       break;
     }
@@ -99,15 +138,18 @@ export function chunkText(
     const chunkText = text.slice(position, chunkEnd).trim();
 
     if (chunkText.length >= opts.minChunkSize) {
-      chunks.push({
-        id: `${bookHash}-${sectionIndex}-${chunkIndex}`,
-        bookHash,
-        sectionIndex,
-        chapterTitle,
-        text: chunkText,
-        pageNumber: Math.floor((cumulativeSizeBeforeSection + position) / SIZE_PER_PAGE),
-        sortIndex: cumulativeSizeBeforeSection + position,
-      });
+      chunks.push(
+        createChunk(
+          chunkText,
+          sectionIndex,
+          chapterTitle,
+          bookHash,
+          cumulativeSizeBeforeSection,
+          position,
+          chunkEnd,
+          chunkIndex,
+        ),
+      );
       chunkIndex++;
     }
 

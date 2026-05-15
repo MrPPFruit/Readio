@@ -66,6 +66,11 @@ export interface TextChunk {
   embedding?: number[];
   pageNumber: number; // legacy character-estimated page number, not current reader layout page
   sortIndex?: number;
+  startOffset?: number;
+  endOffset?: number;
+  charCount?: number;
+  endPageNumber?: number;
+  chunkIndex?: number;
   cfi?: string;
   href?: string;
 }

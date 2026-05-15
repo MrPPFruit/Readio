@@ -6,6 +6,7 @@ import { getAIProvider } from '../providers';
 import { hybridSearch, isBookIndexed } from '../ragService';
 import { aiLogger } from '../logger';
 import { buildSystemPrompt } from '../prompts';
+import { packReaderContext } from '../search/contextPack';
 import type { AISettings, ScoredChunk } from '../types';
 
 let lastSources: ScoredChunk[] = [];
@@ -85,13 +86,22 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
 
       if (await isBookIndexed(bookHash, settings)) {
         try {
+          const maxContextChunks = settings.maxContextChunks || 5;
+          const retrievalK = Math.max(maxContextChunks * 3, 8);
           chunks = await hybridSearch(
             bookHash,
             query,
             settings,
-            settings.maxContextChunks || 5,
+            retrievalK,
             settings.spoilerProtection ? currentPage : undefined,
           );
+          chunks = packReaderContext({
+            question: query,
+            chunks,
+            currentPage,
+            maxContextChunks,
+            spoilerProtection: settings.spoilerProtection,
+          });
           aiLogger.chat.context(chunks.length, chunks.map((c) => c.text).join('').length);
           lastSources = chunks;
         } catch (e) {
@@ -111,7 +121,13 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
         return;
       }
 
-      const systemPrompt = buildSystemPrompt(bookTitle, authorName, chunks, currentPage);
+      const systemPrompt = buildSystemPrompt(
+        bookTitle,
+        authorName,
+        chunks,
+        currentPage,
+        settings.spoilerProtection,
+      );
 
       const aiMessages = messages.map((m) => ({
         role: m.role as 'user' | 'assistant',

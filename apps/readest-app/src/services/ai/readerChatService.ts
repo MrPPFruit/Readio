@@ -5,6 +5,7 @@ import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { buildSystemPrompt } from './prompts';
 import { getCurrentSectionContextChunks, hybridSearch } from './ragService';
+import { packReaderContext } from './search/contextPack';
 import type { ReaderAISource } from '@/types/readerAI';
 import type { AIProviderName, AISettings, ScoredChunk } from './types';
 
@@ -208,22 +209,29 @@ export async function* streamReaderAIAnswer({
     return;
   }
 
+  const maxContextChunks = settings.maxContextChunks || 5;
+  const retrievalK = Math.max(maxContextChunks * 3, 8);
+
   try {
     chunks = await hybridSearch(
       bookHash,
       query,
       settings,
-      settings.maxContextChunks || 5,
+      retrievalK,
       settings.spoilerProtection ? currentPage : undefined,
     );
     if (settings.spoilerProtection && currentContextQuestionPattern.test(question)) {
       const currentChunks = await getCurrentSectionContextChunks(bookHash, currentPage, 4);
-      const seen = new Set(currentChunks.map((chunk) => chunk.id));
-      chunks = [...currentChunks, ...chunks.filter((chunk) => !seen.has(chunk.id))].slice(
-        0,
-        settings.maxContextChunks || 5,
-      );
+      chunks = [...currentChunks, ...chunks];
     }
+    chunks = packReaderContext({
+      question: query,
+      chunks,
+      currentPage,
+      maxContextChunks,
+      spoilerProtection: settings.spoilerProtection,
+      selectionText,
+    });
   } catch {
     chunks = [];
   }

@@ -42,6 +42,11 @@ export const createBM25Index = (chunks: TextChunk[]): Index =>
 
 const CURRENT_PAGE_CONTEXT_WINDOW = 2;
 
+export const isChunkWithinPageBoundary = (chunk: TextChunk, maxPage?: number): boolean => {
+  if (maxPage === undefined) return true;
+  return (chunk.endPageNumber ?? chunk.pageNumber) <= maxPage;
+};
+
 const getChunkOrder = (chunk: TextChunk, fallback: number): number => {
   const match = chunk.id.match(/-(\d+)$/);
   return match ? Number(match[1]) : fallback;
@@ -54,7 +59,7 @@ export const getCurrentPageContextChunks = (
 ): ScoredChunk[] => {
   const readableChunks = chunks
     .map((chunk, index) => ({ chunk, index }))
-    .filter(({ chunk }) => chunk.pageNumber <= currentPage);
+    .filter(({ chunk }) => isChunkWithinPageBoundary(chunk, currentPage));
   if (readableChunks.length === 0) return [];
 
   const currentSectionIndex = readableChunks.reduce((latest, candidate) =>
@@ -88,7 +93,7 @@ const lexicalChineseSearch = (
 
   return chunks
     .flatMap((chunk) => {
-      if (maxPage !== undefined && chunk.pageNumber > maxPage) return [];
+      if (!isChunkWithinPageBoundary(chunk, maxPage)) return [];
       const text = `${chunk.chapterTitle}\n${chunk.text}`.toLowerCase();
       const score = tokens.reduce(
         (total, token) => total + (text.includes(token.toLowerCase()) ? token.length : 0),
@@ -96,7 +101,12 @@ const lexicalChineseSearch = (
       );
       return score > 0 ? [{ ...chunk, score, searchMethod: 'bm25' as const }] : [];
     })
-    .sort((a, b) => b.score - a.score || b.pageNumber - a.pageNumber)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (a.sortIndex ?? a.pageNumber) - (b.sortIndex ?? b.pageNumber) ||
+        a.id.localeCompare(b.id),
+    )
     .slice(0, topK);
 };
 
@@ -118,7 +128,7 @@ export const searchBM25Index = (
   for (const result of results) {
     const chunk = chunkMap.get(result.ref);
     if (!chunk) continue;
-    if (maxPage !== undefined && chunk.pageNumber > maxPage) continue;
+    if (!isChunkWithinPageBoundary(chunk, maxPage)) continue;
     scored.push({ ...chunk, score: result.score, searchMethod: 'bm25' });
     if (scored.length >= topK) break;
   }

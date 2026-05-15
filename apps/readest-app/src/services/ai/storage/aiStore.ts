@@ -1,6 +1,6 @@
 import { TextChunk, ScoredChunk, BookIndexMeta, AIConversation, AIMessage } from '../types';
 import { aiLogger } from '../logger';
-import { createBM25Index, searchBM25Index } from '../search/bm25';
+import { createBM25Index, isChunkWithinPageBoundary, searchBM25Index } from '../search/bm25';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const lunr = require('lunr') as typeof import('lunr');
@@ -236,7 +236,7 @@ class AIStore {
     const beforeFilter = chunks.filter((c) => c.embedding).length;
     const scored: ScoredChunk[] = [];
     for (const chunk of chunks) {
-      if (maxPage !== undefined && chunk.pageNumber > maxPage) continue;
+      if (!isChunkWithinPageBoundary(chunk, maxPage)) continue;
       if (!chunk.embedding) continue;
       scored.push({
         ...chunk,

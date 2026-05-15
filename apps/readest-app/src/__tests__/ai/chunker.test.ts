@@ -5,7 +5,12 @@ vi.mock('../types', () => ({
   TextChunk: {},
 }));
 
-import { extractTextFromDocument, chunkSection, chunkText } from '@/services/ai/utils/chunker';
+import {
+  extractTextFromDocument,
+  chunkSection,
+  chunkText,
+  SIZE_PER_PAGE,
+} from '@/services/ai/utils/chunker';
 
 describe('AI Chunker', () => {
   const createDocument = (html: string): Document => {
@@ -91,6 +96,77 @@ describe('AI Chunker', () => {
       const doc = createDocument('');
       const chunks = chunkSection(doc, sectionIndex, chapterTitle, bookHash, 0);
       expect(chunks).toEqual([]);
+    });
+
+    test('should include stable offsets and page span metadata for every chunk', () => {
+      const cumulativeSize = SIZE_PER_PAGE * 2 + 25;
+      const chunks = chunkText(
+        'Readable content with repeated context. '.repeat(80),
+        sectionIndex,
+        chapterTitle,
+        bookHash,
+        cumulativeSize,
+      );
+
+      expect(chunks.length).toBeGreaterThan(1);
+      chunks.forEach((chunk, index) => {
+        expect(chunk.chunkIndex).toBe(index);
+        expect(chunk.startOffset).toBeTypeOf('number');
+        expect(chunk.endOffset).toBeTypeOf('number');
+        expect(chunk.charCount).toBe(chunk.text.length);
+        expect(chunk.sortIndex).toBe(cumulativeSize + chunk.startOffset!);
+        expect(chunk.pageNumber).toBe(
+          Math.floor((cumulativeSize + chunk.startOffset!) / SIZE_PER_PAGE),
+        );
+        expect(chunk.endPageNumber).toBe(
+          Math.floor((cumulativeSize + Math.max(0, chunk.endOffset! - 1)) / SIZE_PER_PAGE),
+        );
+        expect(chunk.startOffset!).toBeGreaterThanOrEqual(0);
+        expect(chunk.endOffset!).toBeGreaterThan(chunk.startOffset!);
+      });
+    });
+
+    test('should keep a chunk ending exactly on a page boundary within the previous page', () => {
+      const text = 'A'.repeat(SIZE_PER_PAGE);
+      const chunks = chunkText(text, sectionIndex, chapterTitle, bookHash, 0, {
+        maxChunkSize: SIZE_PER_PAGE,
+        overlapSize: 0,
+        minChunkSize: 50,
+      });
+
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0]!.pageNumber).toBe(0);
+      expect(chunks[0]!.endOffset).toBe(SIZE_PER_PAGE);
+      expect(chunks[0]!.endPageNumber).toBe(0);
+    });
+
+    test('should update metadata when merging a short final remainder', () => {
+      const text = `${'A'.repeat(140)}tail`;
+      const chunks = chunkText(text, sectionIndex, chapterTitle, bookHash, 0, {
+        maxChunkSize: 140,
+        overlapSize: 0,
+        minChunkSize: 50,
+      });
+
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0]!.text).toContain('tail');
+      expect(chunks[0]!.endOffset).toBe(text.length);
+      expect(chunks[0]!.charCount).toBe(chunks[0]!.text.length);
+      expect(chunks[0]!.endPageNumber).toBe(Math.floor(text.length / SIZE_PER_PAGE));
+    });
+
+    test('should include metadata on short single chunks', () => {
+      const text = 'Short text that is less than max chunk size.';
+      const chunks = chunkText(text, sectionIndex, chapterTitle, bookHash, 10);
+
+      expect(chunks).toHaveLength(1);
+      expect(chunks[0]).toMatchObject({
+        startOffset: 0,
+        endOffset: text.length,
+        charCount: text.length,
+        endPageNumber: 0,
+        chunkIndex: 0,
+      });
     });
 
     test('should respect custom chunk options', () => {

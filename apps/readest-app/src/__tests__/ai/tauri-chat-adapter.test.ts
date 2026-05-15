@@ -3,14 +3,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AI_PROVIDER_CATALOG, DEFAULT_AI_SETTINGS } from '@/services/ai/constants';
 import type { AISettings } from '@/services/ai/types';
 
-const { generateTextMock, streamTextMock, getAIProviderMock, hybridSearchMock, isBookIndexedMock } =
-  vi.hoisted(() => ({
-    generateTextMock: vi.fn(),
-    streamTextMock: vi.fn(),
-    getAIProviderMock: vi.fn(),
-    hybridSearchMock: vi.fn(),
-    isBookIndexedMock: vi.fn(),
-  }));
+const {
+  generateTextMock,
+  streamTextMock,
+  getAIProviderMock,
+  hybridSearchMock,
+  isBookIndexedMock,
+  packReaderContextMock,
+} = vi.hoisted(() => ({
+  generateTextMock: vi.fn(),
+  streamTextMock: vi.fn(),
+  getAIProviderMock: vi.fn(),
+  hybridSearchMock: vi.fn(),
+  isBookIndexedMock: vi.fn(),
+  packReaderContextMock: vi.fn(),
+}));
 
 vi.mock('ai', () => ({
   generateText: generateTextMock,
@@ -24,6 +31,10 @@ vi.mock('@/services/ai/providers', () => ({
 vi.mock('@/services/ai/ragService', () => ({
   hybridSearch: hybridSearchMock,
   isBookIndexed: isBookIndexedMock,
+}));
+
+vi.mock('@/services/ai/search/contextPack', () => ({
+  packReaderContext: packReaderContextMock,
 }));
 
 vi.mock('@/services/ai/logger', () => ({
@@ -80,6 +91,7 @@ describe('createTauriAdapter', () => {
     getAIProviderMock.mockReturnValue({ getModel: () => 'mock-model' });
     isBookIndexedMock.mockResolvedValue(false);
     hybridSearchMock.mockResolvedValue([]);
+    packReaderContextMock.mockImplementation(({ chunks }) => chunks);
   });
 
   it('asks the user to index before answering when the book is not indexed', async () => {
@@ -113,6 +125,93 @@ describe('createTauriAdapter', () => {
       ],
     });
     expect(generateTextMock).not.toHaveBeenCalled();
+  });
+
+  it('oversamples and packs retrieval context before prompting in the Tauri adapter', async () => {
+    isBookIndexedMock.mockResolvedValue(true);
+    const searchChunk = {
+      id: 'book-1-0',
+      bookHash: 'book-hash',
+      sectionIndex: 1,
+      chapterTitle: 'Chapter',
+      pageNumber: 40,
+      text: '戴里克在白银城点亮蜡烛。',
+      score: 2,
+      searchMethod: 'bm25' as const,
+    };
+    hybridSearchMock.mockResolvedValue([searchChunk]);
+    packReaderContextMock.mockReturnValue([searchChunk]);
+
+    const adapter = createTauriAdapter(() => ({
+      settings: { ...settings, maxContextChunks: 2, spoilerProtection: true },
+      bookHash: 'book-hash',
+      bookTitle: 'Book',
+      authorName: 'Author',
+      currentPage: 42,
+    }));
+    const result = adapter.run({
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: '戴里克发生了什么？' }],
+        },
+      ],
+    } as never) as AsyncGenerator<ChatModelRunResult>;
+
+    for await (const _chunk of result) {
+      // drain stream
+    }
+
+    expect(hybridSearchMock).toHaveBeenCalledWith(
+      'book-hash',
+      '戴里克发生了什么？',
+      expect.objectContaining({ maxContextChunks: 2 }),
+      8,
+      42,
+    );
+    expect(packReaderContextMock).toHaveBeenCalledWith({
+      question: '戴里克发生了什么？',
+      chunks: [searchChunk],
+      currentPage: 42,
+      maxContextChunks: 2,
+      spoilerProtection: true,
+    });
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('戴里克在白银城点亮蜡烛。'),
+      }),
+    );
+  });
+
+  it('passes disabled spoiler protection through to the Tauri system prompt', async () => {
+    isBookIndexedMock.mockResolvedValue(true);
+    hybridSearchMock.mockResolvedValue([]);
+
+    const adapter = createTauriAdapter(() => ({
+      settings: { ...settings, spoilerProtection: false },
+      bookHash: 'book-hash',
+      bookTitle: 'Book',
+      authorName: 'Author',
+      currentPage: 42,
+    }));
+    const result = adapter.run({
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: '结局是什么？' }],
+        },
+      ],
+    } as never) as AsyncGenerator<ChatModelRunResult>;
+
+    for await (const _chunk of result) {
+      // drain stream
+    }
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('Spoiler mode is allowed for this request'),
+      }),
+    );
   });
 
   it('streams direct provider generation in the Tauri app even when window exists', async () => {
