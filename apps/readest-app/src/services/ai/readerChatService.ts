@@ -4,6 +4,7 @@ import { isWebAppPlatform } from '@/services/environment';
 import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { buildSystemPrompt } from './prompts';
+import { classifyReaderQuestion, type ReaderQuestionClassification } from './questionRouting';
 import { getCurrentSectionContextChunks, hybridSearch } from './ragService';
 import { packReaderContext } from './search/contextPack';
 import type { ReaderAISource } from '@/types/readerAI';
@@ -39,7 +40,6 @@ export interface GenerateReaderAISuggestionsOptions {
   signal?: AbortSignal;
 }
 
-const highRiskSpoilerPattern = /结局|谁是凶手|后面|最后|后来|最终|死了没|会死|真相|剧透/;
 const currentContextQuestionPattern = /前面|发生了什么|本章|这里|当前|刚才|这段|上一段/;
 
 const isSupportedProvider = (provider: string): provider is AIProviderName =>
@@ -146,6 +146,7 @@ async function* streamViaApiRoute(
     authorName: string;
     currentPage: number;
     spoilerProtection: boolean;
+    classification?: ReaderQuestionClassification;
     chunks: ScoredChunk[];
   },
   settings: AISettings,
@@ -202,12 +203,12 @@ export async function* streamReaderAIAnswer({
   onSources,
 }: StreamReaderAIAnswerOptions): AsyncGenerator<string> {
   const query = buildQuestion(question, selectionText);
+  const classification = classifyReaderQuestion({
+    question,
+    selectionText,
+    spoilerProtection: settings.spoilerProtection,
+  });
   let chunks: ScoredChunk[] = [];
-
-  if (settings.spoilerProtection && highRiskSpoilerPattern.test(question)) {
-    yield `我不能提前透露后文或结局。我们目前只读到第 ${currentPage} 页，我会只基于已读内容聊线索和理解；如果你想讨论具体段落，可以选中文本后问我。`;
-    return;
-  }
 
   const maxContextChunks = settings.maxContextChunks || 5;
   const retrievalK = Math.max(maxContextChunks * 3, 8);
@@ -245,6 +246,7 @@ export async function* streamReaderAIAnswer({
     orderedChunks,
     currentPage,
     settings.spoilerProtection,
+    classification,
   );
   const aiMessages: ModelMessage[] = [
     ...messages.map((message) => ({
@@ -264,6 +266,7 @@ export async function* streamReaderAIAnswer({
         authorName,
         currentPage,
         spoilerProtection: settings.spoilerProtection,
+        classification,
         chunks: orderedChunks,
       },
       settings,

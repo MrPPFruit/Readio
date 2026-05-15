@@ -396,55 +396,103 @@ It directly improves the current implementation while staying compatible with BM
 - Spoiler-safe filtering is more accurate than page-number estimates.
 - Default answer path still feels responsive.
 
-## Phase B: Question classification and strategy routing
+## Phase B: Question intent and source-scope routing
 
 ### Goal
 
-Stop treating every question as the same retrieval problem.
+Stop treating every question as the same retrieval problem, while making spoiler behavior consistent across every question type.
 
 ### Plain-language explanation
 
-“解释这句话”和“总结本章”和“这个人物是谁” need different search behavior. The AI should first understand the type of question, then choose the right retrieval strategy.
+There are two separate decisions:
 
-### Question types
+```text
+intent = what the user wants help with
+scope = how much of the book the AI is allowed to use
+```
 
-1. Selected-text explanation.
-2. Current page / current paragraph question.
-3. Current chapter summary.
-4. Previous recap.
-5. Character or concept lookup.
-6. Cross-chapter comparison.
-7. Theme or foreshadowing analysis.
-8. Spoiler-risk question.
-9. Unanswerable-from-current-source question.
+For example, “这个人是谁？” is always a character/entity question. Spoiler protection should not turn it into a different question type. Instead, spoiler protection changes the answer range:
+
+- spoiler protection on: answer from what the reader has reached so far;
+- spoiler protection off: whole-book evidence is allowed, but the answer should say when it is using whole-book information.
+
+In plain terms:
+
+> The question type decides where to look first. The spoiler setting decides how far the assistant is allowed to look.
+
+### Question intents
+
+Initial rule-based intents:
+
+1. `selection_explanation`: explain selected text or the current sentence/paragraph.
+2. `current_recap`: recap what has happened up to the current reading position.
+3. `entity_lookup`: explain a character, place, organization, item, or concept.
+4. `chapter_summary`: summarize the current chapter or section.
+5. `analysis`: explain cause/effect, foreshadowing, clue significance, themes, or relationships.
+6. `general`: fallback for ordinary source-grounded questions.
+
+Do not model “spoiler-risk” as a normal intent. Spoiler control is a source-scope rule that applies to every intent.
+
+### Source scopes
+
+Initial scopes:
+
+1. `read_so_far`: spoiler protection is enabled; retrieve and answer only from content at or before the current reading boundary.
+2. `whole_book_allowed`: spoiler protection is disabled; retrieval may use the whole book, but the answer should make the evidence range clear.
+
+Important nuance:
+
+`whole_book_allowed` means the assistant may use the whole book. It does not mean every answer must over-explain the ending.
+
+Examples:
+
+- “这个人是谁？” + `read_so_far`: “截至你当前读到的位置，他是……”
+- “这个人是谁？” + `whole_book_allowed`: “从全书范围看，他后来……”
+- “这句话是什么意思？” + `whole_book_allowed`: first explain the local context; only mention later meaning if it materially changes interpretation.
+- “总结本章” + `whole_book_allowed`: summarize the chapter, not the whole book, unless the user asks for whole-book context.
+
+### Current implementation status
+
+Implemented and verified locally:
+
+- deterministic intent/scope classifier;
+- prompt guidance for intent and source scope;
+- browser API reader-context validation for classification metadata;
+- Tauri reader chat prompt metadata wiring.
+
+Still pending:
+
+- retrieval strategy changes based on `intent + scope`.
 
 ### Main work
 
-1. Add a small classifier:
+1. Add a small intent/scope classifier:
    - rule-based first;
-   - LLM-based only if needed later.
+   - LLM-based only if needed later;
+   - keep it pure and easy to test.
 
-2. Map each type to retrieval strategy:
-   - selected text: selected passage + neighbor window;
-   - current chapter: section coverage;
-   - character lookup: first occurrence + latest relevant occurrence + current mention;
-   - recap: previous sections only;
-   - theme analysis: broader multi-section retrieval;
-   - spoiler-risk: strict read-boundary filtering.
+2. Map each intent plus scope to retrieval strategy:
+   - selected text: selected passage + neighbor window, constrained by scope;
+   - current recap: current and previous content, constrained by scope;
+   - entity lookup: exact name recall, first relevant appearance, recent/current mention, with whole-book expansion only when scope allows;
+   - chapter summary: current chapter/section coverage;
+   - analysis: broader multi-section retrieval and later query decomposition;
+   - general: current retrieval path with scope-aware boundaries.
 
-3. Adjust prompt style by question type:
-   - concise explanation;
-   - bullet recap;
-   - evidence list;
-   - uncertainty note;
-   - no-spoiler refusal with known-so-far summary.
+3. Adjust prompt style by intent and scope:
+   - concise local explanation;
+   - known-so-far recap;
+   - whole-book label when later content is used;
+   - evidence list for analysis;
+   - uncertainty note when retrieved evidence is insufficient.
 
 ### Success criteria
 
-- Different question types produce visibly better evidence selection.
-- Character questions do not over-focus only on the latest mention.
-- Chapter summaries cover more of the chapter structure.
-- Spoiler-risk questions are handled more naturally and safely.
+- Spoiler protection behavior is consistent for every question type.
+- Turning spoiler protection off allows whole-book evidence without forcing irrelevant ending spoilers into local questions.
+- Character/entity questions can answer either “known so far” or “whole-book view” depending on scope.
+- Tests cover the same intent under both `read_so_far` and `whole_book_allowed` scopes.
+- Prompt/context metadata makes the chosen scope clear to the model.
 
 ## Phase C: Deep analysis / Heavy Read mode
 

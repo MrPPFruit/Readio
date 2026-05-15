@@ -5,6 +5,7 @@ import { readioFeatures } from '@/config/features';
 import { AI_PROVIDER_CATALOG } from '@/services/ai/constants';
 import { createOpenAICompatibleModel } from '@/services/ai/openAICompatibleModel';
 import { buildSystemPrompt } from '@/services/ai/prompts';
+import type { ReaderQuestionClassification } from '@/services/ai/questionRouting';
 import type { AIProviderName, ScoredChunk } from '@/services/ai/types';
 import { validateUserAndToken } from '@/utils/access';
 import { streamText } from 'ai';
@@ -21,6 +22,15 @@ const MAX_READER_CHUNKS = 8;
 const MAX_READER_CHUNK_TEXT_CHARS = 3000;
 const MAX_READER_CHAPTER_CHARS = 200;
 const MAX_BASE_URL_CHARS = 300;
+const READER_INTENTS = [
+  'selection_explanation',
+  'current_recap',
+  'entity_lookup',
+  'chapter_summary',
+  'analysis',
+  'general',
+] as const;
+const READER_SCOPES = ['read_so_far', 'whole_book_allowed'] as const;
 const DEFAULT_PROVIDER: AIProviderName = 'openrouter';
 
 const jsonError = (error: string, status: number) =>
@@ -75,6 +85,11 @@ const boundedString = (value: unknown, maxLength: number): string | null => {
   if (typeof value !== 'string' || value.length > maxLength) return null;
   return value;
 };
+
+const isReaderQuestionClassification = (value: unknown): value is ReaderQuestionClassification =>
+  isPlainObject(value) &&
+  READER_INTENTS.includes(value['intent'] as (typeof READER_INTENTS)[number]) &&
+  READER_SCOPES.includes(value['scope'] as (typeof READER_SCOPES)[number]);
 
 const boundedOptionalString = (value: unknown, maxLength: number): string | null => {
   if (value === undefined) return '';
@@ -152,6 +167,7 @@ const validateReaderContext = (readerContext: unknown) => {
   const authorName = boundedOptionalString(readerContext['authorName'], MAX_READER_AUTHOR_CHARS);
   const currentPage = readerContext['currentPage'];
   const spoilerProtection = readerContext['spoilerProtection'];
+  const classification = readerContext['classification'];
   const chunks = readerContext['chunks'];
 
   if (
@@ -163,6 +179,14 @@ const validateReaderContext = (readerContext: unknown) => {
     return null;
   }
   if (spoilerProtection !== undefined && typeof spoilerProtection !== 'boolean') return null;
+  const effectiveSpoilerProtection = spoilerProtection !== false;
+  const expectedScope = effectiveSpoilerProtection ? 'read_so_far' : 'whole_book_allowed';
+  if (
+    classification !== undefined &&
+    (!isReaderQuestionClassification(classification) || classification.scope !== expectedScope)
+  ) {
+    return null;
+  }
   if (!Array.isArray(chunks) || chunks.length > MAX_READER_CHUNKS) return null;
 
   const validatedChunks: ScoredChunk[] = [];
@@ -198,7 +222,8 @@ const validateReaderContext = (readerContext: unknown) => {
     bookTitle,
     authorName,
     currentPage: Math.max(1, Math.floor(currentPage)),
-    spoilerProtection: spoilerProtection !== false,
+    spoilerProtection: effectiveSpoilerProtection,
+    classification,
     chunks: validatedChunks,
   };
 };
@@ -268,6 +293,7 @@ export async function POST(req: Request): Promise<Response> {
         validatedReaderContext.chunks,
         validatedReaderContext.currentPage,
         validatedReaderContext.spoilerProtection,
+        validatedReaderContext.classification,
       );
     } else {
       const providedSystem = body['system'];

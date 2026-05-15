@@ -28,8 +28,18 @@
 ## Validation evidence to preserve
 
 - Latest Reader AI/RAG Phase A verification (2026-05-15):
+  - Committed as `e4a504bf feat(ai): improve reader retrieval context quality`.
+  - Follow-up regression test committed as `c0a0dc10 test(ai): cover spoiler setting changes within conversation`.
   - `pnpm -C "./apps/readest-app" test -- --watch=false src/__tests__/ai/chunker.test.ts src/__tests__/ai/bm25-search.test.ts src/__tests__/ai/context-pack.test.ts src/__tests__/ai/rag-service.test.ts src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/tauri-chat-adapter.test.ts` passed after review fixes; Vitest selected the full app suite and reported `191 files / 3507 tests passed`, `2 files / 7 tests skipped`.
+  - Same-conversation spoiler toggle regression test passed; subsequent full Vitest run reported `191 files / 3508 tests passed`.
   - `pnpm -C "./apps/readest-app" lint` passed after final blocker fix; `tsgo --noEmit && biome check .`, `811 files checked`.
+- Reader AI/RAG Phase B classifier + prompt/context metadata verification (2026-05-15):
+  - Current work is local/uncommitted until explicitly committed.
+  - Added deterministic `intent + scope` classifier and passed classification metadata through `readerChatService`, `TauriChatAdapter`, and `/api/ai/chat` reader context validation into `buildSystemPrompt`.
+  - Review fixes: API validation rejects classification scopes that conflict with effective spoiler protection; whole-book prompts use `source_scope="whole_book_allowed" reading_position="..."` instead of current `page_limit` metadata; high-risk spoiler wording now still routes through read-so-far retrieval/prompting instead of an early canned return; empty whole-book prompts no longer claim page-limited context.
+  - `pnpm -C "./apps/readest-app" test -- --watch=false src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/api-chat-route.test.ts src/__tests__/ai/question-routing.test.ts src/__tests__/ai/tauri-chat-adapter.test.ts` passed; Vitest selected the full app suite and reported `192 files / 3514 tests passed`, `2 files / 7 tests skipped`.
+  - `pnpm -C "./apps/readest-app" lint` passed; `tsgo --noEmit && biome check .`, `813 files checked`.
+  - Final code review approved after blocker fixes.
 - Previous alpha.10/alpha.13 release evidence:
   - Full Vitest run passed: `189 files / 3475 tests passed`.
   - App lint passed: `pnpm --filter @readest/readest-app lint`, `809 files checked`.
@@ -69,7 +79,10 @@
 
 ## Current blockers and risks
 
-- Reader AI/RAG Phase A source changes are implemented locally but not committed: structured chunk offsets/order metadata, CJK lexical BM25 fallback, current-section context boost, context packing, source ordering, and focused tests. Review diffs before committing.
+- Reader AI/RAG Phase A source changes are committed.
+- Phase B classifier + prompt/context metadata work is implemented and verified locally, but not committed yet.
+- Phase B design decision: spoiler protection is not a question intent. Treat it as a source scope (`read_so_far` vs `whole_book_allowed`) that applies to every question intent.
+- Next RAG work should use `intent + scope` to vary retrieval strategy, starting with entity lookup, selected-text explanation, and current recap.
 - No known alpha.13 release blocker at this handoff.
 - `.codepilot-uploads/` is untracked and likely unrelated; avoid accidental commit.
 - Android generated files can be overwritten by `tauri android init` or icon generation. Recheck package paths, app label, and launcher resources after regeneration.
@@ -78,12 +91,13 @@
 
 ## Next actions
 
-1. If continuing Reader AI/RAG Phase A, review the local diffs around `chunker.ts`, `bm25.ts`, `contextPack.ts`, `readerChatService.ts`, `aiStore.ts`, `types.ts`, `prompts.ts`, and the AI tests; then decide whether to commit or proceed to UI/manual QA.
-2. If continuing alpha.13 stabilization, start from targeted tests around brightness, Reader AI, and citation ordering; then run type check, lint, and focused emulator validation.
-3. If extending Reader AI retrieval/RAG quality beyond Phase A, read `./READIO_AI_RETRIEVAL_ROADMAP.md` first; discuss before introducing heavier embedding, long preprocessing, or deep-analysis defaults.
-4. If preparing alpha.14 or later, bump version and `versionCode` first, then build with `build-readio-apk`, install on emulator, smoke test, create a prerelease, upload APK plus `.sha256` with local `gh release upload`, download it back, and verify SHA-256.
-5. If committing, review `git diff` and stage only intentional source/docs changes; do not stage `.codepilot-uploads/` by default.
-6. If needing historical context, read `./HANDOFF_PRE_ALPHA10_ARCHIVE.md` instead of expanding this handoff.
+1. If continuing Reader AI/RAG quality work, commit the verified Phase B classifier + prompt/context metadata batch if desired, then route retrieval based on `intent + scope` instead of treating spoiler risk as a standalone intent.
+2. For the next Phase B retrieval-routing increment, add tests first for entity lookup, selected-text explanation, and current recap under both `read_so_far` and `whole_book_allowed` where relevant.
+3. If continuing alpha.13 stabilization, start from targeted tests around brightness, Reader AI, and citation ordering; then run type check, lint, and focused emulator validation.
+4. If extending Reader AI retrieval/RAG beyond Phase B, read `./READIO_AI_RETRIEVAL_ROADMAP.md` first; discuss before introducing heavier embedding, long preprocessing, or deep-analysis defaults.
+5. If preparing alpha.14 or later, bump version and `versionCode` first, then build with `build-readio-apk`, install on emulator, smoke test, create a prerelease, upload APK plus `.sha256` with local `gh release upload`, download it back, and verify SHA-256.
+6. If committing, review `git diff` and stage only intentional source/docs changes; do not stage `.codepilot-uploads/` or unrelated `temp/` files by default.
+7. If needing historical context, read `./HANDOFF_PRE_ALPHA10_ARCHIVE.md` instead of expanding this handoff.
 
 ## Key files
 
@@ -97,7 +111,12 @@
 - `./apps/readest-app/src/services/ai/utils/chunker.ts`
 - `./apps/readest-app/src/services/ai/search/bm25.ts`
 - `./apps/readest-app/src/services/ai/search/contextPack.ts`
+- `./apps/readest-app/src/services/ai/questionRouting.ts`
+- `./apps/readest-app/src/services/ai/prompts.ts`
 - `./apps/readest-app/src/services/ai/readerChatService.ts`
+- `./apps/readest-app/src/services/ai/adapters/TauriChatAdapter.ts`
+- `./apps/readest-app/src/app/api/ai/chat/route.ts`
+- `./apps/readest-app/src/__tests__/ai/question-routing.test.ts`
 - `./apps/readest-app/src/__tests__/ai/context-pack.test.ts`
 - `./CLAUDE.md`
 - `./apks/readio-v0.1.0-alpha.13-android-arm64-release.apk`

@@ -181,6 +181,16 @@ describe('createTauriAdapter', () => {
         system: expect.stringContaining('戴里克在白银城点亮蜡烛。'),
       }),
     );
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('Question intent: entity_lookup'),
+      }),
+    );
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('Answer scope: read_so_far'),
+      }),
+    );
   });
 
   it('passes disabled spoiler protection through to the Tauri system prompt', async () => {

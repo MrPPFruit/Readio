@@ -1,43 +1,63 @@
-# Readio Readest M1.1 收口计划
+# Readio Reader AI Phase B Plan
 
-## 目标
+## Goal
 
-收口当前 Readest-based 阅读器精简批次，优先修复“隐藏滚动模式后仍可能进入滚动”的问题，并产出经模拟器验证的 release APK。
+Start Reader AI Phase B by separating question intent from spoiler/source scope, then add a tested pure classifier and pass the classification through reader chat prompt/context metadata.
 
-## 当前阶段
+## Current phase
 
-- 状态：complete
-- 阶段 1：恢复上下文与梳理未提交改动（complete）
-- 阶段 2：补齐翻页唯一化回归测试（complete）
-- 阶段 3：实现默认且只能分页翻页（complete）
-- 阶段 4：运行目标测试、type check、lint/build（complete）
-- 阶段 5：构建 release APK 并安装模拟器验证（complete）
-- 阶段 6：更新 HANDOFF 与交付结论（complete）
+- Status: complete
+- Phase 1: Update roadmap and handoff with intent/scope design (complete)
+- Phase 2: Add failing tests for intent/scope classification (complete)
+- Phase 3: Implement minimal classifier (complete)
+- Phase 4: Add prompt/API/Tauri integration tests for classification metadata (complete)
+- Phase 5: Wire classifier into reader chat prompt/context metadata (complete)
+- Phase 6: Run focused AI tests and lint (complete)
+- Phase 7: Update planning notes and report results (complete)
 
-## 已知约束
+## Key decision
 
-- 当前主线工作区是 `/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest`，不是旧 Kotlin spike 仓库。
-- 不继续大规模精简 UI；当前批次目标是收口稳定性。
-- 默认且只能使用分页/翻页模式；不得保留用户可进入滚动模式的入口或持久状态。
-- 出包前必须安装到模拟器做基础功能验证。
-- APK 尽量使用既有 release 小包脚本输出到 `apks/`。
-- 不提交、不推送，除非用户明确要求。
+Spoiler protection is not a question intent. It is a source scope that applies to every intent:
 
-## 决策记录
+- `read_so_far`: spoiler protection enabled; answer only from content at or before current reading boundary.
+- `whole_book_allowed`: spoiler protection disabled; whole-book evidence may be used, but answers should make the evidence range clear.
 
-- 继续沿用 Readest 底座，Readio 做本地优先、中文阅读优先、功能减法后的轻量阅读体验。
-- 当前批次先修阅读模式状态一致性，再跑验证和出包。
-- 本批交付边界按评审调整为“M1.1 阅读器精简收口 + pagination-only hardening”，包含前序阅读 UI 精简延续改动；提交时不要描述成纯滚动模式修复。
-- `FootnotePopup.tsx` 的 `flow='scrolled'` 是脚注弹窗内部 renderer 例外，不是主阅读模式；当前保留并记录，避免为字面零 occurrence 破坏脚注阅读体验。
+Question intent remains separate:
 
-## 风险与注意事项
+- `selection_explanation`
+- `current_recap`
+- `entity_lookup`
+- `chapter_summary`
+- `analysis`
+- `general`
 
-- 工作区已有大量未提交改动，修改前必须读相关文件，避免覆盖上一轮成果。
-- Readest 上游仍在活跃迭代，当前不追 TTS、sync、PDF 搜索等全功能方向。
-- 构建时需要清理宿主 Next 私有环境变量；Android 构建需要显式 cargo PATH 或使用既有脚本。
+## Constraints
 
-## 遇到的错误
+- Follow test-first development.
+- Start with pure deterministic rules; do not call an LLM for classification.
+- Do not introduce embedding, heavy preprocessing, or persistent cache changes.
+- Keep this step small: classifier plus prompt/context metadata first; retrieval strategy routing can follow in a later step.
+- Do not stage `.codepilot-uploads/` or unrelated `temp/` files.
 
-| 错误                                    | 尝试次数 | 解决方案                                                                                  |
-| --------------------------------------- | -------- | ----------------------------------------------------------------------------------------- |
-| apksigner build-tools 36.0.0 路径不存在 | 1        | 改用实际安装的 `/Users/ppg/Library/Android/sdk/build-tools/35.0.0/apksigner` 完成签名验证 |
+## Verification plan
+
+- First run the new classifier test and confirm it fails before implementation.
+- Add integration tests that fail until prompt/API/Tauri paths carry classification metadata.
+- After implementation, run focused AI tests.
+- Run app lint after code changes.
+
+## Verification evidence
+
+- `pnpm -C apps/readest-app test -- --watch=false src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/api-chat-route.test.ts src/__tests__/ai/question-routing.test.ts src/__tests__/ai/tauri-chat-adapter.test.ts` passed; Vitest selected the full app suite and reported `192 files / 3514 tests passed`, `2 files / 7 tests skipped`.
+- `pnpm -C apps/readest-app lint` passed; `tsgo --noEmit && biome check .`, `813 files checked`.
+- Final code review approved after fixing high-risk spoiler early-return routing and whole-book empty-context wording.
+
+## Errors encountered
+
+| Error                                                                                   | Attempt | Resolution                                                                                         |
+| --------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| New test failed because `@/services/ai/questionRouting` did not exist                   | 1       | Expected RED phase; implemented minimal `questionRouting.ts`                                       |
+| Entity lookup rule missed Chinese question marks                                        | 1       | Allowed trailing `？` / `?` in entity lookup regex                                                 |
+| Entity-event rule misclassified `前面发生了什么？` as `entity_lookup`                   | 1       | Excluded recap prefixes such as `前面` / `之前` / `刚才` from the entity-event rule                |
+| Code review found API accepted classification scope conflicting with spoiler protection | 1       | Added API validation requiring `classification.scope` to match effective `spoilerProtection`       |
+| Code review found whole-book prompts still labeled passages with current `page_limit`   | 1       | Changed unprotected passage metadata to `source_scope="whole_book_allowed" reading_position="..."` |

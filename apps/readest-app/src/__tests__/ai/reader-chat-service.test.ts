@@ -558,6 +558,7 @@ describe('streamReaderAIAnswer', () => {
           authorName: 'Author',
           currentPage: 90,
           spoilerProtection: true,
+          classification: { intent: 'current_recap', scope: 'read_so_far' },
           chunks: [
             { text: 'A relevant passage.', chapterTitle: 'Chapter 1', pageNumber: 4 },
             { text: 'Later passage.', chapterTitle: 'Chapter 8', pageNumber: 80 },
@@ -607,7 +608,54 @@ describe('streamReaderAIAnswer', () => {
     expect(unprotectedSystem).not.toContain('You can ONLY discuss content from pages 1 to 7');
   });
 
-  it('does not search future content for high-risk spoiler questions', async () => {
+  it('includes question intent and source scope guidance in the system prompt', async () => {
+    const system = buildSystemPrompt(
+      'Book',
+      'Author',
+      [
+        {
+          id: 'future-source',
+          bookHash: 'book-hash',
+          sectionIndex: 8,
+          chapterTitle: 'Chapter 8',
+          text: 'A later whole-book passage.',
+          pageNumber: 80,
+          score: 0.9,
+          searchMethod: 'hybrid',
+        },
+      ],
+      7,
+      false,
+      {
+        intent: 'entity_lookup',
+        scope: 'whole_book_allowed',
+      },
+    );
+
+    expect(system).toContain('Question intent: entity_lookup');
+    expect(system).toContain('Answer scope: whole_book_allowed');
+    expect(system).toContain('whole-book evidence is allowed');
+    expect(system).toContain('label whole-book or later-content evidence when you use it');
+    expect(system).toContain(
+      '<BOOK_PASSAGES source_scope="whole_book_allowed" reading_position="7">',
+    );
+    expect(system).not.toContain('<BOOK_PASSAGES page_limit="7">');
+  });
+
+  it('routes high-risk spoiler wording through read-so-far retrieval and prompting', async () => {
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'clue-source',
+        bookHash: 'book-hash',
+        sectionIndex: 1,
+        chapterTitle: '第一章',
+        text: '侦探只在已读范围内发现了钥匙和脚印两个线索。',
+        pageNumber: 10,
+        score: 1,
+        searchMethod: 'hybrid',
+      },
+    ]);
+
     const chunks: string[] = [];
 
     for await (const chunk of streamReaderAIAnswer({
@@ -621,9 +669,28 @@ describe('streamReaderAIAnswer', () => {
       chunks.push(chunk);
     }
 
-    expect(chunks.join('')).toContain('不能提前透露后文或结局');
-    expect(hybridSearchMock).not.toHaveBeenCalled();
-    expect(streamTextMock).not.toHaveBeenCalled();
+    expect(chunks).toEqual(['ok']);
+    expect(hybridSearchMock).toHaveBeenCalledWith('book-hash', '最后谁是凶手？', settings, 9, 12);
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('Answer scope: read_so_far'),
+      }),
+    );
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining('You can ONLY discuss content from pages 1 to 12'),
+      }),
+    );
+  });
+
+  it('uses scope-aware empty-context wording for whole-book requests', () => {
+    const system = buildSystemPrompt('Book', 'Author', [], 7, false, {
+      intent: 'entity_lookup',
+      scope: 'whole_book_allowed',
+    });
+
+    expect(system).toContain('[No indexed book passages are available for this request.]');
+    expect(system).not.toContain('[No indexed content available for pages you have read yet.]');
   });
 
   it('escapes prompt-like text from book metadata and passages before building the system prompt', () => {

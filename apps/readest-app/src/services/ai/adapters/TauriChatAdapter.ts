@@ -6,6 +6,7 @@ import { getAIProvider } from '../providers';
 import { hybridSearch, isBookIndexed } from '../ragService';
 import { aiLogger } from '../logger';
 import { buildSystemPrompt } from '../prompts';
+import { classifyReaderQuestion } from '../questionRouting';
 import { packReaderContext } from '../search/contextPack';
 import type { AISettings, ScoredChunk } from '../types';
 
@@ -83,6 +84,10 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
           .join(' ') || '';
 
       aiLogger.chat.send(query.length, false);
+      const classification = classifyReaderQuestion({
+        question: query,
+        spoilerProtection: settings.spoilerProtection,
+      });
 
       if (await isBookIndexed(bookHash, settings)) {
         try {
@@ -127,6 +132,7 @@ export function createTauriAdapter(getOptions: () => TauriAdapterOptions): ChatM
         chunks,
         currentPage,
         settings.spoilerProtection,
+        classification,
       );
 
       const aiMessages = messages.map((m) => ({

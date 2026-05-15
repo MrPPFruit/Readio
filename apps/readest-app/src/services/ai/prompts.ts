@@ -1,3 +1,4 @@
+import type { ReaderQuestionClassification } from './questionRouting';
 import type { ScoredChunk } from './types';
 
 const escapePromptData = (value: string): string =>
@@ -9,19 +10,49 @@ export function buildSystemPrompt(
   chunks: ScoredChunk[],
   currentPage: number,
   spoilerProtection = true,
+  classification?: ReaderQuestionClassification,
 ): string {
   const safeBookTitle = escapePromptData(bookTitle);
   const safeAuthorName = escapePromptData(authorName);
+  const passageAttributes = spoilerProtection
+    ? `page_limit="${currentPage}"`
+    : `source_scope="whole_book_allowed" reading_position="${currentPage}"`;
+  const emptyContextMessage = spoilerProtection
+    ? '[No indexed content available for pages you have read yet.]'
+    : '[No indexed book passages are available for this request.]';
   const contextSection =
     chunks.length > 0
-      ? `\n\n<BOOK_PASSAGES page_limit="${currentPage}">\n${chunks
+      ? `\n\n<BOOK_PASSAGES ${passageAttributes}>\n${chunks
           .map((c, index) => {
             const header = escapePromptData(c.chapterTitle || `Section ${c.sectionIndex + 1}`);
             const text = escapePromptData(c.text);
             return `[Source ${index + 1}: ${header}]\n${text}`;
           })
           .join('\n\n')}\n</BOOK_PASSAGES>`
-      : '\n\n[No indexed content available for pages you have read yet.]';
+      : `\n\n${emptyContextMessage}`;
+
+  const questionGuidance = classification
+    ? `
+QUESTION ROUTING:
+- Question intent: ${classification.intent}
+- Answer scope: ${classification.scope}
+- Use the intent to decide what kind of help the reader wants.
+- Use the answer scope as the maximum allowed evidence range.`
+    : '';
+
+  const scopeGuidance =
+    classification?.scope === 'whole_book_allowed'
+      ? `
+WHOLE-BOOK SCOPE GUIDANCE:
+- whole-book evidence is allowed for this request, but do not force ending details into local questions.
+- If you use later-content or whole-book evidence, label whole-book or later-content evidence when you use it.
+- For local selected-text questions, explain the local context first.`
+      : classification?.scope === 'read_so_far'
+        ? `
+READ-SO-FAR SCOPE GUIDANCE:
+- Answer as known so far at the current reading position.
+- Do not use or imply future content beyond the current reading boundary.`
+        : '';
 
   const spoilerInstructions = spoilerProtection
     ? `- You remember everything from pages 1 to ${currentPage}, but you have NOT read beyond that
@@ -57,7 +88,7 @@ You are **Readio**, a warm and encouraging reading companion.
 IDENTITY:
 - You read alongside the user, experiencing the book together
 - You are currently on page ${currentPage} of "${safeBookTitle}"${safeAuthorName ? ` by ${safeAuthorName}` : ''}
-${spoilerInstructions}
+${spoilerInstructions}${questionGuidance}${scopeGuidance}
 
 RESPONSE STYLE:
 - Be warm and conversational, like a friend discussing a great book

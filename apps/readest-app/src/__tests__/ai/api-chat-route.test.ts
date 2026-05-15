@@ -182,6 +182,28 @@ describe('/api/ai/chat BYOK provider routing', () => {
     expect(mocks.streamText).not.toHaveBeenCalled();
   });
 
+  it('rejects reader classification scope that conflicts with spoiler protection', async () => {
+    const response = await POST(
+      postRequest({
+        provider: 'openrouter',
+        apiKey: 'openrouter-key',
+        model: 'google/gemini-2.5-flash-lite',
+        readerContext: {
+          bookTitle: 'Book',
+          currentPage: 7,
+          spoilerProtection: true,
+          classification: { intent: 'entity_lookup', scope: 'whole_book_allowed' },
+          chunks: [],
+        },
+        messages: [{ role: 'user', content: '戴里克是谁？' }],
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid reader context' });
+    expect(mocks.streamText).not.toHaveBeenCalled();
+  });
+
   it('returns a generic error when providers fail', async () => {
     mocks.streamText.mockImplementationOnce(() => {
       throw new Error('upstream leaked provider detail');
