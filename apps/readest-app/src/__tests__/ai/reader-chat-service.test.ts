@@ -802,7 +802,7 @@ describe('streamReaderAIAnswer', () => {
     ]);
   });
 
-  it('still uses current chapter context for current-state questions when spoiler protection is disabled', async () => {
+  it('allows whole-book evidence while preserving current context when spoiler protection is disabled', async () => {
     getCurrentSectionContextChunksMock.mockResolvedValue([
       {
         id: 'current-world-member',
@@ -818,6 +818,18 @@ describe('streamReaderAIAnswer', () => {
     ]);
     hybridSearchMock.mockResolvedValue([
       {
+        id: 'later-members',
+        bookHash: 'book-hash',
+        sectionIndex: 520,
+        chapterTitle: '后文章节',
+        text: '后续塔罗会成员包括魔术师、月亮、隐者、星星、审判。',
+        pageNumber: 4200,
+        endPageNumber: 4200,
+        sortIndex: 4_200_000,
+        score: 30,
+        searchMethod: 'bm25',
+      },
+      {
         id: 'old-members',
         bookHash: 'book-hash',
         sectionIndex: 35,
@@ -825,7 +837,8 @@ describe('streamReaderAIAnswer', () => {
         text: '塔罗会成员包括愚者、正义和倒吊人。',
         pageNumber: 260,
         endPageNumber: 260,
-        score: 30,
+        sortIndex: 400_000,
+        score: 24,
         searchMethod: 'bm25',
       },
     ]);
@@ -846,6 +859,7 @@ describe('streamReaderAIAnswer', () => {
       }
     });
 
+    const systemPrompt = streamTextMock.mock.calls[0]?.[0].system;
     expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 1988, 4);
     expect(hybridSearchMock).toHaveBeenCalledWith(
       'book-hash',
@@ -854,6 +868,12 @@ describe('streamReaderAIAnswer', () => {
       30,
       undefined,
     );
+    expect(systemPrompt).toContain(
+      '<BOOK_PASSAGES source_scope="whole_book_allowed" reading_position="3104">',
+    );
+    expect(systemPrompt).toContain('后续塔罗会成员包括魔术师、月亮、隐者、星星、审判');
+    expect(systemPrompt).toContain('克莱恩向正义、倒吊人、太阳介绍新成员“世界”');
+    expect(systemPrompt).not.toContain('safe_boundary="filtered"');
     expect(onSources.mock.calls[0]?.[0][0]).toMatchObject({ id: 'current-world-member' });
   });
 
