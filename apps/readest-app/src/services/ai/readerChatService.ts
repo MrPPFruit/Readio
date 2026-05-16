@@ -11,6 +11,7 @@ import {
   hybridSearch,
 } from './ragService';
 import { packReaderContext } from './search/contextPack';
+import { tokenizeSearchText } from './search/bm25';
 import type { ReaderAISource } from '@/types/readerAI';
 import type { AIProviderName, AISettings, ScoredChunk } from './types';
 
@@ -49,6 +50,7 @@ const currentContextQuestionPattern =
   /前面|发生了什么|本章|这章|这一章|当前章节|这里|当前|现在|目前|刚才|这段|上一段/;
 const entityListQuestionPattern = /成员|都有谁|有谁|名单|包括谁/;
 const currentContextScoreBoost = 1_000;
+const MIN_ENTITY_CURRENT_CONTEXT_TOKEN_LENGTH = 2;
 
 const isSupportedProvider = (provider: string): provider is AIProviderName =>
   provider in AI_PROVIDER_CATALOG;
@@ -100,6 +102,19 @@ function sortCurrentChunksFirst(
     if (sortA !== sortB) return sortA - sortB;
     return b.score - a.score;
   });
+}
+
+function filterEntityCurrentChunks(chunks: ScoredChunk[], question: string): ScoredChunk[] {
+  const tokens = tokenizeSearchText(question).filter(
+    (token) => token.length >= MIN_ENTITY_CURRENT_CONTEXT_TOKEN_LENGTH,
+  );
+  if (tokens.length === 0) return chunks;
+
+  const relevantChunks = chunks.filter((chunk) => {
+    const text = `${chunk.chapterTitle}\n${chunk.text}`.toLowerCase();
+    return tokens.some((token) => text.includes(token.toLowerCase()));
+  });
+  return relevantChunks.length > 0 ? relevantChunks : chunks;
 }
 
 function chunkToSource(chunk: ScoredChunk): ReaderAISource {
@@ -254,13 +269,16 @@ export async function* streamReaderAIAnswer({
       settings.spoilerProtection ? sourceBoundaryPage : undefined,
     );
     const shouldIncludeCurrentContext =
-      currentContextQuestionPattern.test(question) ||
-      (classification.intent === 'entity_lookup' && entityListQuestionPattern.test(question));
+      currentContextQuestionPattern.test(question) || classification.intent === 'entity_lookup';
     if (shouldIncludeCurrentContext) {
-      const currentChunks =
+      const sectionChunks =
         classification.intent === 'chapter_summary'
           ? await getCurrentSectionSummaryChunks(bookHash, sourceBoundaryPage, 4)
           : await getCurrentSectionContextChunks(bookHash, sourceBoundaryPage, 4);
+      const currentChunks =
+        classification.intent === 'entity_lookup'
+          ? filterEntityCurrentChunks(sectionChunks, question)
+          : sectionChunks;
       currentChunks.forEach((chunk) => currentChunkIds.add(chunk.id));
       const boostedCurrentChunks = currentChunks.map((chunk) => ({
         ...chunk,
@@ -283,10 +301,15 @@ export async function* streamReaderAIAnswer({
     chunks = [];
   }
 
-  const orderedChunks =
-    currentChunkIds.size > 0 && classification.intent !== 'current_recap'
-      ? sortCurrentChunksFirst(chunks, currentChunkIds)
-      : sortChunksByBookOrder(chunks);
+  const shouldPrioritizeCurrentChunks =
+    currentChunkIds.size > 0 &&
+    classification.intent !== 'current_recap' &&
+    (classification.intent !== 'entity_lookup' ||
+      entityListQuestionPattern.test(question) ||
+      currentContextQuestionPattern.test(question));
+  const orderedChunks = shouldPrioritizeCurrentChunks
+    ? sortCurrentChunksFirst(chunks, currentChunkIds)
+    : sortChunksByBookOrder(chunks);
   onSources?.(orderedChunks.map(chunkToSource));
 
   const systemPrompt = buildSystemPrompt(

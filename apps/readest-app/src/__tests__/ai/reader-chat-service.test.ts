@@ -663,6 +663,75 @@ describe('streamReaderAIAnswer', () => {
     expect(onSources.mock.calls[0]?.[0][0]).toMatchObject({ id: 'current-world-member' });
   });
 
+  it('mixes relevant current-section evidence into single-entity lookup questions without explicit current wording', async () => {
+    getCurrentSectionContextChunksMock.mockResolvedValue([
+      {
+        id: 'current-klein-relevant',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        text: '克莱恩以“愚者”的身份主持塔罗会，并通过“世界”这个身份参与交流。',
+        pageNumber: 1988,
+        endPageNumber: 1988,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+      {
+        id: 'current-unrelated',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        text: '奥黛丽和阿尔杰讨论了交易需求。',
+        pageNumber: 1988,
+        endPageNumber: 1988,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'safe-klein-definition',
+        bookHash: 'book-hash',
+        sectionIndex: 2,
+        chapterTitle: '第二章 情况',
+        text: '克莱恩·莫雷蒂原本是廷根市的历史系毕业生，醒来后承接了这个身份。',
+        pageNumber: 20,
+        endPageNumber: 20,
+        sortIndex: 20_000,
+        score: 28,
+        searchMethod: 'bm25',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: { ...settings, maxContextChunks: 10 },
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '克莱恩是谁？',
+        onSources,
+      })) {
+      }
+    });
+
+    const systemPrompt = streamTextMock.mock.calls[0]?.[0].system;
+    expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 1988, 4);
+    expect(systemPrompt).toContain('第二章 情况');
+    expect(systemPrompt).toContain('克莱恩·莫雷蒂');
+    expect(systemPrompt).toContain('第五十一章 五人聚会');
+    expect(systemPrompt).toContain('“愚者”的身份');
+    expect(systemPrompt).not.toContain('奥黛丽和阿尔杰讨论了交易需求');
+    expect(onSources).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'safe-klein-definition' }),
+      expect.objectContaining({ id: 'current-klein-relevant' }),
+    ]);
+  });
+
   it('excludes later book-order sources from read-so-far entity answers even when estimated pages look readable', async () => {
     getCurrentSectionContextChunksMock.mockResolvedValue([
       {

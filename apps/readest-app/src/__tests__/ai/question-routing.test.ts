@@ -43,6 +43,12 @@ describe('classifyReaderQuestion', () => {
       classifyReaderQuestion({ question: '白银城是什么地方？', spoilerProtection: true }).intent,
     ).toBe('entity_lookup');
     expect(
+      classifyReaderQuestion({
+        question: '克莱恩是谁？请按当前阅读进度简短回答并给出依据。',
+        spoilerProtection: true,
+      }).intent,
+    ).toBe('entity_lookup');
+    expect(
       classifyReaderQuestion({ question: '塔罗会成员有哪些？', spoilerProtection: true }).intent,
     ).toBe('entity_lookup');
     expect(

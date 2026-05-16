@@ -723,15 +723,15 @@ Start with 30-50 cases. Do not overbuild. The purpose is to catch regressions an
 Current status after the latest Reader AI work:
 
 - Phase A is partially implemented: richer chunk metadata, improved Chinese BM25, source-boundary filtering, safer citations, and volume-aware chapter labels are in place.
-- Phase B is partially implemented: intent/scope routing exists, and spoiler protection is now treated as a maximum evidence scope rather than a question type.
+- Phase B is in progress: intent/scope routing exists, spoiler protection is now treated as a maximum evidence scope rather than a question type, `chapter_summary` questions prioritize current-section summary chunks, and entity/list questions mix in current-section context.
 - The next best step is not embeddings yet. The NotebookLM comparison points to better intent-specific retrieval coverage as the highest-return improvement.
 
 Updated priority:
 
-1. Finish Phase B retrieval strategy routing for `intent + scope`.
-2. Add deterministic benchmark cases from the NotebookLM comparison.
-3. Add current-chapter coverage improvements for `chapter_summary`.
-4. Add entity/list retrieval improvements for `entity_lookup` questions.
+1. Continue Phase B retrieval strategy routing for `intent + scope`.
+2. Strengthen single-entity lookup questions such as `克莱恩是谁？` by mixing definition/identity evidence with current-position evidence.
+3. Add deterministic benchmark cases from the NotebookLM comparison.
+4. Refine current-chapter coverage for `chapter_summary` if real-question tests show missing chapter events.
 5. Start Phase C deep analysis only after the default route is benchmarked.
 6. Keep Phase D embeddings optional and evidence-driven.
 7. Keep Phase E library-level flows later.
