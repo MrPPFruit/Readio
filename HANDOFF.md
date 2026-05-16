@@ -49,7 +49,8 @@
   - Lint/type check passed: `pnpm -C "./apps/readest-app" lint`, `tsgo --noEmit && biome check .`, `813 files checked`.
   - Rebuilt signed APK at `./apks/readio-v0.1.0-alpha.13-android-arm64-release.apk`, installed on `emulator-5554`, opened Reader AI in 《诡秘之主》 page `2868 / 14955`, asked `总结本章到这里`, and verified DOM contained the clear empty-answer message plus citations and the original question. Recent logcat showed no app crash.
 - Reader AI/MiMo quality-test fix set verification (2026-05-16):
-  - Current fix set aligns reflowable reader display pages with AI chunk page boundaries via `getReflowableAIPageBoundary()` and `currentAIPage` fallback handling.
+  - Committed `ceef48e5 fix(ai): align reader AI page boundaries and MiMo streaming output` and `6bfb95ae style(ai): apply reader AI formatting updates`.
+  - Aligns reflowable reader display pages with AI chunk page boundaries via `getReflowableAIPageBoundary()` and `currentAIPage` fallback handling.
   - MiMo OpenAI-compatible parsing ignores `reasoning_content` and only emits visible answer content.
   - Question routing now classifies `这章目前讲了什么？` as `chapter_summary`.
   - `ReaderAIAnswerPanel` handles markdown `<br>` nodes in cited content.
@@ -58,6 +59,14 @@
   - AI target tests passed: `3 files / 68 tests passed` across `bm25-search.test.ts`, `reader-chat-service.test.ts`, and `reader-ai-panels.test.tsx`.
   - Full app tests passed: `pnpm -C apps/readest-app test -- --runInBand`, `192 files / 3526 tests passed`, `2 files / 7 tests skipped`.
   - Emulator + MiMo spot check passed for 《诡秘之主》 question `塔罗会当前成员有哪些？`: answer listed current members without future-member spoilers and cited `第五十一章 五人聚会` first.
+- Reader AI spoiler boundary hardening verification (2026-05-16):
+  - Root cause evidence: Readio + MiMo Q2 `克莱恩是谁？请按当前阅读进度简短回答并给出依据。` leaked later evidence such as `夏洛克·莫里亚蒂` / `贝克兰德` and cited future chapters including `第一百三十四章 超过一分钟了` while spoiler protection was on.
+  - Added RED regression in `reader-chat-service.test.ts`: read-so-far entity answers must exclude later book-order chunks even when stale/estimated page numbers appear inside the current AI page boundary.
+  - RED confirmed: focused test failed because `<BOOK_PASSAGES>` still contained `第一百三十四章 超过一分钟了` and `夏洛克·莫里亚蒂`.
+  - Minimal fix: `isChunkWithinPageBoundary()` now also checks `sortIndex < (maxPage + 1) * SIZE_PER_PAGE` when `sortIndex` exists, so page-boundary filtering is tied back to absolute book offset and stale low page numbers cannot smuggle later chunks into spoiler-protected prompts.
+  - Focused tests passed: `pnpm -C apps/readest-app exec vitest run src/__tests__/ai/reader-chat-service.test.ts`, `24 tests passed`; `pnpm -C apps/readest-app exec vitest run src/__tests__/ai/bm25-search.test.ts`, `8 tests passed`.
+  - Lint/type check passed: `pnpm -C apps/readest-app lint`, `tsgo --noEmit && biome check .`, `813 files checked`.
+  - Full app tests passed: `pnpm -C apps/readest-app test -- --runInBand`, `192 files / 3530 tests passed`, `2 files / 7 tests skipped`.
 - Previous alpha.10/alpha.13 release evidence:
   - Full Vitest run passed: `189 files / 3475 tests passed`.
   - App lint passed: `pnpm --filter @readest/readest-app lint`, `809 files checked`.
@@ -100,14 +109,11 @@
 - Reader AI/RAG Phase A source changes are committed.
 - Phase B classifier + prompt/context metadata work is committed.
 - Android/Tauri empty-answer fix is committed as `f7a045a0 fix(ai): handle empty Reader AI provider streams`.
-- Current active work is the Readio + MiMo + NotebookLM quality-test setup. The TDD fix set has passed focused tests, lint, AI target tests, full app tests, and one emulator + MiMo spot check; review diff before committing.
+- Current active work is the Readio + MiMo + NotebookLM quality-test setup. Page-boundary/MiMo formatting fixes are committed; spoiler boundary hardening has passed RED/GREEN focused tests, lint, and full app tests.
 - NotebookLM CLI comparison is usable via temporary venv command: `/tmp/notebooklm-py-041/bin/notebooklm`. `Readio` notebook ID is `1f45c537-1155-4b4f-9ae8-436c5151ef61`; it contains source 《诡秘之主》精校版全文 EPUB with status `ready`.
 - MiMo provider in emulator was updated with the user-provided valid token and a direct probe returned normal non-streaming text. Never print or persist the raw token in docs/logs.
-- Readio simulator quality test exposed a key coordinate mismatch: displayed reader page around `3104` does not match AI chunk page boundary around `1988–1990`. Using displayed page for spoiler filtering causes wrong retrieval/citations for questions like `这章目前讲了什么？`.
-- The current uncommitted fix adds `getReflowableAIPageBoundary()` and passes `currentAIPage` through `ReaderAIAssistant` into `streamReaderAIAnswer`; service then uses `currentAIPage ?? currentPage` for spoiler boundary, current-section context, context packing, and prompt page-limit wording.
-- Current uncommitted fix also adjusts question routing so `这章目前讲了什么？` is classified as `chapter_summary`.
-- Current uncommitted OpenAI-compatible change: streaming ignores MiMo `delta.reasoning_content` and only emits visible `delta.content`; non-streaming also ignores `message.reasoning_content` to avoid exposing internal reasoning as answer text.
-- Current uncommitted UI fix: `ReaderAIAnswerPanel` handles markdown `<br>` nodes to avoid cited line-break crashes.
+- Readio simulator quality test exposed a key coordinate mismatch: displayed reader page around `3104` does not match AI chunk page boundary around `1988–1990`. This was fixed by `getReflowableAIPageBoundary()` / `currentAIPage` and committed in `ceef48e5`.
+- Readio simulator Q2 then exposed a spoiler-source leak: with spoiler protection on, stale/estimated low page metadata allowed a later book-order chunk (`第一百三十四章 超过一分钟了`) into the final model prompt. The hardening filters by `sortIndex` absolute book offset when available.
 - Phase B design decision: spoiler protection is not a question intent. Treat it as a source scope (`read_so_far` vs `whole_book_allowed`) that applies to every question intent.
 - Next RAG work should use `intent + scope` to vary retrieval strategy, starting with entity lookup, selected-text explanation, and current recap.
 - `.codepilot-uploads/` and `temp/` are untracked and likely unrelated; avoid accidental commit.
@@ -117,20 +123,13 @@
 
 ## Next actions
 
-1. Continue from the uncommitted TDD fix set. First run focused tests for the changed areas:
-   - `pnpm -C apps/readest-app exec vitest run src/__tests__/app/reader/page-info.test.ts`
-   - `pnpm -C apps/readest-app exec vitest run src/__tests__/ai/openai-compatible-model.test.ts`
-   - `pnpm -C apps/readest-app exec vitest run src/__tests__/ai/question-routing.test.ts`
-   - `pnpm -C apps/readest-app exec vitest run src/__tests__/ai/reader-chat-service.test.ts`
-   - `pnpm -C apps/readest-app exec vitest run src/__tests__/ai/reader-ai-assistant.test.tsx src/__tests__/ai/reader-ai-panels.test.tsx`
-2. If focused tests pass, run `pnpm -C apps/readest-app lint`. If needed, run broader AI tests before commit.
-3. Rebuild/install only if producing a new APK or continuing emulator quality validation; otherwise keep this as source-level fix first.
-4. Resume Readio vs NotebookLM quality test after the AI page-boundary fix is installed in the emulator. Use 《诡秘之主》 in NotebookLM `Readio` notebook and the same questions in Readio + MiMo.
-5. For NotebookLM baseline, use `/tmp/notebooklm-py-041/bin/notebooklm ask -n 1f45c537-1155-4b4f-9ae8-436c5151ef61 "<question>" --json`.
-6. If committing, review `git diff` and stage only intentional source/test/docs changes; do not stage `.codepilot-uploads/` or unrelated `temp/` files by default.
-7. If extending Reader AI retrieval/RAG beyond this fix, read `./READIO_AI_RETRIEVAL_ROADMAP.md` first; discuss before introducing heavier embedding, long preprocessing, or deep-analysis defaults.
-8. If preparing alpha.14 or later, bump version and `versionCode` first, then build with `build-readio-apk`, install on emulator, smoke test, create a prerelease, upload APK plus `.sha256` with local `gh release upload`, download it back, and verify SHA-256.
-9. If needing historical context, read `./HANDOFF_PRE_ALPHA10_ARCHIVE.md` instead of expanding this handoff.
+1. Rebuild/install only if continuing emulator quality validation or producing a new APK. The source-level fix already passed focused tests, lint, and full tests.
+2. Resume Readio vs NotebookLM quality test after installing the hardening fix in the emulator. Retest Q2 `克莱恩是谁？请按当前阅读进度简短回答并给出依据。` first; expected result: no `夏洛克·莫里亚蒂`, no `贝克兰德`, no future-chapter citations under spoiler protection.
+3. Use 《诡秘之主》 in NotebookLM `Readio` notebook for the baseline. For NotebookLM CLI, use `/tmp/notebooklm-py-041/bin/notebooklm ask -n 1f45c537-1155-4b4f-9ae8-436c5151ef61 "<question>" --json`.
+4. Continue the standard question set only after Q2 passes in Readio emulator: `白银城是什么地方？`, `这章目前讲了什么？`, `前面发生了什么？`, `这句话是什么意思？`, `最后谁是凶手？` with spoiler on/off, and same-conversation spoiler toggle.
+5. If extending Reader AI retrieval/RAG beyond this fix, read `./READIO_AI_RETRIEVAL_ROADMAP.md` first; discuss before introducing heavier embedding, long preprocessing, or deep-analysis defaults.
+6. If preparing alpha.14 or later, bump version and `versionCode` first, then build with `build-readio-apk`, install on emulator, smoke test, create a prerelease, upload APK plus `.sha256` with local `gh release upload`, download it back, and verify SHA-256.
+7. If needing historical context, read `./HANDOFF_PRE_ALPHA10_ARCHIVE.md` instead of expanding this handoff.
 
 ## Key files
 

@@ -550,6 +550,76 @@ describe('streamReaderAIAnswer', () => {
     expect(onSources.mock.calls[0]?.[0][0]).toMatchObject({ id: 'current-world-member' });
   });
 
+  it('excludes later book-order sources from read-so-far entity answers even when estimated pages look readable', async () => {
+    getCurrentSectionContextChunksMock.mockResolvedValue([
+      {
+        id: 'current-klein-identity',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        text: '克莱恩是值夜者，也以“愚者”的身份主持塔罗会。',
+        pageNumber: 1988,
+        endPageNumber: 1988,
+        sortIndex: 2_982_000,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'future-klein-identity',
+        bookHash: 'book-hash',
+        sectionIndex: 420,
+        chapterTitle: '第一百三十四章 超过一分钟了',
+        text: '克莱恩之后会以夏洛克·莫里亚蒂侦探身份在贝克兰德行动。',
+        pageNumber: 1700,
+        endPageNumber: 1700,
+        sortIndex: 4_110_000,
+        score: 40,
+        searchMethod: 'bm25',
+      },
+      {
+        id: 'safe-klein-identity',
+        bookHash: 'book-hash',
+        sectionIndex: 120,
+        chapterTitle: '第十四章 通灵者',
+        text: '克莱恩加入值夜者，开始接触非凡事件。',
+        pageNumber: 800,
+        endPageNumber: 800,
+        sortIndex: 1_200_000,
+        score: 20,
+        searchMethod: 'bm25',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: { ...settings, maxContextChunks: 10 },
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '克莱恩是谁？请按当前阅读进度简短回答并给出依据。',
+        onSources,
+      })) {
+      }
+    });
+
+    const systemPrompt = streamTextMock.mock.calls[0]?.[0].system;
+    expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 1988, 4);
+    expect(systemPrompt).toContain('第五十一章 五人聚会');
+    expect(systemPrompt).toContain('第十四章 通灵者');
+    expect(systemPrompt).not.toContain('第一百三十四章 超过一分钟了');
+    expect(systemPrompt).not.toContain('夏洛克·莫里亚蒂');
+    expect(onSources).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'current-klein-identity' }),
+      expect.objectContaining({ id: 'safe-klein-identity' }),
+    ]);
+  });
+
   it('still uses current chapter context for current-state questions when spoiler protection is disabled', async () => {
     getCurrentSectionContextChunksMock.mockResolvedValue([
       {

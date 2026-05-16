@@ -1,4 +1,5 @@
 import type { Index } from 'lunr';
+import { SIZE_PER_PAGE } from '../utils/chunker';
 import type { ScoredChunk, TextChunk } from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -44,7 +45,10 @@ const CURRENT_PAGE_CONTEXT_WINDOW = 2;
 
 export const isChunkWithinPageBoundary = (chunk: TextChunk, maxPage?: number): boolean => {
   if (maxPage === undefined) return true;
-  return (chunk.endPageNumber ?? chunk.pageNumber) <= maxPage;
+  const pageBoundary = (chunk.endPageNumber ?? chunk.pageNumber) <= maxPage;
+  if (!pageBoundary) return false;
+  if (chunk.sortIndex === undefined) return true;
+  return chunk.sortIndex < (maxPage + 1) * SIZE_PER_PAGE;
 };
 
 const getChunkOrder = (chunk: TextChunk, fallback: number): number => {
