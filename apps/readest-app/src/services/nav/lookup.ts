@@ -52,11 +52,11 @@ export const getTocDisplayLabel = (
   currentItem: TocLabelItem | null | undefined,
 ): string | undefined => {
   if (!currentItem?.label) return undefined;
-  if (!toc?.length || !currentItem.href) return currentItem.label;
+  if (!toc?.length) return currentItem.label;
 
   if (isPartLikeLabel(currentItem.label)) return currentItem.label;
 
-  const path = findLabelPath(toc, currentItem.href);
+  const path = currentItem.href ? findLabelPath(toc, currentItem.href) : [];
   const parent = path.length >= 2 ? path[path.length - 2] : findPrecedingPart(toc, currentItem);
   if (!parent?.label || !isPartLikeLabel(parent.label)) return currentItem.label;
   if (currentItem.label.includes(parent.label)) return currentItem.label;

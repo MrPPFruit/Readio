@@ -166,6 +166,7 @@ const validateReaderContext = (readerContext: unknown) => {
   const bookTitle = boundedString(readerContext['bookTitle'], MAX_READER_TITLE_CHARS);
   const authorName = boundedOptionalString(readerContext['authorName'], MAX_READER_AUTHOR_CHARS);
   const currentPage = readerContext['currentPage'];
+  const readerPage = readerContext['readerPage'];
   const spoilerProtection = readerContext['spoilerProtection'];
   const classification = readerContext['classification'];
   const chunks = readerContext['chunks'];
@@ -175,6 +176,12 @@ const validateReaderContext = (readerContext: unknown) => {
     authorName === null ||
     typeof currentPage !== 'number' ||
     !Number.isFinite(currentPage)
+  ) {
+    return null;
+  }
+  if (
+    readerPage !== undefined &&
+    (typeof readerPage !== 'number' || !Number.isFinite(readerPage))
   ) {
     return null;
   }
@@ -222,6 +229,7 @@ const validateReaderContext = (readerContext: unknown) => {
     bookTitle,
     authorName,
     currentPage: Math.max(1, Math.floor(currentPage)),
+    readerPage: readerPage === undefined ? undefined : Math.max(1, Math.floor(readerPage)),
     spoilerProtection: effectiveSpoilerProtection,
     classification,
     chunks: validatedChunks,
@@ -294,6 +302,7 @@ export async function POST(req: Request): Promise<Response> {
         validatedReaderContext.currentPage,
         validatedReaderContext.spoilerProtection,
         validatedReaderContext.classification,
+        validatedReaderContext.readerPage,
       );
     } else {
       const providedSystem = body['system'];

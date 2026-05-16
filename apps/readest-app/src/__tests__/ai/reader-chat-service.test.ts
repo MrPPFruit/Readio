@@ -390,12 +390,58 @@ describe('streamReaderAIAnswer', () => {
         9,
         1988,
       );
-      expect(streamTextMock.mock.calls[0]?.[0].system).toContain(
-        'You remember everything from pages 1 to 1988',
-      );
+      expect(streamTextMock.mock.calls[0]?.[0].system).toContain('safe readable boundary');
+      expect(streamTextMock.mock.calls[0]?.[0].system).toContain('You are currently on page 3104');
       expect(streamTextMock.mock.calls[0]?.[0].system).not.toContain(
-        'You remember everything from pages 1 to 3104',
+        'readable source boundary is page 1988',
       );
+    });
+  });
+
+  it('uses rendered reader page for user-facing prompt wording while keeping the AI boundary internal', async () => {
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'current-klein-identity',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第二部 无面人 · 第五十一章 五人聚会',
+        text: '克莱恩以“愚者”的身份主持塔罗会。',
+        pageNumber: 1988,
+        endPageNumber: 1988,
+        sortIndex: 2_982_000,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings,
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '克莱恩是谁？请按当前阅读进度简短回答并给出依据。',
+      })) {
+      }
+
+      const systemPrompt = streamTextMock.mock.calls[0]?.[0].system;
+      expect(hybridSearchMock).toHaveBeenCalledWith(
+        'book-hash',
+        '克莱恩是谁？请按当前阅读进度简短回答并给出依据。',
+        settings,
+        9,
+        1988,
+      );
+      expect(systemPrompt).toContain('<BOOK_PASSAGES safe_boundary="filtered" reader_page="3104">');
+      expect(systemPrompt).toContain('reader-visible current page is 3104');
+      expect(systemPrompt).toContain('never mention internal filtering details');
+      expect(systemPrompt).not.toContain('page_limit="1988"');
+      expect(systemPrompt).not.toContain('readable source boundary is page 1988');
+      expect(systemPrompt).not.toContain('You are currently on page 1988');
+      expect(systemPrompt).not.toContain('only on page 1988');
     });
   });
 
@@ -872,6 +918,7 @@ describe('streamReaderAIAnswer', () => {
           bookTitle: 'Book',
           authorName: 'Author',
           currentPage: 1988,
+          readerPage: 3104,
           spoilerProtection: true,
           classification: { intent: 'current_recap', scope: 'read_so_far' },
           chunks: [
@@ -954,7 +1001,7 @@ describe('streamReaderAIAnswer', () => {
     expect(system).toContain(
       '<BOOK_PASSAGES source_scope="whole_book_allowed" reading_position="7">',
     );
-    expect(system).not.toContain('<BOOK_PASSAGES page_limit="7">');
+    expect(system).not.toContain('<BOOK_PASSAGES safe_boundary="filtered"');
   });
 
   it('routes high-risk spoiler wording through read-so-far retrieval and prompting', async () => {
@@ -991,11 +1038,11 @@ describe('streamReaderAIAnswer', () => {
         system: expect.stringContaining('Answer scope: read_so_far'),
       }),
     );
-    expect(streamTextMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        system: expect.stringContaining('You can ONLY discuss content from pages 1 to 12'),
-      }),
-    );
+    const systemPrompt = streamTextMock.mock.calls[0]?.[0].system;
+    expect(systemPrompt).toContain('safe readable boundary');
+    expect(systemPrompt).toContain('<BOOK_PASSAGES safe_boundary="filtered">');
+    expect(systemPrompt).not.toContain('readable source boundary is page 12');
+    expect(systemPrompt).not.toContain('page_limit="12"');
   });
 
   it('uses scope-aware empty-context wording for whole-book requests', () => {

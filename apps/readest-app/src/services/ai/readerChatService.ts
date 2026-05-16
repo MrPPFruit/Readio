@@ -172,6 +172,7 @@ async function* streamViaApiRoute(
     bookTitle: string;
     authorName: string;
     currentPage: number;
+    readerPage?: number;
     spoilerProtection: boolean;
     classification?: ReaderQuestionClassification;
     chunks: ScoredChunk[];
@@ -291,6 +292,7 @@ export async function* streamReaderAIAnswer({
     sourceBoundaryPage,
     settings.spoilerProtection,
     classification,
+    currentPage,
   );
   const aiMessages: ModelMessage[] = [
     ...messages.map((message) => ({
@@ -309,6 +311,7 @@ export async function* streamReaderAIAnswer({
         bookTitle,
         authorName,
         currentPage: sourceBoundaryPage,
+        readerPage: currentPage,
         spoilerProtection: settings.spoilerProtection,
         classification,
         chunks: orderedChunks,

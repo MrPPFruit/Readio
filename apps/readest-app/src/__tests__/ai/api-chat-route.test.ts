@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   createOpenAICompatibleModel: vi.fn((config) => ({ kind: 'chat-model', config })),
-  streamText: vi.fn(() => ({
+  streamText: vi.fn((_options: { system?: string }) => ({
     toTextStreamResponse: vi.fn(() => new Response('ok')),
   })),
 }));
@@ -196,6 +196,91 @@ describe('/api/ai/chat BYOK provider routing', () => {
           chunks: [],
         },
         messages: [{ role: 'user', content: '戴里克是谁？' }],
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid reader context' });
+    expect(mocks.streamText).not.toHaveBeenCalled();
+  });
+
+  it('passes reader-visible page into the reader prompt separately from source page', async () => {
+    const response = await POST(
+      postRequest({
+        provider: 'openrouter',
+        apiKey: 'openrouter-key',
+        model: 'google/gemini-2.5-flash-lite',
+        readerContext: {
+          bookTitle: 'Book',
+          authorName: 'Author',
+          currentPage: 1988,
+          readerPage: 3104.9,
+          spoilerProtection: true,
+          classification: { intent: 'current_recap', scope: 'read_so_far' },
+          chunks: [
+            {
+              text: 'Safe source text.',
+              chapterTitle: 'Current chapter',
+              sectionIndex: 5,
+              pageNumber: 1988,
+            },
+          ],
+        },
+        messages: [{ role: 'user', content: '这章目前讲了什么？' }],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const system = mocks.streamText.mock.calls[0]?.[0].system;
+    expect(system).toContain('You are currently on page 3104');
+    expect(system).toContain('reader-visible current page is 3104');
+    expect(system).toContain('<BOOK_PASSAGES safe_boundary="filtered" reader_page="3104">');
+    expect(system).not.toContain('You are currently on page 1988');
+    expect(system).not.toContain('page_limit="1988"');
+  });
+
+  it('uses current page when reader-visible page is absent', async () => {
+    const response = await POST(
+      postRequest({
+        provider: 'openrouter',
+        apiKey: 'openrouter-key',
+        model: 'google/gemini-2.5-flash-lite',
+        readerContext: {
+          bookTitle: 'Book',
+          currentPage: 7,
+          chunks: [
+            {
+              text: 'Safe source text.',
+              chapterTitle: 'Current chapter',
+              sectionIndex: 0,
+              pageNumber: 7,
+            },
+          ],
+        },
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const system = mocks.streamText.mock.calls[0]?.[0].system;
+    expect(system).toContain('You are currently on page 7');
+    expect(system).toContain('<BOOK_PASSAGES safe_boundary="filtered">');
+    expect(system).not.toContain('reader_page=');
+  });
+
+  it('rejects non-numeric reader-visible page values', async () => {
+    const response = await POST(
+      postRequest({
+        provider: 'openrouter',
+        apiKey: 'openrouter-key',
+        model: 'google/gemini-2.5-flash-lite',
+        readerContext: {
+          bookTitle: 'Book',
+          currentPage: 7,
+          readerPage: '3104',
+          chunks: [],
+        },
+        messages: [{ role: 'user', content: 'hello' }],
       }),
     );
 

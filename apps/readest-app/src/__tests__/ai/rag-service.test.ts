@@ -120,7 +120,7 @@ const currentMeta: BookIndexMeta = {
   totalSections: 1,
   totalChunks: 3,
   embeddingModel: 'text-embedding-3-small',
-  indexVersion: 2,
+  indexVersion: 3,
   chunkerVersion: 3,
   bm25Version: 1,
   estimatedBytes: 4096,
@@ -160,7 +160,7 @@ describe('indexBook metadata freshness', () => {
   });
 
   it('treats indexes created before volume-aware AI citation labels as stale', async () => {
-    mocks.getMeta.mockResolvedValue({ ...currentMeta, indexVersion: 1 });
+    mocks.getMeta.mockResolvedValue({ ...currentMeta, indexVersion: 2 });
 
     await expect(isBookIndexed('book-hash', settings)).resolves.toBe(false);
   });
@@ -192,7 +192,7 @@ describe('indexBook metadata freshness', () => {
 
     expect(mocks.saveMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        indexVersion: 2,
+        indexVersion: 3,
         chunkerVersion: 3,
         bm25Version: 1,
         estimatedBytes: expect.any(Number),
@@ -233,6 +233,57 @@ describe('indexBook metadata freshness', () => {
           chapterTitle: '第一部 小丑 · 第五章 线索',
           href: 'chapter-5.xhtml',
           cfi: 'epubcfi(/6/10)',
+        }),
+      ]),
+    );
+  });
+
+  it('stores volume-aware chapter labels when a section lacks href metadata', async () => {
+    const flatBookDoc = {
+      metadata: { title: 'Book', author: 'Author' },
+      toc: [
+        { id: 0, label: '第一部 小丑', href: 'part-1.xhtml' },
+        { id: 1, label: '第一百三十四章 超过一分钟了', href: 'chapter-134.xhtml' },
+        { id: 2, label: '第二部 无面人', href: 'part-2.xhtml' },
+        { id: 3, label: '第五十一章 五人聚会', href: 'chapter-51.xhtml' },
+      ],
+      sections: [
+        {
+          id: 'part-1',
+          size: 1,
+          linear: 'yes',
+          createDocument: async () => createDocument('<p>短</p>'),
+        },
+        {
+          id: 'chapter-134',
+          size: 1,
+          linear: 'yes',
+          createDocument: async () => createDocument('<p>短</p>'),
+        },
+        {
+          id: 'part-2',
+          size: 1,
+          linear: 'yes',
+          createDocument: async () => createDocument('<p>短</p>'),
+        },
+        {
+          id: 'chapter-51',
+          cfi: 'epubcfi(/6/20)',
+          size: 1200,
+          linear: 'yes',
+          createDocument: async () =>
+            createDocument(`<p>${'五人聚会里，克莱恩继续以愚者身份主持塔罗会。'.repeat(40)}</p>`),
+        },
+      ],
+    };
+
+    await indexBook(flatBookDoc, 'book-hash', { ...settings, providerEmbeddingModels: {} });
+
+    expect(mocks.saveChunks).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          chapterTitle: '第二部 无面人 · 第五十一章 五人聚会',
+          cfi: 'epubcfi(/6/20)',
         }),
       ]),
     );

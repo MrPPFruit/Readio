@@ -49,7 +49,7 @@ export interface BookDocType {
   metadata?: { title?: string | { [key: string]: string }; author?: string | { name?: string } };
 }
 
-export const INDEX_VERSION = 2;
+export const INDEX_VERSION = 3;
 export const BM25_ONLY_EMBEDDING_MODEL = 'bm25-only';
 
 interface IndexIdentity {
@@ -157,7 +157,9 @@ function getChapterTitle(
       .find((item) => item.href?.split('#')[0] === sectionHref);
     if (hrefMatch) return getTocDisplayLabel(toc, hrefMatch) ?? hrefMatch.label;
   }
-  return candidates[candidates.length - 1]?.label || `Section ${sectionIndex + 1}`;
+  const sectionItem = candidates[candidates.length - 1];
+  if (!sectionItem) return `Section ${sectionIndex + 1}`;
+  return getTocDisplayLabel(toc, sectionItem) ?? sectionItem.label;
 }
 
 interface IndexBookOptions {
