@@ -24,6 +24,7 @@ const recapPattern =
 const chapterSummaryPattern =
   /(总结|概括).*(本章|这一章|当前章节|本节|这一节)|(本章|这章|这一章|当前章节).*(讲了什么|重点|内容)/;
 const entityLookupPattern = /(.+)(是谁|是什么|什么地方|什么组织|什么东西|什么意思|指什么)[？?]?$/;
+const entityListPattern = /(.+)(成员有哪些|有哪些成员|都有谁|包括谁|有谁|名单)/;
 const entityEventPattern =
   /^(?!前面|之前|刚才|目前|现在|这里|这段|上一段)[\p{Script=Han}A-Za-z0-9·]{2,24}(发生了什么|怎么了|后来怎么样|最后怎么样)[？?]?$/u;
 const analysisPattern =
@@ -40,6 +41,7 @@ export const classifyReaderQuestion = ({
 
   if (hasSelection) return { intent: 'selection_explanation', scope };
   if (chapterSummaryPattern.test(normalizedQuestion)) return { intent: 'chapter_summary', scope };
+  if (entityListPattern.test(normalizedQuestion)) return { intent: 'entity_lookup', scope };
   if (entityEventPattern.test(normalizedQuestion)) return { intent: 'entity_lookup', scope };
   if (recapPattern.test(normalizedQuestion)) return { intent: 'current_recap', scope };
   if (analysisPattern.test(normalizedQuestion)) return { intent: 'analysis', scope };

@@ -47,6 +47,7 @@ export interface GenerateReaderAISuggestionsOptions {
 
 const currentContextQuestionPattern =
   /前面|发生了什么|本章|这章|这一章|当前章节|这里|当前|现在|目前|刚才|这段|上一段/;
+const entityListQuestionPattern = /成员|都有谁|有谁|名单|包括谁/;
 const currentContextScoreBoost = 1_000;
 
 const isSupportedProvider = (provider: string): provider is AIProviderName =>
@@ -252,7 +253,10 @@ export async function* streamReaderAIAnswer({
       retrievalK,
       settings.spoilerProtection ? sourceBoundaryPage : undefined,
     );
-    if (currentContextQuestionPattern.test(question)) {
+    const shouldIncludeCurrentContext =
+      currentContextQuestionPattern.test(question) ||
+      (classification.intent === 'entity_lookup' && entityListQuestionPattern.test(question));
+    if (shouldIncludeCurrentContext) {
       const currentChunks =
         classification.intent === 'chapter_summary'
           ? await getCurrentSectionSummaryChunks(bookHash, sourceBoundaryPage, 4)

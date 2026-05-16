@@ -533,6 +533,73 @@ describe('streamReaderAIAnswer', () => {
     ]);
   });
 
+  it('prioritizes current chapter context for entity list questions even without explicit current wording', async () => {
+    getCurrentSectionContextChunksMock.mockResolvedValue([
+      {
+        id: 'current-world-member',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        text: '克莱恩向正义、倒吊人、太阳介绍新成员“世界”，塔罗会变成五人聚会。',
+        pageNumber: 1988,
+        endPageNumber: 1988,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'future-members',
+        bookHash: 'book-hash',
+        sectionIndex: 520,
+        chapterTitle: '未来章节',
+        text: '后续塔罗会成员包括魔术师、月亮、隐者、星星、审判。',
+        pageNumber: 1980,
+        endPageNumber: 1980,
+        sortIndex: 4_200_000,
+        score: 30,
+        searchMethod: 'bm25',
+      },
+      {
+        id: 'old-members',
+        bookHash: 'book-hash',
+        sectionIndex: 35,
+        chapterTitle: '第三十五章 交流消息',
+        text: '塔罗会成员包括愚者、正义和倒吊人。',
+        pageNumber: 260,
+        endPageNumber: 260,
+        sortIndex: 400_000,
+        score: 24,
+        searchMethod: 'bm25',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: { ...settings, maxContextChunks: 10 },
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '塔罗会成员有哪些？请简短列出并给出依据。',
+        onSources,
+      })) {
+      }
+    });
+
+    const systemPrompt = streamTextMock.mock.calls[0]?.[0].system;
+    expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 1988, 4);
+    expect(systemPrompt).toContain('第五十一章 五人聚会');
+    expect(systemPrompt).toContain('新成员“世界”');
+    expect(systemPrompt).toContain('第三十五章 交流消息');
+    expect(systemPrompt).not.toContain('未来章节');
+    expect(systemPrompt).not.toContain('魔术师、月亮、隐者、星星、审判');
+    expect(onSources.mock.calls[0]?.[0][0]).toMatchObject({ id: 'current-world-member' });
+  });
+
   it('uses current chapter context for current-state membership questions', async () => {
     getCurrentSectionContextChunksMock.mockResolvedValue([
       {

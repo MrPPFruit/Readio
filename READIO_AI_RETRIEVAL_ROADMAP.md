@@ -649,6 +649,44 @@ If source-grounded retrieval is weak, library-level summaries will look impressi
 
 Build a small but stable RAG test set before major changes.
 
+### NotebookLM comparison notes
+
+A live NotebookLM comparison was run against the `Readio` notebook containing `《诡秘之主》精校版全本[完美排版].epub`.
+
+Important caveat:
+
+- NotebookLM is useful as a full-book answer quality reference.
+- It is not a strict spoiler-safe baseline by default, because it has access to the whole source and may also continue prior conversation context.
+- When the prompt explicitly states the reading boundary, NotebookLM can produce a strong bounded answer. This confirms that Readio's key advantage should be enforcing source scope before generation, not merely asking the model to avoid spoilers.
+
+Observed comparison cases:
+
+1. Character lookup: `克莱恩是谁？`
+   - Unbounded NotebookLM answer used whole-book/current-history context and mentioned later identity/location details such as `夏洛克·莫里亚蒂` and `贝克兰德`.
+   - Bounded prompt avoided those later details and gave a concise known-so-far identity answer.
+   - Readio should keep enforcing read-so-far retrieval boundaries for spoiler protection, because prompt-only protection is not reliable enough.
+
+2. Tarot Club membership: `塔罗会当前成员有哪些？`
+   - Unbounded NotebookLM answered with later full-book membership.
+   - Bounded prompt correctly answered the five-person state at `第二部 第五十一章 五人聚会`: `愚者`、`正义`、`倒吊人`、`太阳`、`世界`.
+   - This is a good regression benchmark for entity/list questions under spoiler protection.
+
+3. Current chapter summary: `这章目前讲了什么？`
+   - NotebookLM gave a high-quality chapter summary when it knew the boundary.
+   - Readio should prioritize current-section/chapter coverage for this intent instead of relying only on global top-k retrieval.
+
+Practical evaluation rule:
+
+> Use NotebookLM to discover what a good answer might include, then convert the comparison into deterministic Readio benchmarks: expected evidence, forbidden future terms, answer completeness checks, and citation support checks.
+
+### Initial standard benchmark candidates
+
+| Case                                                     | Reading boundary             | Expected answer traits                                                                                                      | Forbidden under spoiler protection                              |
+| -------------------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `克莱恩是谁？请按当前阅读进度简短回答并给出依据。`       | Tinggen / early progress     | Zhou Mingrui transmigrated into Klein Moretti; lives in Tingen; joined the Nighthawks / Divination path if already reached. | `夏洛克·莫里亚蒂`, `贝克兰德`, later identities.                |
+| `塔罗会当前成员有哪些？请简短列出并给出依据。`           | `第二部 第五十一章 五人聚会` | `愚者`, `正义`, `倒吊人`, `太阳`, `世界`; explain `世界` is Klein's puppet/sockpuppet identity.                             | Later members such as `魔术师`, `月亮`, `隐者`, `星星`, `审判`. |
+| `这章目前讲了什么？请按当前阅读进度概括，不要剧透后文。` | current chapter              | Focus on current chapter events and immediate setup; cite chapter-local passages.                                           | Later plot outcomes or future member additions.                 |
+
 ### Test categories
 
 1. Single-paragraph factual QA.
@@ -682,11 +720,21 @@ Start with 30-50 cases. Do not overbuild. The purpose is to catch regressions an
 
 ## 8. Recommended priority order
 
-1. Phase A: Lightweight RAG v2.
-2. Phase B: Question classification and strategy routing.
-3. Phase C: Deep analysis / Heavy Read mode.
-4. Phase D: Optional embedding / high-quality index.
-5. Phase E: Library-level organization and learning flows.
+Current status after the latest Reader AI work:
+
+- Phase A is partially implemented: richer chunk metadata, improved Chinese BM25, source-boundary filtering, safer citations, and volume-aware chapter labels are in place.
+- Phase B is partially implemented: intent/scope routing exists, and spoiler protection is now treated as a maximum evidence scope rather than a question type.
+- The next best step is not embeddings yet. The NotebookLM comparison points to better intent-specific retrieval coverage as the highest-return improvement.
+
+Updated priority:
+
+1. Finish Phase B retrieval strategy routing for `intent + scope`.
+2. Add deterministic benchmark cases from the NotebookLM comparison.
+3. Add current-chapter coverage improvements for `chapter_summary`.
+4. Add entity/list retrieval improvements for `entity_lookup` questions.
+5. Start Phase C deep analysis only after the default route is benchmarked.
+6. Keep Phase D embeddings optional and evidence-driven.
+7. Keep Phase E library-level flows later.
 
 Reasoning:
 
