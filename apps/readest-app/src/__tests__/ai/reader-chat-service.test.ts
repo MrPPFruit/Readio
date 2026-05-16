@@ -233,6 +233,30 @@ describe('streamReaderAIAnswer', () => {
     });
   });
 
+  it('uses broader retrieval for analysis questions while keeping the spoiler boundary', async () => {
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings,
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '这是不是伏笔？为什么他会这样做？',
+      })) {
+      }
+    });
+
+    expect(hybridSearchMock).toHaveBeenCalledWith(
+      'book-hash',
+      '这是不是伏笔？为什么他会这样做？',
+      settings,
+      15,
+      1988,
+    );
+  });
+
   it('uses updated spoiler settings for a later question in the same conversation', async () => {
     await runWithoutWindow(async () => {
       const unprotectedSettings = { ...settings, spoilerProtection: false };
@@ -320,6 +344,101 @@ describe('streamReaderAIAnswer', () => {
       /\[Source 1: 第五十六章 驱散\][\s\S]*\[Source 2: 第五十八章 压制\]/,
     );
     expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 4054, 4);
+  });
+
+  it('keeps current context available for current recap even when older matches score higher', async () => {
+    getCurrentSectionContextChunksMock.mockResolvedValue([
+      {
+        id: 'current-recap-1',
+        bookHash: 'book-hash',
+        sectionIndex: 546,
+        chapterTitle: '第五十八章 当前事件',
+        text: '角色乙刚刚完成仪式准备，正在等待关键回应。',
+        pageNumber: 4052,
+        endPageNumber: 4052,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'older-high-score',
+        bookHash: 'book-hash',
+        sectionIndex: 120,
+        chapterTitle: '旧章节',
+        text: '旧章节里也发生了重要事件。',
+        pageNumber: 900,
+        endPageNumber: 900,
+        score: 40,
+        searchMethod: 'bm25',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: { ...settings, maxContextChunks: 10 },
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 4054,
+        messages: [],
+        question: '前面发生了什么？',
+        onSources,
+      })) {
+      }
+    });
+
+    expect(onSources).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'older-high-score' }),
+      expect.objectContaining({ id: 'current-recap-1' }),
+    ]);
+    expect(streamTextMock.mock.calls[0]?.[0].system).toContain('角色乙刚刚完成仪式准备');
+  });
+
+  it('keeps selected text evidence first for selection explanations', async () => {
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'selected-passage',
+        bookHash: 'book-hash',
+        sectionIndex: 10,
+        chapterTitle: '第十章 线索现场',
+        text: '他在密室里听见了远处的呼唤。',
+        pageNumber: 88,
+        endPageNumber: 88,
+        score: 4,
+        searchMethod: 'bm25',
+      },
+      {
+        id: 'generic-high-score',
+        bookHash: 'book-hash',
+        sectionIndex: 20,
+        chapterTitle: '第二十章 线索',
+        text: '别处也提到了呼唤和密室线索。',
+        pageNumber: 120,
+        endPageNumber: 120,
+        score: 30,
+        searchMethod: 'bm25',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: { ...settings, maxContextChunks: 10 },
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 88,
+        messages: [],
+        question: '这里是什么意思？',
+        selectionText: '他在密室里听见了远处的呼唤。',
+        onSources,
+      })) {
+      }
+    });
+
+    expect(onSources.mock.calls[0]?.[0][0]).toMatchObject({ id: 'selected-passage' });
   });
 
   it('streams direct provider chunks in the Tauri app even when window exists', async () => {
@@ -943,7 +1062,7 @@ describe('streamReaderAIAnswer', () => {
       'book-hash',
       '灰雾线索是什么？',
       expect.objectContaining({ maxContextChunks: 2 }),
-      8,
+      10,
       42,
     );
     expect(onSources).toHaveBeenCalledWith([

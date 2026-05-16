@@ -50,6 +50,7 @@ const currentContextQuestionPattern =
   /前面|发生了什么|本章|这章|这一章|当前章节|这里|当前|现在|目前|刚才|这段|上一段/;
 const entityListQuestionPattern = /成员|都有谁|有谁|名单|包括谁/;
 const currentContextScoreBoost = 1_000;
+const analysisRetrievalMultiplier = 5;
 const MIN_ENTITY_CURRENT_CONTEXT_TOKEN_LENGTH = 2;
 
 const isSupportedProvider = (provider: string): provider is AIProviderName =>
@@ -258,7 +259,9 @@ export async function* streamReaderAIAnswer({
   const sourceBoundaryPage = currentAIPage ?? currentPage;
 
   const maxContextChunks = settings.maxContextChunks || 5;
-  const retrievalK = Math.max(maxContextChunks * 3, 8);
+  const retrievalMultiplier =
+    classification.intent === 'analysis' ? analysisRetrievalMultiplier : 3;
+  const retrievalK = Math.max(maxContextChunks * retrievalMultiplier, 8);
 
   try {
     chunks = await hybridSearch(
