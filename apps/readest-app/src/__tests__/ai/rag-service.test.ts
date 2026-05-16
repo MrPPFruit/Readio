@@ -120,7 +120,7 @@ const currentMeta: BookIndexMeta = {
   totalSections: 1,
   totalChunks: 3,
   embeddingModel: 'text-embedding-3-small',
-  indexVersion: 1,
+  indexVersion: 2,
   chunkerVersion: 3,
   bm25Version: 1,
   estimatedBytes: 4096,
@@ -159,6 +159,12 @@ describe('indexBook metadata freshness', () => {
     await expect(isBookIndexed('book-hash', settings)).resolves.toBe(false);
   });
 
+  it('treats indexes created before volume-aware AI citation labels as stale', async () => {
+    mocks.getMeta.mockResolvedValue({ ...currentMeta, indexVersion: 1 });
+
+    await expect(isBookIndexed('book-hash', settings)).resolves.toBe(false);
+  });
+
   it('treats an embedding model change as stale when embeddings are configured', async () => {
     mocks.getMeta.mockResolvedValue({ ...currentMeta, embeddingModel: 'old-embedding-model' });
 
@@ -186,7 +192,7 @@ describe('indexBook metadata freshness', () => {
 
     expect(mocks.saveMeta).toHaveBeenCalledWith(
       expect.objectContaining({
-        indexVersion: 1,
+        indexVersion: 2,
         chunkerVersion: 3,
         bm25Version: 1,
         estimatedBytes: expect.any(Number),

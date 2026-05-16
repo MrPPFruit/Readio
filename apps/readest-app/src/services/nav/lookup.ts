@@ -36,6 +36,17 @@ const findLabelPath = (toc: TocLabelItem[], href: string): TocLabelItem[] => {
   return [];
 };
 
+const findPrecedingPart = (toc: TocLabelItem[], currentItem: TocLabelItem): TocLabelItem | null => {
+  let precedingPart: TocLabelItem | null = null;
+  for (const item of toc) {
+    if (item === currentItem || (currentItem.href && item.href === currentItem.href)) {
+      return precedingPart;
+    }
+    if (item.label && isPartLikeLabel(item.label)) precedingPart = item;
+  }
+  return null;
+};
+
 export const getTocDisplayLabel = (
   toc: TocLabelItem[] | undefined,
   currentItem: TocLabelItem | null | undefined,
@@ -43,8 +54,10 @@ export const getTocDisplayLabel = (
   if (!currentItem?.label) return undefined;
   if (!toc?.length || !currentItem.href) return currentItem.label;
 
+  if (isPartLikeLabel(currentItem.label)) return currentItem.label;
+
   const path = findLabelPath(toc, currentItem.href);
-  const parent = path.length >= 2 ? path[path.length - 2] : null;
+  const parent = path.length >= 2 ? path[path.length - 2] : findPrecedingPart(toc, currentItem);
   if (!parent?.label || !isPartLikeLabel(parent.label)) return currentItem.label;
   if (currentItem.label.includes(parent.label)) return currentItem.label;
 

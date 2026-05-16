@@ -49,7 +49,7 @@ export interface BookDocType {
   metadata?: { title?: string | { [key: string]: string }; author?: string | { name?: string } };
 }
 
-export const INDEX_VERSION = 1;
+export const INDEX_VERSION = 2;
 export const BM25_ONLY_EMBEDDING_MODEL = 'bm25-only';
 
 interface IndexIdentity {

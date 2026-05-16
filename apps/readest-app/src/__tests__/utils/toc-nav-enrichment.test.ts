@@ -128,6 +128,27 @@ describe('getTocDisplayLabel', () => {
 
     expect(getTocDisplayLabel(toc, toc[0]!.subitems![0]!)).toBe('第一部 小丑 第五章 线索');
   });
+
+  it('includes the nearest preceding part for flat chapter labels', () => {
+    const toc: TOCItem[] = [
+      { id: 0, label: '第一部 小丑', href: 'part-1.xhtml', index: 0 },
+      { id: 138, label: '第一百三十四章 超过一分钟了', href: 'chapter-134.xhtml', index: 138 },
+      { id: 220, label: '第二部 无面人', href: 'part-2.xhtml', index: 220 },
+      { id: 269, label: '第五十一章 五人聚会', href: 'chapter-269.xhtml', index: 269 },
+    ];
+
+    expect(getTocDisplayLabel(toc, toc[1]!)).toBe('第一部 小丑 · 第一百三十四章 超过一分钟了');
+    expect(getTocDisplayLabel(toc, toc[3]!)).toBe('第二部 无面人 · 第五十一章 五人聚会');
+  });
+
+  it('does not prefix top-level part labels with earlier parts', () => {
+    const toc: TOCItem[] = [
+      { id: 0, label: '第一部 小丑', href: 'part-1.xhtml', index: 0 },
+      { id: 220, label: '第二部 无面人', href: 'part-2.xhtml', index: 220 },
+    ];
+
+    expect(getTocDisplayLabel(toc, toc[1]!)).toBe('第二部 无面人');
+  });
 });
 
 describe('computeBookNav nav-enrichment fallback', () => {
