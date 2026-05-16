@@ -442,7 +442,12 @@ describe('Reader AI panels', () => {
     render(
       <ReaderAIAnswerPanel
         messages={[
-          { id: 'user-current-source', role: 'user', content: '塔罗会现在有哪些成员？', createdAt: 1 },
+          {
+            id: 'user-current-source',
+            role: 'user',
+            content: '塔罗会现在有哪些成员？',
+            createdAt: 1,
+          },
           {
             id: 'assistant-current-source',
             role: 'assistant',

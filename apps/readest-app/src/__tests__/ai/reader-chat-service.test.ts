@@ -785,7 +785,7 @@ describe('streamReaderAIAnswer', () => {
           currentPage: 3104,
           currentAIPage: 1988,
           messages: [],
-          question: '发生了什么？'
+          question: '发生了什么？',
         })) {
           chunks.push(chunk);
         }

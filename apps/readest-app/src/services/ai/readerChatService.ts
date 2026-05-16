@@ -45,7 +45,8 @@ export interface GenerateReaderAISuggestionsOptions {
   signal?: AbortSignal;
 }
 
-const currentContextQuestionPattern = /前面|发生了什么|本章|这章|这一章|当前章节|这里|当前|现在|目前|刚才|这段|上一段/;
+const currentContextQuestionPattern =
+  /前面|发生了什么|本章|这章|这一章|当前章节|这里|当前|现在|目前|刚才|这段|上一段/;
 const currentContextScoreBoost = 1_000;
 
 const isSupportedProvider = (provider: string): provider is AIProviderName =>
@@ -84,7 +85,10 @@ function sortChunksByBookOrder(chunks: ScoredChunk[]): ScoredChunk[] {
   });
 }
 
-function sortCurrentChunksFirst(chunks: ScoredChunk[], currentChunkIds: Set<string>): ScoredChunk[] {
+function sortCurrentChunksFirst(
+  chunks: ScoredChunk[],
+  currentChunkIds: Set<string>,
+): ScoredChunk[] {
   return [...chunks].sort((a, b) => {
     const aIsCurrent = currentChunkIds.has(a.id);
     const bIsCurrent = currentChunkIds.has(b.id);

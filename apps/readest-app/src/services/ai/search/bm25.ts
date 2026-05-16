@@ -64,7 +64,9 @@ const getCurrentReadableSectionChunks = (chunks: TextChunk[], currentPage: numbe
   return readableChunks.filter(({ chunk }) => chunk.sectionIndex === currentSectionIndex);
 };
 
-const sortReadableChunksByBookOrder = <T extends { chunk: TextChunk; index: number }>(chunks: T[]) =>
+const sortReadableChunksByBookOrder = <T extends { chunk: TextChunk; index: number }>(
+  chunks: T[],
+) =>
   [...chunks].sort(
     (a, b) =>
       a.chunk.pageNumber - b.chunk.pageNumber ||
@@ -99,7 +101,11 @@ export const getCurrentSectionSummaryChunks = (
     getCurrentReadableSectionChunks(chunks, currentPage),
   );
   if (sectionChunks.length <= topK) {
-    return sectionChunks.map(({ chunk }) => ({ ...chunk, score: 1, searchMethod: 'bm25' as const }));
+    return sectionChunks.map(({ chunk }) => ({
+      ...chunk,
+      score: 1,
+      searchMethod: 'bm25' as const,
+    }));
   }
   if (topK <= 1) {
     const chunk = sectionChunks[0]!.chunk;
