@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { getReflowableFullBookPageInfo, getRendererPageInfo } from '@/app/reader/utils/pageInfo';
+import {
+  getReflowableAIPageBoundary,
+  getReflowableFullBookPageInfo,
+  getRendererPageInfo,
+} from '@/app/reader/utils/pageInfo';
 import type { BookDoc } from '@/libs/document';
 import type { FoliateView } from '@/types/view';
 
@@ -57,5 +61,17 @@ describe('reader page info', () => {
         renderedPageInfo: { current: 1, total: 12 },
       }),
     ).toEqual({ current: 5, total: 40 });
+  });
+
+  it('maps reflowable progress to the AI chunk page coordinate system', () => {
+    const bookDoc = makeBookDoc([1000, 3000, 6000]);
+
+    expect(
+      getReflowableAIPageBoundary({
+        bookDoc,
+        section: { current: 1, total: 3 },
+        renderedPageInfo: { current: 3, total: 6 },
+      }),
+    ).toBe(1);
   });
 });

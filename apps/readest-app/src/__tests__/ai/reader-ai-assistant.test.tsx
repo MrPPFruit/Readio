@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getBookData: vi.fn(),
   getProgress: vi.fn(),
   getView: vi.fn(),
+  getViewState: vi.fn(),
   useKeyDownActions: vi.fn(),
   setActiveSettingsItemId: vi.fn(),
   setSettingsDialogBookKey: vi.fn(),
@@ -66,7 +67,11 @@ vi.mock('@/store/bookDataStore', () => ({
 
 vi.mock('@/store/readerStore', () => ({
   useReaderStore: {
-    getState: () => ({ getProgress: mocks.getProgress, getView: mocks.getView }),
+    getState: () => ({
+      getProgress: mocks.getProgress,
+      getView: mocks.getView,
+      getViewState: mocks.getViewState,
+    }),
   },
 }));
 
@@ -249,6 +254,7 @@ beforeEach(() => {
   });
   mocks.getProgress.mockReturnValue({ page: 7 });
   mocks.getView.mockReturnValue({ goTo: vi.fn() });
+  mocks.getViewState.mockReturnValue({ renderedPageInfo: null });
   mocks.useKeyDownActions.mockReturnValue({ current: null });
   storeState = {
     activeConversationId: null,
@@ -667,6 +673,35 @@ describe('ReaderAIAssistant integration safeguards', () => {
 
     await waitFor(() => expect(mocks.streamReaderAIAnswer).toHaveBeenCalled());
     expect(mocks.streamReaderAIAnswer.mock.calls[0]![0].settings.spoilerProtection).toBe(true);
+  });
+
+  it('passes the AI chunk page boundary when reflowable renderer pages differ from chunk pages', async () => {
+    mocks.getProgress.mockReturnValue({
+      page: 3104,
+      section: { current: 1, total: 2 },
+    });
+    mocks.getBookData.mockReturnValue({
+      book: { title: 'Current Book', author: 'Author' },
+      bookDoc: {
+        metadata: { title: 'Current Book', author: 'Author' },
+        sections: [
+          { size: 2_982_000, linear: 'yes' },
+          { size: 6_000, linear: 'yes' },
+        ],
+      },
+      isFixedLayout: false,
+    });
+    mocks.getViewState.mockReturnValue({ renderedPageInfo: { current: 3, total: 6 } });
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await waitFor(() => expect(mocks.streamReaderAIAnswer).toHaveBeenCalled());
+    expect(mocks.streamReaderAIAnswer.mock.calls[0]![0]).toMatchObject({
+      currentPage: 3104,
+      currentAIPage: 1990,
+    });
   });
 
   it('passes disabled spoiler protection to answer streaming when the user allows spoilers', async () => {

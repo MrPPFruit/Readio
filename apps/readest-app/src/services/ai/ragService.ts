@@ -6,7 +6,11 @@ import { withRetryAndTimeout, AI_TIMEOUTS, AI_RETRY_CONFIGS } from './utils/retr
 import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { aiLogger } from './logger';
-import { BM25_VERSION, getCurrentPageContextChunks } from './search/bm25';
+import {
+  BM25_VERSION,
+  getCurrentPageContextChunks,
+  getCurrentSectionSummaryChunks as getBM25CurrentSectionSummaryChunks,
+} from './search/bm25';
 import { getTocDisplayLabel } from '@/services/nav';
 import type {
   AISettings,
@@ -384,6 +388,15 @@ export async function getCurrentSectionContextChunks(
 ): Promise<ScoredChunk[]> {
   const chunks = await aiStore.getChunks(bookHash);
   return getCurrentPageContextChunks(chunks, currentPage, topK);
+}
+
+export async function getCurrentSectionSummaryChunks(
+  bookHash: string,
+  currentPage: number,
+  topK = 4,
+): Promise<ScoredChunk[]> {
+  const chunks = await aiStore.getChunks(bookHash);
+  return getBM25CurrentSectionSummaryChunks(chunks, currentPage, topK);
 }
 
 export async function hybridSearch(

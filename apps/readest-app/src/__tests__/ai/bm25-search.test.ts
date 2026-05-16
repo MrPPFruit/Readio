@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createBM25Index,
   getCurrentPageContextChunks,
+  getCurrentSectionSummaryChunks,
   isChunkWithinPageBoundary,
   searchBM25Index,
 } from '@/services/ai/search/bm25';
@@ -125,6 +126,89 @@ describe('BM25 search for Chinese reader content', () => {
     const results = getCurrentPageContextChunks(pageChunks, 4054, 2);
 
     expect(results.map((result) => result.id)).toEqual(['book-546-2']);
+  });
+
+  it('samples current section chunks across the chapter for summary context', () => {
+    const sectionChunks: TextChunk[] = [
+      {
+        id: 'book-269-1',
+        bookHash: 'book',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        pageNumber: 1984,
+        text: '克莱恩制造“世界”作为新成员参加塔罗会。',
+      },
+      {
+        id: 'book-269-2',
+        bookHash: 'book',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        pageNumber: 1986,
+        text: '奥黛丽、阿尔杰和戴里克准时来到灰雾之上。',
+      },
+      {
+        id: 'book-269-3',
+        bookHash: 'book',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        pageNumber: 1988,
+        text: '罗塞尔日记提到贝尔纳黛和查拉图的预言。',
+      },
+      {
+        id: 'book-270-1',
+        bookHash: 'book',
+        sectionIndex: 270,
+        chapterTitle: '第五十二章 后文',
+        pageNumber: 1989,
+        text: '后文内容不应进入当前章节总结。',
+      },
+    ];
+
+    const results = getCurrentSectionSummaryChunks(sectionChunks, 1988, 3);
+
+    expect(results.map((result) => result.id)).toEqual(['book-269-1', 'book-269-2', 'book-269-3']);
+  });
+
+  it('returns a single current-section summary chunk when topK is one', () => {
+    const sectionChunks: TextChunk[] = [
+      {
+        id: 'book-269-1',
+        bookHash: 'book',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        pageNumber: 1984,
+        text: '克莱恩制造“世界”作为新成员参加塔罗会。',
+      },
+      {
+        id: 'book-269-2',
+        bookHash: 'book',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        pageNumber: 1986,
+        text: '奥黛丽、阿尔杰和戴里克准时来到灰雾之上。',
+      },
+    ];
+
+    const results = getCurrentSectionSummaryChunks(sectionChunks, 1986, 1);
+
+    expect(results.map((result) => result.id)).toEqual(['book-269-1']);
+  });
+
+  it('returns no current-section summary chunks when topK is zero', () => {
+    const sectionChunks: TextChunk[] = [
+      {
+        id: 'book-269-1',
+        bookHash: 'book',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        pageNumber: 1984,
+        text: '克莱恩制造“世界”作为新成员参加塔罗会。',
+      },
+    ];
+
+    const results = getCurrentSectionSummaryChunks(sectionChunks, 1984, 0);
+
+    expect(results).toEqual([]);
   });
 
   it('prefers the beginning of the current page window over later chunks on the same page', () => {

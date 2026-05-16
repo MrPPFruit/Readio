@@ -391,7 +391,7 @@ describe('Reader AI panels', () => {
     ).toContain('w-full');
   });
 
-  it('renders compact numbered references sorted by book order', () => {
+  it('renders compact numbered references in service-provided order', () => {
     render(
       <ReaderAIAnswerPanel
         messages={[
@@ -430,12 +430,54 @@ describe('Reader AI panels', () => {
     const referenceButtons = within(references).getAllByRole('button');
 
     expect(referenceButtons[0]?.textContent).toContain('[1]');
-    expect(referenceButtons[0]?.textContent).toContain('第五章 线索');
+    expect(referenceButtons[0]?.textContent).toContain('第九章 线索');
     expect(referenceButtons[0]?.textContent).toContain('约略位置');
-    expect(referenceButtons[0]?.textContent).not.toContain('第 38 页');
-    expect(referenceButtons[0]?.textContent).not.toContain('灰雾之上的线索再次出现');
+    expect(referenceButtons[0]?.textContent).not.toContain('第 88 页');
+    expect(referenceButtons[0]?.textContent).not.toContain('后面的线索');
     expect(referenceButtons[1]?.textContent).toContain('[2]');
-    expect(referenceButtons[1]?.textContent).toContain('第九章 线索');
+    expect(referenceButtons[1]?.textContent).toContain('第五章 线索');
+  });
+
+  it('keeps rendered citations aligned with service-provided source order', () => {
+    render(
+      <ReaderAIAnswerPanel
+        messages={[
+          { id: 'user-current-source', role: 'user', content: '塔罗会现在有哪些成员？', createdAt: 1 },
+          {
+            id: 'assistant-current-source',
+            role: 'assistant',
+            content: '“世界”在当前聚会首次亮相 [1]。',
+            createdAt: 2,
+            sources: [
+              {
+                id: 'current-world-source',
+                chapterTitle: '第五十一章 五人聚会',
+                sectionIndex: 269,
+                snippet: '新成员“世界”正式亮相。',
+                confidence: 'approximate',
+              },
+              {
+                id: 'old-source',
+                chapterTitle: '第十四章 通灵者',
+                sectionIndex: 14,
+                snippet: '克莱恩早期经历。',
+                confidence: 'approximate',
+              },
+            ],
+          },
+        ]}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const references = screen.getByRole('region', { name: '引用来源' });
+    const referenceButtons = within(references).getAllByRole('button');
+
+    expect(referenceButtons[0]?.textContent).toContain('[1]');
+    expect(referenceButtons[0]?.textContent).toContain('第五十一章 五人聚会');
+    expect(referenceButtons[1]?.textContent).toContain('[2]');
+    expect(referenceButtons[1]?.textContent).toContain('第十四章 通灵者');
   });
 
   it('keeps citation numbers aligned with same-position source order', () => {
@@ -555,6 +597,36 @@ describe('Reader AI panels', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看引用 1' }));
 
     expect(screen.getByRole('dialog', { name: '引用 1' })).toBeTruthy();
+  });
+
+  it('renders cited assistant markdown line breaks without crashing', () => {
+    render(
+      <ReaderAIAnswerPanel
+        messages={[
+          { id: 'user-citation-break', role: 'user', content: '总结这章', createdAt: 1 },
+          {
+            id: 'assistant-citation-break',
+            role: 'assistant',
+            content: '第一行回答。\n第二行带引用 [1]。',
+            createdAt: 2,
+            sources: [
+              {
+                id: 'source-citation-break',
+                chapterTitle: '第五十一章 五人聚会',
+                sectionIndex: 210,
+                snippet: '塔罗会加入了新成员。',
+                confidence: 'approximate',
+              },
+            ],
+          },
+        ]}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/第一行回答/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: '查看引用 1' })).toBeTruthy();
   });
 
   it('does not turn citation-like text inside code into source buttons', () => {

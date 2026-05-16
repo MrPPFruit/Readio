@@ -94,6 +94,42 @@ describe('OpenAI-compatible model transport', () => {
     fetchMock.mockRestore();
   });
 
+  test('does not expose non-streaming MiMo reasoning_content as answer text', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: { content: '', reasoning_content: 'internal reasoning' },
+              finish_reason: 'stop',
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const model = createOpenAICompatibleModel({
+      provider: 'mimo',
+      apiKey: 'key',
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+      model: 'mimo-v2.5-pro',
+    }) as unknown as {
+      doGenerate: (options: { prompt: { role: string; content: string }[] }) => Promise<{
+        content: { type: string; text: string }[];
+      }>;
+    };
+
+    const result = await model.doGenerate({ prompt: [{ role: 'user', content: 'hello' }] });
+
+    expect(result.content).toEqual([{ type: 'text', text: '' }]);
+
+    fetchMock.mockRestore();
+  });
+
   test('streams OpenAI-compatible text deltas through the AI SDK textStream', async () => {
     const encoder = new TextEncoder();
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
@@ -166,5 +202,49 @@ describe('OpenAI-compatible model transport', () => {
 
       expect(chunks.join('')).toBe('hello world');
     });
+  });
+
+  test('does not expose MiMo reasoning_content when final content is streamed', async () => {
+    const encoder = new TextEncoder();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                'data: {"id":"chatcmpl-1","model":"mimo-v2.5-pro","choices":[{"delta":{"reasoning_content":"internal reasoning"}}]}\n\n',
+              ),
+            );
+            controller.enqueue(
+              encoder.encode(
+                'data: {"choices":[{"delta":{"content":"visible answer"},"finish_reason":"stop"}]}\n\n',
+              ),
+            );
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        },
+      ),
+    );
+
+    const model = createOpenAICompatibleModel({
+      provider: 'mimo',
+      apiKey: 'key',
+      baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+      model: 'mimo-v2.5-pro',
+    });
+
+    const chunks: string[] = [];
+    for await (const chunk of streamText({ model, prompt: 'hello' }).textStream) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks.join('')).toBe('visible answer');
+
+    fetchMock.mockRestore();
   });
 });

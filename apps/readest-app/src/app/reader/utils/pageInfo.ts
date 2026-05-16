@@ -1,6 +1,7 @@
 import { PageInfo } from '@/types/book';
 import { BookDoc } from '@/libs/document';
 import { FoliateView } from '@/types/view';
+import { SIZE_PER_PAGE } from '@/services/ai/utils/chunker';
 
 export const getRendererPageInfo = (view: FoliateView | null): PageInfo | null => {
   const renderer = view?.renderer;
@@ -50,4 +51,29 @@ export const getReflowableFullBookPageInfo = ({
   );
 
   return { current, total };
+};
+
+export const getReflowableAIPageBoundary = ({
+  bookDoc,
+  section,
+  renderedPageInfo,
+}: {
+  bookDoc: BookDoc;
+  section: PageInfo;
+  renderedPageInfo: PageInfo | null;
+}): number | null => {
+  if (!renderedPageInfo || renderedPageInfo.total <= 0) return null;
+
+  const currentSectionSize = bookDoc.sections[section.current]?.size ?? 0;
+  if (currentSectionSize <= 0) return null;
+
+  const sizeBefore = bookDoc.sections
+    .slice(0, section.current)
+    .reduce((sum, item) => sum + (item.linear !== 'no' && item.size > 0 ? item.size : 0), 0);
+  const sectionProgress = Math.max(
+    0,
+    Math.min(1, renderedPageInfo.current / renderedPageInfo.total),
+  );
+
+  return Math.floor((sizeBefore + sectionProgress * currentSectionSize) / SIZE_PER_PAGE);
 };

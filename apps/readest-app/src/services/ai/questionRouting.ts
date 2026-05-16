@@ -22,7 +22,7 @@ export interface ReaderQuestionClassification {
 const recapPattern =
   /(前面|之前|刚才|目前|现在).*(发生|讲到|进展|局势|回顾)|发生了什么|回顾一下|讲到哪/;
 const chapterSummaryPattern =
-  /(总结|概括).*(本章|这一章|当前章节|本节|这一节)|本章.*(讲了什么|重点|内容)/;
+  /(总结|概括).*(本章|这一章|当前章节|本节|这一节)|(本章|这章|这一章|当前章节).*(讲了什么|重点|内容)/;
 const entityLookupPattern = /(.+)(是谁|是什么|什么地方|什么组织|什么东西|什么意思|指什么)[？?]?$/;
 const entityEventPattern =
   /^(?!前面|之前|刚才|目前|现在|这里|这段|上一段)[\p{Script=Han}A-Za-z0-9·]{2,24}(发生了什么|怎么了|后来怎么样|最后怎么样)[？?]?$/u;

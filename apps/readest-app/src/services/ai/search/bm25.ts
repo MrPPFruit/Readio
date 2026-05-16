@@ -52,11 +52,7 @@ const getChunkOrder = (chunk: TextChunk, fallback: number): number => {
   return match ? Number(match[1]) : fallback;
 };
 
-export const getCurrentPageContextChunks = (
-  chunks: TextChunk[],
-  currentPage: number,
-  topK = 2,
-): ScoredChunk[] => {
+const getCurrentReadableSectionChunks = (chunks: TextChunk[], currentPage: number) => {
   const readableChunks = chunks
     .map((chunk, index) => ({ chunk, index }))
     .filter(({ chunk }) => isChunkWithinPageBoundary(chunk, currentPage));
@@ -65,21 +61,63 @@ export const getCurrentPageContextChunks = (
   const currentSectionIndex = readableChunks.reduce((latest, candidate) =>
     candidate.chunk.sectionIndex > latest.chunk.sectionIndex ? candidate : latest,
   ).chunk.sectionIndex;
-  const sectionChunks = readableChunks.filter(
-    ({ chunk }) => chunk.sectionIndex === currentSectionIndex,
+  return readableChunks.filter(({ chunk }) => chunk.sectionIndex === currentSectionIndex);
+};
+
+const sortReadableChunksByBookOrder = <T extends { chunk: TextChunk; index: number }>(chunks: T[]) =>
+  [...chunks].sort(
+    (a, b) =>
+      a.chunk.pageNumber - b.chunk.pageNumber ||
+      getChunkOrder(a.chunk, a.index) - getChunkOrder(b.chunk, b.index) ||
+      a.index - b.index,
   );
+
+export const getCurrentPageContextChunks = (
+  chunks: TextChunk[],
+  currentPage: number,
+  topK = 2,
+): ScoredChunk[] => {
+  const sectionChunks = getCurrentReadableSectionChunks(chunks, currentPage);
+  if (sectionChunks.length === 0) return [];
+
   const windowStart = currentPage - CURRENT_PAGE_CONTEXT_WINDOW;
   const windowChunks = sectionChunks.filter(({ chunk }) => chunk.pageNumber >= windowStart);
 
-  return (windowChunks.length > 0 ? windowChunks : sectionChunks)
-    .sort(
-      (a, b) =>
-        a.chunk.pageNumber - b.chunk.pageNumber ||
-        getChunkOrder(a.chunk, a.index) - getChunkOrder(b.chunk, b.index) ||
-        a.index - b.index,
-    )
+  return sortReadableChunksByBookOrder(windowChunks.length > 0 ? windowChunks : sectionChunks)
     .slice(0, topK)
     .map(({ chunk }) => ({ ...chunk, score: 1, searchMethod: 'bm25' as const }));
+};
+
+export const getCurrentSectionSummaryChunks = (
+  chunks: TextChunk[],
+  currentPage: number,
+  topK = 4,
+): ScoredChunk[] => {
+  if (topK <= 0) return [];
+
+  const sectionChunks = sortReadableChunksByBookOrder(
+    getCurrentReadableSectionChunks(chunks, currentPage),
+  );
+  if (sectionChunks.length <= topK) {
+    return sectionChunks.map(({ chunk }) => ({ ...chunk, score: 1, searchMethod: 'bm25' as const }));
+  }
+  if (topK <= 1) {
+    const chunk = sectionChunks[0]!.chunk;
+    return [{ ...chunk, score: 1, searchMethod: 'bm25' as const }];
+  }
+
+  const selectedIndexes = new Set<number>();
+  for (let i = 0; i < topK; i++) {
+    selectedIndexes.add(Math.round((i * (sectionChunks.length - 1)) / (topK - 1)));
+  }
+
+  return [...selectedIndexes]
+    .sort((a, b) => a - b)
+    .map((index) => ({
+      ...sectionChunks[index]!.chunk,
+      score: 1,
+      searchMethod: 'bm25' as const,
+    }));
 };
 
 const lexicalChineseSearch = (

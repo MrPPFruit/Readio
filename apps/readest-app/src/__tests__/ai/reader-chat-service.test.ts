@@ -4,17 +4,24 @@ import type { AISettings } from '@/services/ai/types';
 import { buildSystemPrompt } from '@/services/ai/prompts';
 import { generateReaderAISuggestions, streamReaderAIAnswer } from '@/services/ai/readerChatService';
 
-const { hybridSearchMock, getCurrentSectionContextChunksMock, streamTextMock, generateTextMock } =
-  vi.hoisted(() => ({
-    hybridSearchMock: vi.fn(),
-    getCurrentSectionContextChunksMock: vi.fn(),
-    streamTextMock: vi.fn(),
-    generateTextMock: vi.fn(),
-  }));
+const {
+  hybridSearchMock,
+  getCurrentSectionContextChunksMock,
+  getCurrentSectionSummaryChunksMock,
+  streamTextMock,
+  generateTextMock,
+} = vi.hoisted(() => ({
+  hybridSearchMock: vi.fn(),
+  getCurrentSectionContextChunksMock: vi.fn(),
+  getCurrentSectionSummaryChunksMock: vi.fn(),
+  streamTextMock: vi.fn(),
+  generateTextMock: vi.fn(),
+}));
 
 vi.mock('@/services/ai/ragService', () => ({
   hybridSearch: hybridSearchMock,
   getCurrentSectionContextChunks: getCurrentSectionContextChunksMock,
+  getCurrentSectionSummaryChunks: getCurrentSectionSummaryChunksMock,
 }));
 
 vi.mock('@/services/ai/providers', () => ({
@@ -161,6 +168,7 @@ describe('streamReaderAIAnswer', () => {
     vi.clearAllMocks();
     hybridSearchMock.mockResolvedValue([]);
     getCurrentSectionContextChunksMock.mockResolvedValue([]);
+    getCurrentSectionSummaryChunksMock.mockResolvedValue([]);
     streamTextMock.mockReturnValue({
       textStream: (async function* () {
         yield 'ok';
@@ -361,6 +369,242 @@ describe('streamReaderAIAnswer', () => {
     });
   });
 
+  it('uses the AI page boundary instead of rendered reader page for spoiler filtering', async () => {
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings,
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '这章目前讲了什么？',
+      })) {
+      }
+
+      expect(hybridSearchMock).toHaveBeenCalledWith(
+        'book-hash',
+        '这章目前讲了什么？',
+        settings,
+        9,
+        1988,
+      );
+      expect(streamTextMock.mock.calls[0]?.[0].system).toContain(
+        'You remember everything from pages 1 to 1988',
+      );
+      expect(streamTextMock.mock.calls[0]?.[0].system).not.toContain(
+        'You remember everything from pages 1 to 3104',
+      );
+    });
+  });
+
+  it('keeps current chapter context for chapter-summary questions when generic matches score higher', async () => {
+    getCurrentSectionSummaryChunksMock.mockResolvedValue([
+      {
+        id: 'current-chapter-1',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        text: '奥黛丽观察到塔罗会上出现新的成员，大家开始围绕交易和情报交流。',
+        pageNumber: 1986,
+        endPageNumber: 1986,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+      {
+        id: 'current-chapter-2',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        text: '克莱恩以愚者身份主持聚会，控制节奏并回应成员的问题。',
+        pageNumber: 1987,
+        endPageNumber: 1987,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'generic-hit-1',
+        bookHash: 'book-hash',
+        sectionIndex: 184,
+        chapterTitle: '第一百三十四章 超过一分钟了',
+        text: '克莱恩和邓恩、弗莱前往废弃城堡处理怨灵。',
+        pageNumber: 1364,
+        endPageNumber: 1364,
+        score: 30,
+        searchMethod: 'bm25',
+      },
+      {
+        id: 'generic-hit-2',
+        bookHash: 'book-hash',
+        sectionIndex: 185,
+        chapterTitle: '第一百三十五章 地下室',
+        text: '三人在地下室继续调查，确认怨灵留下的痕迹。',
+        pageNumber: 1370,
+        endPageNumber: 1370,
+        score: 24,
+        searchMethod: 'bm25',
+      },
+      {
+        id: 'generic-hit-3',
+        bookHash: 'book-hash',
+        sectionIndex: 186,
+        chapterTitle: '第一百三十六章 线索',
+        text: '线索被重新整理，行动暂时告一段落。',
+        pageNumber: 1378,
+        endPageNumber: 1378,
+        score: 20,
+        searchMethod: 'bm25',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: { ...settings, maxContextChunks: 10 },
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '这章目前讲了什么？',
+        onSources,
+      })) {
+      }
+    });
+
+    const systemPrompt = streamTextMock.mock.calls[0]?.[0].system;
+    expect(getCurrentSectionSummaryChunksMock).toHaveBeenCalledWith('book-hash', 1988, 4);
+    expect(systemPrompt).toContain('第五十一章 五人聚会');
+    expect(systemPrompt).toContain('塔罗会上出现新的成员');
+    expect(systemPrompt).not.toContain('第一百三十四章 超过一分钟了');
+    expect(onSources).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'current-chapter-1' }),
+      expect.objectContaining({ id: 'current-chapter-2' }),
+    ]);
+  });
+
+  it('uses current chapter context for current-state membership questions', async () => {
+    getCurrentSectionContextChunksMock.mockResolvedValue([
+      {
+        id: 'current-world-member',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        text: '克莱恩向正义、倒吊人、太阳介绍新成员“世界”，塔罗会变成五人聚会。',
+        pageNumber: 1988,
+        endPageNumber: 1988,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'old-members',
+        bookHash: 'book-hash',
+        sectionIndex: 35,
+        chapterTitle: '第三十五章 交流消息',
+        text: '塔罗会成员包括愚者、正义和倒吊人。',
+        pageNumber: 260,
+        endPageNumber: 260,
+        score: 30,
+        searchMethod: 'bm25',
+      },
+      {
+        id: 'sun-member',
+        bookHash: 'book-hash',
+        sectionIndex: 143,
+        chapterTitle: '第一百四十三章 愚者牌同声翻译器',
+        text: '太阳戴里克加入塔罗会。',
+        pageNumber: 1060,
+        endPageNumber: 1060,
+        score: 24,
+        searchMethod: 'bm25',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: { ...settings, maxContextChunks: 10 },
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '塔罗会现在有哪些成员？',
+        onSources,
+      })) {
+      }
+    });
+
+    const systemPrompt = streamTextMock.mock.calls[0]?.[0].system;
+    expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 1988, 4);
+    expect(systemPrompt).toContain('第五十一章 五人聚会');
+    expect(systemPrompt).toContain('新成员“世界”');
+    expect(systemPrompt).toMatch(/\[Source 1: 第五十一章 五人聚会\][\s\S]*新成员“世界”/);
+    expect(onSources.mock.calls[0]?.[0][0]).toMatchObject({ id: 'current-world-member' });
+  });
+
+  it('still uses current chapter context for current-state questions when spoiler protection is disabled', async () => {
+    getCurrentSectionContextChunksMock.mockResolvedValue([
+      {
+        id: 'current-world-member',
+        bookHash: 'book-hash',
+        sectionIndex: 269,
+        chapterTitle: '第五十一章 五人聚会',
+        text: '克莱恩向正义、倒吊人、太阳介绍新成员“世界”，塔罗会变成五人聚会。',
+        pageNumber: 1988,
+        endPageNumber: 1988,
+        score: 1,
+        searchMethod: 'bm25',
+      },
+    ]);
+    hybridSearchMock.mockResolvedValue([
+      {
+        id: 'old-members',
+        bookHash: 'book-hash',
+        sectionIndex: 35,
+        chapterTitle: '第三十五章 交流消息',
+        text: '塔罗会成员包括愚者、正义和倒吊人。',
+        pageNumber: 260,
+        endPageNumber: 260,
+        score: 30,
+        searchMethod: 'bm25',
+      },
+    ]);
+    const onSources = vi.fn();
+
+    await runWithoutWindow(async () => {
+      for await (const _chunk of streamReaderAIAnswer({
+        settings: { ...settings, spoilerProtection: false, maxContextChunks: 10 },
+        bookHash: 'book-hash',
+        bookTitle: 'Book',
+        authorName: 'Author',
+        currentPage: 3104,
+        currentAIPage: 1988,
+        messages: [],
+        question: '塔罗会现在有哪些成员？',
+        onSources,
+      })) {
+      }
+    });
+
+    expect(getCurrentSectionContextChunksMock).toHaveBeenCalledWith('book-hash', 1988, 4);
+    expect(hybridSearchMock).toHaveBeenCalledWith(
+      'book-hash',
+      '塔罗会现在有哪些成员？',
+      expect.objectContaining({ spoilerProtection: false }),
+      30,
+      undefined,
+    );
+    expect(onSources.mock.calls[0]?.[0][0]).toMatchObject({ id: 'current-world-member' });
+  });
+
   it('packs oversampled search results before sending final context to the model', async () => {
     hybridSearchMock.mockResolvedValue([
       {
@@ -538,9 +782,10 @@ describe('streamReaderAIAnswer', () => {
           bookHash: 'book-hash',
           bookTitle: 'Book',
           authorName: 'Author',
-          currentPage: 90,
+          currentPage: 3104,
+          currentAIPage: 1988,
           messages: [],
-          question: '发生了什么？',
+          question: '发生了什么？'
         })) {
           chunks.push(chunk);
         }
@@ -556,7 +801,7 @@ describe('streamReaderAIAnswer', () => {
         expect(body.readerContext).toMatchObject({
           bookTitle: 'Book',
           authorName: 'Author',
-          currentPage: 90,
+          currentPage: 1988,
           spoilerProtection: true,
           classification: { intent: 'current_recap', scope: 'read_so_far' },
           chunks: [

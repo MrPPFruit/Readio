@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
 import { getAIAvailability } from '@/services/ai/availability';
+import { getReflowableAIPageBoundary } from '@/app/reader/utils/pageInfo';
 import { indexBook, isBookIndexed, type BookDocType } from '@/services/ai/ragService';
 import type { EmbeddingProgress } from '@/services/ai/types';
 import { generateReaderAISuggestions, streamReaderAIAnswer } from '@/services/ai/readerChatService';
@@ -415,6 +416,15 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
       bookData?.book?.author ||
       (bookData?.bookDoc?.metadata.author ? formatAuthors(bookData.bookDoc.metadata.author) : '');
     const currentPage = selection?.page || progress?.page || 1;
+    const viewState = useReaderStore.getState().getViewState(bookKey);
+    const currentAIPage =
+      !selection?.page && !bookData?.isFixedLayout && bookData?.bookDoc && progress?.section
+        ? getReflowableAIPageBoundary({
+            bookDoc: bookData.bookDoc,
+            section: progress.section,
+            renderedPageInfo: viewState?.renderedPageInfo ?? null,
+          })
+        : null;
     let answer = '';
     let answerSources: ReaderAISource[] = [];
     let timedOut = false;
@@ -431,6 +441,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
         bookTitle,
         authorName,
         currentPage,
+        ...(currentAIPage !== null ? { currentAIPage } : {}),
         messages: priorMessages.map(({ role, content }) => ({ role, content })),
         question,
         selectionText: selection?.text,

@@ -161,9 +161,8 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
             }
             const choice = (json['choices'] as Record<string, unknown>[] | undefined)?.[0];
             const delta = choice?.['delta'] as Record<string, unknown> | undefined;
-            if (typeof delta?.['content'] === 'string' && delta['content']) {
-              controller.enqueue({ type: 'text-delta', id: textId, delta: delta['content'] });
-            }
+            const textDelta = typeof delta?.['content'] === 'string' ? delta['content'] : '';
+            if (textDelta) controller.enqueue({ type: 'text-delta', id: textId, delta: textDelta });
             if (typeof choice?.['finish_reason'] === 'string')
               finishReason = choice['finish_reason'];
             if (json['usage']) usage = usageFrom(json['usage'] as Record<string, unknown>);

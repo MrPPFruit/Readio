@@ -37,6 +37,9 @@ describe('classifyReaderQuestion', () => {
       classifyReaderQuestion({ question: '总结本章内容', spoilerProtection: true }).intent,
     ).toBe('chapter_summary');
     expect(
+      classifyReaderQuestion({ question: '这章目前讲了什么？', spoilerProtection: true }).intent,
+    ).toBe('chapter_summary');
+    expect(
       classifyReaderQuestion({ question: '白银城是什么地方？', spoilerProtection: true }).intent,
     ).toBe('entity_lookup');
     expect(

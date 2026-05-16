@@ -44,18 +44,7 @@ interface ReaderAIMessageContentProps {
   onCitationClick?: (index: number) => void;
 }
 
-const sourceOrderValue = (source: ReaderAISource) =>
-  source.sortIndex ??
-  (source.sectionIndex ?? Number.MAX_SAFE_INTEGER) * 1_000_000 + (source.pageNumber ?? 0);
-
-const getOrderedSources = (sources: ReaderAISource[] = []) =>
-  sources
-    .map((source, index) => ({ source, index }))
-    .sort((a, b) => {
-      const orderDiff = sourceOrderValue(a.source) - sourceOrderValue(b.source);
-      return orderDiff === 0 ? a.index - b.index : orderDiff;
-    })
-    .map(({ source }) => source);
+const getOrderedSources = (sources: ReaderAISource[] = []) => sources;
 
 const formatSourceLabel = (source: ReaderAISource) => {
   const locationLabel =
@@ -123,6 +112,8 @@ function renderHtmlNode(
     if (attribute.name.startsWith('on') || attribute.name === 'style') continue;
     props[attribute.name === 'class' ? 'className' : attribute.name] = attribute.value;
   }
+  if (tagName === 'br') return React.createElement(tagName, props);
+
   const children = Array.from(element.childNodes).map((child, index) =>
     renderHtmlNode(child, `${key}-${index}`, sourceCount, nextCitationsDisabled, onCitationClick),
   );

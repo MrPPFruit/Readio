@@ -5,7 +5,11 @@ import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { buildSystemPrompt } from './prompts';
 import { classifyReaderQuestion, type ReaderQuestionClassification } from './questionRouting';
-import { getCurrentSectionContextChunks, hybridSearch } from './ragService';
+import {
+  getCurrentSectionContextChunks,
+  getCurrentSectionSummaryChunks,
+  hybridSearch,
+} from './ragService';
 import { packReaderContext } from './search/contextPack';
 import type { ReaderAISource } from '@/types/readerAI';
 import type { AIProviderName, AISettings, ScoredChunk } from './types';
@@ -21,6 +25,7 @@ export interface StreamReaderAIAnswerOptions {
   bookTitle: string;
   authorName?: string;
   currentPage: number;
+  currentAIPage?: number;
   messages: ReaderChatMessage[];
   question: string;
   selectionText?: string;
@@ -40,7 +45,8 @@ export interface GenerateReaderAISuggestionsOptions {
   signal?: AbortSignal;
 }
 
-const currentContextQuestionPattern = /前面|发生了什么|本章|这里|当前|刚才|这段|上一段/;
+const currentContextQuestionPattern = /前面|发生了什么|本章|这章|这一章|当前章节|这里|当前|现在|目前|刚才|这段|上一段/;
+const currentContextScoreBoost = 1_000;
 
 const isSupportedProvider = (provider: string): provider is AIProviderName =>
   provider in AI_PROVIDER_CATALOG;
@@ -65,10 +71,27 @@ function chunksToText(chunks: ScoredChunk[]): string {
     .join('\n');
 }
 
+function getChunkBookOrder(chunk: ScoredChunk): number {
+  return chunk.sortIndex ?? chunk.sectionIndex * 1_000_000 + chunk.pageNumber;
+}
+
 function sortChunksByBookOrder(chunks: ScoredChunk[]): ScoredChunk[] {
   return [...chunks].sort((a, b) => {
-    const sortA = a.sortIndex ?? a.sectionIndex * 1_000_000 + a.pageNumber;
-    const sortB = b.sortIndex ?? b.sectionIndex * 1_000_000 + b.pageNumber;
+    const sortA = getChunkBookOrder(a);
+    const sortB = getChunkBookOrder(b);
+    if (sortA !== sortB) return sortA - sortB;
+    return b.score - a.score;
+  });
+}
+
+function sortCurrentChunksFirst(chunks: ScoredChunk[], currentChunkIds: Set<string>): ScoredChunk[] {
+  return [...chunks].sort((a, b) => {
+    const aIsCurrent = currentChunkIds.has(a.id);
+    const bIsCurrent = currentChunkIds.has(b.id);
+    if (aIsCurrent !== bIsCurrent) return aIsCurrent ? -1 : 1;
+
+    const sortA = getChunkBookOrder(a);
+    const sortB = getChunkBookOrder(b);
     if (sortA !== sortB) return sortA - sortB;
     return b.score - a.score;
   });
@@ -196,6 +219,7 @@ export async function* streamReaderAIAnswer({
   bookTitle,
   authorName = '',
   currentPage,
+  currentAIPage,
   messages,
   question,
   selectionText,
@@ -209,6 +233,8 @@ export async function* streamReaderAIAnswer({
     spoilerProtection: settings.spoilerProtection,
   });
   let chunks: ScoredChunk[] = [];
+  const currentChunkIds = new Set<string>();
+  const sourceBoundaryPage = currentAIPage ?? currentPage;
 
   const maxContextChunks = settings.maxContextChunks || 5;
   const retrievalK = Math.max(maxContextChunks * 3, 8);
@@ -219,16 +245,27 @@ export async function* streamReaderAIAnswer({
       query,
       settings,
       retrievalK,
-      settings.spoilerProtection ? currentPage : undefined,
+      settings.spoilerProtection ? sourceBoundaryPage : undefined,
     );
-    if (settings.spoilerProtection && currentContextQuestionPattern.test(question)) {
-      const currentChunks = await getCurrentSectionContextChunks(bookHash, currentPage, 4);
-      chunks = [...currentChunks, ...chunks];
+    if (currentContextQuestionPattern.test(question)) {
+      const currentChunks =
+        classification.intent === 'chapter_summary'
+          ? await getCurrentSectionSummaryChunks(bookHash, sourceBoundaryPage, 4)
+          : await getCurrentSectionContextChunks(bookHash, sourceBoundaryPage, 4);
+      currentChunks.forEach((chunk) => currentChunkIds.add(chunk.id));
+      const boostedCurrentChunks = currentChunks.map((chunk) => ({
+        ...chunk,
+        score: chunk.score + currentContextScoreBoost,
+      }));
+      chunks =
+        classification.intent === 'chapter_summary' && boostedCurrentChunks.length
+          ? boostedCurrentChunks
+          : [...boostedCurrentChunks, ...chunks];
     }
     chunks = packReaderContext({
       question: query,
       chunks,
-      currentPage,
+      currentPage: sourceBoundaryPage,
       maxContextChunks,
       spoilerProtection: settings.spoilerProtection,
       selectionText,
@@ -237,14 +274,17 @@ export async function* streamReaderAIAnswer({
     chunks = [];
   }
 
-  const orderedChunks = sortChunksByBookOrder(chunks);
+  const orderedChunks =
+    currentChunkIds.size > 0 && classification.intent !== 'current_recap'
+      ? sortCurrentChunksFirst(chunks, currentChunkIds)
+      : sortChunksByBookOrder(chunks);
   onSources?.(orderedChunks.map(chunkToSource));
 
   const systemPrompt = buildSystemPrompt(
     bookTitle,
     authorName,
     orderedChunks,
-    currentPage,
+    sourceBoundaryPage,
     settings.spoilerProtection,
     classification,
   );
@@ -264,7 +304,7 @@ export async function* streamReaderAIAnswer({
       {
         bookTitle,
         authorName,
-        currentPage,
+        currentPage: sourceBoundaryPage,
         spoilerProtection: settings.spoilerProtection,
         classification,
         chunks: orderedChunks,
