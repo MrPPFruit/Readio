@@ -1,4 +1,4 @@
-# HANDOFF — Readio alpha.13 current state
+# HANDOFF — Readio alpha.14 current state
 
 ## Current goal and progress
 
@@ -6,18 +6,31 @@
 - Repo: this repository checkout.
 - Branch: `readio/restart-readest-base`.
 - Upstream Readest baseline: `528a13e36aaba55b03ccf4b1039c5d8e91060f11`.
-- Current app version: `0.1.0-alpha.13` in `./apps/readest-app/package.json`.
+- Current app version: `0.1.0-alpha.14` in `./apps/readest-app/package.json`.
 - Android package/identifier: `com.ppg.readio`.
-- Android `versionCode`: `1001013` in `./apps/readest-app/src-tauri/tauri.conf.json`.
-- Current release APK: `./apks/readio-v0.1.0-alpha.13-android-arm64-release.apk`.
+- Android `versionCode`: `1001014` in `./apps/readest-app/src-tauri/tauri.conf.json`.
+- Current release APK: `./apks/readio-v0.1.0-alpha.14-android-arm64-release.apk`.
 - GitHub Release asset is the source of truth for distributed APKs.
-- Working tree note: `./HANDOFF.md` is intentionally rewritten and `./HANDOFF_PRE_ALPHA10_ARCHIVE.md` intentionally archives old history. `./.codepilot-uploads/` is unrelated and should not be committed unless explicitly intended.
+- Working tree note: `./HANDOFF.md` tracks current release state. `./.codepilot-uploads/` and `./temp/` are unrelated and should not be committed unless explicitly intended.
 
 ## Latest validated release state
 
-- alpha.13 is the latest GitHub prerelease (2026-05-14).
-- alpha.13 brightness fixes: follow-system brightness with numeric display + accent color, registered `reset_screen_brightness` permission, reverted to window-level brightness control.
-- alpha.10 Reader AI / RAG / selection / annotator improvement batch remains the latest fully emulator-smoke-tested functional baseline:
+- alpha.14 is the latest GitHub prerelease (2026-05-16): `https://github.com/MrPPFruit/Readio/releases/tag/v0.1.0-alpha.14`.
+- alpha.14 ships Reader AI/RAG Phase B core routing and benchmark hardening: intent/scope routing, spoiler-safe source boundaries, MiMo stream handling, volume-aware citations, entity-list and entity lookup current-context mixing, whole-book scope behavior tests, and selection/current-recap/analysis retrieval routing.
+- alpha.14 release asset verification:
+  - Release tag: `v0.1.0-alpha.14`.
+  - Release commit: `de999e85 chore(release): bump Android alpha to 0.1.0-alpha.14`.
+  - APK asset: `readio-v0.1.0-alpha.14-android-arm64-release.apk`.
+  - SHA-256: `bc22d3bc4a01d39ee5ece56c69c9118be9a13ebff3dc788cfe0d91244127f0b2`.
+  - GitHub release download matched the uploaded local artifact hash.
+  - GitHub asset digest reported `sha256:bc22d3bc4a01d39ee5ece56c69c9118be9a13ebff3dc788cfe0d91244127f0b2`.
+- alpha.14 emulator smoke test:
+  - Installed GitHub-downloaded APK on `emulator-5554` with `adb install -r`.
+  - Started `com.ppg.readio/.MainActivity` successfully.
+  - Launch screenshot `/tmp/readio-alpha14-launch.png` showed the library home with Continue Reading for 《诡秘之主》 and Alice.
+  - Recent logcat check found no app crash.
+- alpha.13 brightness fixes remain included: follow-system brightness with numeric display + accent color, registered `reset_screen_brightness` permission, reverted to window-level brightness control.
+- alpha.10 Reader AI / RAG / selection / annotator improvement batch remains included:
   - APK build succeeded and APK signature verification passed with v2=true, v3=true, 1 signer.
   - GitHub Release downloaded asset hash matched the uploaded local artifact hash.
   - Emulator validation passed on `emulator-5554`: app launched, home/library displayed Continue Reading and Alice book, Alice reader opened, Reader AI entry opened via reader controls.
