@@ -12,9 +12,9 @@
 
 ## 3. Privacy and Documentation
 
-- [ ] 3.1 Add tests proving unsafe trace-like fields are omitted from JSON and Markdown reports.
-- [ ] 3.2 Document the local report runner input shape and scope in the eval README.
-- [ ] 3.3 Keep NotebookLM/manual benchmark observations non-authoritative and separate from deterministic scoring.
+- [x] 3.1 Add tests proving unsafe trace-like fields are omitted from JSON and Markdown reports.
+- [x] 3.2 Document the local report runner input shape and scope in the eval README.
+- [x] 3.3 Keep NotebookLM/manual benchmark observations non-authoritative and separate from deterministic scoring.
 
 ## 4. Verification and Handoff
 

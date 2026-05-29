@@ -217,3 +217,52 @@ describe('Reader AI eval report runner output', () => {
     expect(output.markdown).not.toContain('more_complete');
   });
 });
+
+describe('Reader AI eval report runner privacy', () => {
+  it('omits unsafe trace-like fields from JSON and Markdown output', () => {
+    const output = buildReaderAIEvalReportRun({
+      cases: [
+        {
+          id: 'trace-privacy-case',
+          category: 'citation_grounding',
+          language: 'zh-CN',
+          question: '引用是否可靠？',
+          expectedBehavior: 'Check citation support without storing source text.',
+          spoilerMode: 'read_so_far',
+        },
+      ],
+      results: [
+        {
+          caseId: 'trace-privacy-case',
+          runId: 'run-private',
+          classificationIntent: 'citation_check',
+          sourceCount: 1,
+          citationValid: true,
+          insufficientAnswer: false,
+          firstOutputMs: 900,
+          passed: true,
+          reasons: ['citation metadata is valid'],
+        },
+      ],
+      traces: [
+        {
+          runId: 'run-private',
+          stage: 'retrieval',
+          action: 'hybrid_search',
+          status: 'completed',
+          durationMs: 120,
+          sourceText: 'private source text',
+          prompt: 'private prompt',
+          nested: { answerText: 'private answer' },
+        },
+      ],
+    });
+
+    expect(output.ok).toBe(true);
+    expect(JSON.stringify(output)).not.toContain('sourceText');
+    expect(JSON.stringify(output)).not.toContain('private source text');
+    expect(JSON.stringify(output)).not.toContain('private prompt');
+    expect(JSON.stringify(output)).not.toContain('private answer');
+    expect(output.markdown).toContain('| run-private | completed | 1 | 0 | 0 | 0 | 0 | none |');
+  });
+});
