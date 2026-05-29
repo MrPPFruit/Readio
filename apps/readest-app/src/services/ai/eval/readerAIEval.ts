@@ -233,7 +233,7 @@ export type ReaderAITraceLike = {
   firstOutputMs?: unknown;
   overBudgetStage?: unknown;
   recoveryHint?: unknown;
-};
+} & Record<string, unknown>;
 
 export type ReaderAITraceRunSummary = {
   runId: string;
@@ -397,8 +397,9 @@ export function buildReaderAIEvalReport({
 
     const category = evalCase.category;
     const summary = byCategory[category] ?? createEmptyCategorySummary();
+    const latencyTotal = latencyTotals[category] ?? { total: 0, count: 0 };
     byCategory[category] = summary;
-    latencyTotals[category] = latencyTotals[category] ?? { total: 0, count: 0 };
+    latencyTotals[category] = latencyTotal;
 
     summary.total += 1;
     if (result.passed) summary.passed += 1;
@@ -413,15 +414,17 @@ export function buildReaderAIEvalReport({
       summary.firstOutputMs.max === null
         ? result.firstOutputMs
         : Math.max(summary.firstOutputMs.max, result.firstOutputMs);
-    latencyTotals[category].total += result.firstOutputMs;
-    latencyTotals[category].count += 1;
+    latencyTotal.total += result.firstOutputMs;
+    latencyTotal.count += 1;
 
     addCount(summary.overBudgetStages, result.overBudgetStage ?? 'none');
   }
 
   for (const [category, totals] of Object.entries(latencyTotals)) {
-    byCategory[category].firstOutputMs.average =
-      totals.count === 0 ? null : totals.total / totals.count;
+    const summary = byCategory[category];
+    if (summary !== undefined) {
+      summary.firstOutputMs.average = totals.count === 0 ? null : totals.total / totals.count;
+    }
   }
 
   const passed = results.filter((result) => result.passed).length;
