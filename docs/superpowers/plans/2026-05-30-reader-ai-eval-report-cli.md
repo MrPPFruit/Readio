@@ -2,6 +2,7 @@
 change: reader-ai-eval-report-cli
 design-doc: docs/superpowers/specs/2026-05-30-reader-ai-eval-report-cli-design.md
 base-ref: 130dd1ed59715b52c84d1c33c9419a903d0e3a53
+archived-with: 2026-05-30-reader-ai-eval-report-cli
 ---
 
 # Reader AI Eval Report CLI Implementation Plan
@@ -14,7 +15,7 @@ base-ref: 130dd1ed59715b52c84d1c33c9419a903d0e3a53
 
 **Tech Stack:** TypeScript strict mode, Node built-ins (`node:fs/promises`), `tsx` package script, Vitest, existing Reader AI eval utilities. No CLI framework, no model calls, no real book loading, no UI/runtime changes.
 
----
+## archived-with: 2026-05-30-reader-ai-eval-report-cli
 
 ## File Structure
 

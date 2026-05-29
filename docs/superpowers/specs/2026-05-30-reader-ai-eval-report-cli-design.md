@@ -2,6 +2,8 @@
 comet_change: reader-ai-eval-report-cli
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-05-30-reader-ai-eval-report-cli
+status: final
 ---
 
 # Reader AI Eval Report CLI Design
