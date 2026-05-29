@@ -100,8 +100,77 @@ const validateResults = (
   return { validResults, issues };
 };
 
+const formatMs = (value: number | null): string => (value === null ? 'n/a' : `${value}ms`);
+
+const renderCountMap = (counts: Record<string, number>): string => {
+  const entries = Object.entries(counts).sort(([left], [right]) => left.localeCompare(right));
+  if (entries.length === 0) return '- none';
+  return entries.map(([key, count]) => `- ${key}: ${count}`).join('\n');
+};
+
 export function renderReaderAIEvalReportMarkdown(report: ReaderAIEvalReport): string {
-  return `# Reader AI Eval Report\n\nTotal cases: ${report.totalCases}\nTotal results: ${report.totalResults}\nPassed: ${report.passed}\nFailed: ${report.failed}\n`;
+  const categoryRows = Object.entries(report.byCategory)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([category, summary]) =>
+      [
+        category,
+        String(summary.total),
+        String(summary.passed),
+        String(summary.citationValid),
+        String(summary.insufficientAnswers),
+        formatMs(summary.firstOutputMs.min),
+        formatMs(summary.firstOutputMs.max),
+        formatMs(summary.firstOutputMs.average),
+      ].join(' | '),
+    )
+    .map((row) => `| ${row} |`);
+
+  const overBudgetStages = Object.entries(report.byCategory)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([category, summary]) => `### ${category}\n\n${renderCountMap(summary.overBudgetStages)}`);
+
+  const runRows = report.runSummaries.map((summary) =>
+    [
+      summary.runId,
+      summary.finalStatus,
+      String(summary.eventCount),
+      String(summary.candidateCount),
+      String(summary.selectedCount),
+      String(summary.sourceCount),
+      String(summary.issueCount),
+      summary.overBudgetStage,
+    ].join(' | '),
+  );
+
+  return [
+    '# Reader AI Eval Report',
+    '',
+    '## Overview',
+    '',
+    `- Total cases: ${report.totalCases}`,
+    `- Total results: ${report.totalResults}`,
+    `- Passed: ${report.passed}`,
+    `- Failed: ${report.failed}`,
+    '',
+    '## Category Summary',
+    '',
+    '| Category | Total | Passed | Citation Valid | Insufficient | First Output Min | First Output Max | First Output Avg |',
+    '|---|---:|---:|---:|---:|---:|---:|---:|',
+    ...(categoryRows.length > 0 ? categoryRows : ['| none | 0 | 0 | 0 | 0 | n/a | n/a | n/a |']),
+    '',
+    '## Over-Budget Stages',
+    '',
+    ...(overBudgetStages.length > 0 ? overBudgetStages : ['- none']),
+    '',
+    '## Run Summaries',
+    '',
+    '| Run ID | Final Status | Events | Candidates | Selected | Sources | Issues | Over-Budget Stage |',
+    '|---|---|---:|---:|---:|---:|---:|---|',
+    ...(runRows.length > 0
+      ? runRows.map((row) => `| ${row} |`)
+      : ['| none | unknown | 0 | 0 | 0 | 0 | 0 | none |']),
+    '',
+  ].join('\n');
 }
 
 export function buildReaderAIEvalReportRun(input: unknown): ReaderAIEvalReportRunnerOutput {

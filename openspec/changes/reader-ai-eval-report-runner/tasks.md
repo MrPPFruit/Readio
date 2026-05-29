@@ -6,9 +6,9 @@
 
 ## 2. Report Generation
 
-- [ ] 2.1 Add pure report runner helpers that compose case/result validation, trace aggregation, and eval report summary generation.
-- [ ] 2.2 Add deterministic JSON report output that preserves the existing metadata-only `ReaderAIEvalReport` shape.
-- [ ] 2.3 Add deterministic Markdown report rendering from sanitized report data with stable overview, category, latency, and run-summary sections.
+- [x] 2.1 Add pure report runner helpers that compose case/result validation, trace aggregation, and eval report summary generation.
+- [x] 2.2 Add deterministic JSON report output that preserves the existing metadata-only `ReaderAIEvalReport` shape.
+- [x] 2.3 Add deterministic Markdown report rendering from sanitized report data with stable overview, category, latency, and run-summary sections.
 
 ## 3. Privacy and Documentation
 
