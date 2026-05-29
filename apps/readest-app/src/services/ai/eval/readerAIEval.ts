@@ -218,3 +218,129 @@ export function validateReaderAIEvalResult(value: unknown): ReaderAIEvalValidati
 
   return { valid: issues.length === 0, issues };
 }
+
+export type ReaderAITraceLike = {
+  runId?: unknown;
+  stage?: unknown;
+  action?: unknown;
+  status?: unknown;
+  durationMs?: unknown;
+  candidateCount?: unknown;
+  selectedCount?: unknown;
+  sourceCount?: unknown;
+  issueCount?: unknown;
+  issueTypeCounts?: unknown;
+  firstOutputMs?: unknown;
+  overBudgetStage?: unknown;
+  recoveryHint?: unknown;
+};
+
+export type ReaderAITraceRunSummary = {
+  runId: string;
+  eventCount: number;
+  statuses: Record<string, number>;
+  stageDurationsMs: Record<string, number>;
+  candidateCount: number;
+  selectedCount: number;
+  sourceCount: number;
+  issueCount: number;
+  issueTypeCounts: Record<string, number>;
+  firstOutputMs: number | null;
+  overBudgetStage: ReaderAIOverBudgetStage | 'none';
+  recoveryHint: string;
+  finalStatus: string;
+};
+
+const asNonNegativeNumber = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+
+const asSafeString = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim().length > 0 ? value : null;
+
+const addCount = (counts: Record<string, number>, key: string, amount = 1): void => {
+  counts[key] = (counts[key] ?? 0) + amount;
+};
+
+const createEmptyRunSummary = (runId: string): ReaderAITraceRunSummary => ({
+  runId,
+  eventCount: 0,
+  statuses: {},
+  stageDurationsMs: {},
+  candidateCount: 0,
+  selectedCount: 0,
+  sourceCount: 0,
+  issueCount: 0,
+  issueTypeCounts: {},
+  firstOutputMs: null,
+  overBudgetStage: 'none',
+  recoveryHint: 'none',
+  finalStatus: 'unknown',
+});
+
+export function buildReaderAITraceRunSummaries(
+  events: ReaderAITraceLike[],
+): ReaderAITraceRunSummary[] {
+  const summaries = new Map<string, ReaderAITraceRunSummary>();
+
+  for (const event of events) {
+    const runId = asSafeString(event.runId);
+    if (runId === null) continue;
+
+    const summary = summaries.get(runId) ?? createEmptyRunSummary(runId);
+    summaries.set(runId, summary);
+    summary.eventCount += 1;
+
+    const status = asSafeString(event.status);
+    if (status !== null) {
+      addCount(summary.statuses, status);
+      summary.finalStatus = status;
+    }
+
+    const stage = asSafeString(event.stage);
+    const durationMs = asNonNegativeNumber(event.durationMs);
+    if (stage !== null && durationMs !== null) {
+      addCount(summary.stageDurationsMs, stage, durationMs);
+    }
+
+    summary.candidateCount = Math.max(
+      summary.candidateCount,
+      asNonNegativeNumber(event.candidateCount) ?? 0,
+    );
+    summary.selectedCount = Math.max(
+      summary.selectedCount,
+      asNonNegativeNumber(event.selectedCount) ?? 0,
+    );
+    summary.sourceCount = Math.max(
+      summary.sourceCount,
+      asNonNegativeNumber(event.sourceCount) ?? 0,
+    );
+    summary.issueCount += asNonNegativeNumber(event.issueCount) ?? 0;
+
+    if (isRecord(event.issueTypeCounts)) {
+      for (const [issueType, count] of Object.entries(event.issueTypeCounts)) {
+        const safeCount = asNonNegativeNumber(count);
+        if (safeCount !== null) addCount(summary.issueTypeCounts, issueType, safeCount);
+      }
+    }
+
+    const firstOutputMs = asNonNegativeNumber(event.firstOutputMs);
+    if (firstOutputMs !== null) {
+      summary.firstOutputMs =
+        summary.firstOutputMs === null
+          ? firstOutputMs
+          : Math.min(summary.firstOutputMs, firstOutputMs);
+    }
+
+    const overBudgetStage = asSafeString(event.overBudgetStage);
+    if (overBudgetStage !== null && overBudgetStages.has(overBudgetStage)) {
+      summary.overBudgetStage = overBudgetStage as ReaderAITraceRunSummary['overBudgetStage'];
+    }
+
+    const recoveryHint = asSafeString(event.recoveryHint);
+    if (recoveryHint !== null) {
+      summary.recoveryHint = recoveryHint;
+    }
+  }
+
+  return Array.from(summaries.values());
+}

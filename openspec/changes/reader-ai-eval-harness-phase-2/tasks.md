@@ -6,9 +6,9 @@
 
 ## 2. Trace Aggregation
 
-- [ ] 2.1 Add pure trace aggregation helpers that group `reader_ai.trace`-style metadata by `runId`.
-- [ ] 2.2 Summarize safe fields: stage durations, source/candidate counts, issue counts, first-output latency, over-budget stage, and final outcome.
-- [ ] 2.3 Add tests showing unknown/content-bearing trace fields are ignored and never copied into summaries.
+- [x] 2.1 Add pure trace aggregation helpers that group `reader_ai.trace`-style metadata by `runId`.
+- [x] 2.2 Summarize safe fields: stage durations, source/candidate counts, issue counts, first-output latency, over-budget stage, and final outcome.
+- [x] 2.3 Add tests showing unknown/content-bearing trace fields are ignored and never copied into summaries.
 
 ## 3. Eval Reporting
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   READER_AI_EVAL_CASE_CATEGORIES,
+  buildReaderAITraceRunSummaries,
   validateReaderAIEvalCase,
   validateReaderAIEvalResult,
 } from '@/services/ai/eval/readerAIEval';
@@ -108,6 +109,119 @@ describe('Reader AI eval foundation', () => {
         'manualBenchmark.answerText is not allowed in Reader AI eval metadata',
         'evidence.localPath is not allowed in Reader AI eval metadata',
       ],
+    });
+  });
+});
+
+describe('Reader AI trace aggregation', () => {
+  it('groups trace-like metadata by runId and summarizes safe fields', () => {
+    const summaries = buildReaderAITraceRunSummaries([
+      {
+        runId: 'run-a',
+        stage: 'retrieval',
+        action: 'hybrid_search',
+        status: 'completed',
+        durationMs: 120,
+        candidateCount: 8,
+        selectedCount: 3,
+        sourceCount: 3,
+      },
+      {
+        runId: 'run-a',
+        stage: 'citation_validation',
+        action: 'validate_citations',
+        status: 'completed',
+        durationMs: 40,
+        issueCount: 2,
+        issueTypeCounts: { missing: 1, stale: 1 },
+      },
+      {
+        runId: 'run-a',
+        stage: 'generation',
+        action: 'generate_answer',
+        status: 'completed',
+        durationMs: 900,
+        firstOutputMs: 1300,
+        overBudgetStage: 'generation',
+        recoveryHint: 'none',
+      },
+      {
+        runId: 'run-b',
+        stage: 'run',
+        action: 'complete_run',
+        status: 'failed',
+        durationMs: 50,
+        overBudgetStage: 'timeout',
+        recoveryHint: 'ask_user_to_retry',
+      },
+    ]);
+
+    expect(summaries).toEqual([
+      {
+        runId: 'run-a',
+        eventCount: 3,
+        statuses: { completed: 3 },
+        stageDurationsMs: { retrieval: 120, citation_validation: 40, generation: 900 },
+        candidateCount: 8,
+        selectedCount: 3,
+        sourceCount: 3,
+        issueCount: 2,
+        issueTypeCounts: { missing: 1, stale: 1 },
+        firstOutputMs: 1300,
+        overBudgetStage: 'generation',
+        recoveryHint: 'none',
+        finalStatus: 'completed',
+      },
+      {
+        runId: 'run-b',
+        eventCount: 1,
+        statuses: { failed: 1 },
+        stageDurationsMs: { run: 50 },
+        candidateCount: 0,
+        selectedCount: 0,
+        sourceCount: 0,
+        issueCount: 0,
+        issueTypeCounts: {},
+        firstOutputMs: null,
+        overBudgetStage: 'timeout',
+        recoveryHint: 'ask_user_to_retry',
+        finalStatus: 'failed',
+      },
+    ]);
+  });
+
+  it('ignores unknown and unsafe trace fields', () => {
+    const summaries = buildReaderAITraceRunSummaries([
+      {
+        runId: 'run-private',
+        stage: 'retrieval',
+        action: 'hybrid_search',
+        status: 'completed',
+        durationMs: 100,
+        sourceText: 'private source text',
+        prompt: 'private prompt',
+        nested: { answerText: 'private answer' },
+      },
+    ]);
+
+    expect(JSON.stringify(summaries)).not.toContain('sourceText');
+    expect(JSON.stringify(summaries)).not.toContain('private source text');
+    expect(JSON.stringify(summaries)).not.toContain('private prompt');
+    expect(JSON.stringify(summaries)).not.toContain('private answer');
+    expect(summaries[0]).toEqual({
+      runId: 'run-private',
+      eventCount: 1,
+      statuses: { completed: 1 },
+      stageDurationsMs: { retrieval: 100 },
+      candidateCount: 0,
+      selectedCount: 0,
+      sourceCount: 0,
+      issueCount: 0,
+      issueTypeCounts: {},
+      firstOutputMs: null,
+      overBudgetStage: 'none',
+      recoveryHint: 'none',
+      finalStatus: 'completed',
     });
   });
 });
