@@ -1,11 +1,11 @@
 workflow: full
-phase: build
+phase: verify
 build_mode: executing-plans
 isolation: branch
 verify_mode: full
 design_doc: docs/superpowers/specs/2026-05-29-reader-ai-harness-observability-design.md
 plan: docs/superpowers/plans/2026-05-29-reader-ai-harness-observability-plan.md
-verify_result: fail
+verify_result: pending
 verification_report: null
 branch_status: pending
 verified_at: null
