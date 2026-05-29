@@ -2,6 +2,7 @@
 change: reader-ai-eval-report-runner
 design-doc: docs/superpowers/specs/2026-05-30-reader-ai-eval-report-runner-design.md
 base-ref: 4522c6cac2866e116ab6cc5e2602f012e409f18a
+archived-with: 2026-05-30-reader-ai-eval-report-runner
 ---
 
 # Reader AI Eval Report Runner Implementation Plan
@@ -14,7 +15,7 @@ base-ref: 4522c6cac2866e116ab6cc5e2602f012e409f18a
 
 **Tech Stack:** TypeScript strict mode, Vitest, existing Reader AI eval utilities, no CLI, no file I/O, no model calls, no UI changes.
 
----
+## archived-with: 2026-05-30-reader-ai-eval-report-runner
 
 ## File Structure
 

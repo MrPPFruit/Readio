@@ -1,6 +1,6 @@
 ## Purpose
 
-Provide local metadata-only Reader AI evaluation validation, trace aggregation, and report summaries for ordinary-reader QA workflows without storing private reading content.
+Provide local metadata-only Reader AI evaluation validation, trace aggregation, report summaries, and local report-runner composition for ordinary-reader QA workflows without storing private reading content.
 
 ## Requirements
 
@@ -68,3 +68,17 @@ The system SHALL allow manual benchmark metadata to be recorded separately from 
 
 - **WHEN** a user compares a Readio answer with NotebookLM full-book mode
 - **THEN** the eval record can note benchmark source, spoiler mode, and non-content observations without treating NotebookLM output as an automated oracle
+
+### Requirement: Eval harness exposes report runner composition
+
+The system SHALL allow local eval tooling to compose existing case validation, result validation, trace aggregation, and report summary helpers into a single report generation workflow.
+
+#### Scenario: Existing helpers are reused for report generation
+
+- **WHEN** the report runner builds a report from validated local inputs
+- **THEN** it uses the eval harness validation, trace aggregation, and report summary behavior rather than duplicating separate scoring or aggregation rules
+
+#### Scenario: Manual benchmark notes remain separate from scoring
+
+- **WHEN** eval results include manual NotebookLM or human benchmark metadata
+- **THEN** the report runner preserves deterministic pass/fail scoring from explicit result metadata and does not treat manual benchmark observations as an automated oracle

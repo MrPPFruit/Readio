@@ -9,6 +9,6 @@ verify_result: pass
 verification_report: docs/superpowers/reports/2026-05-30-reader-ai-eval-report-runner-verify.md
 branch_status: handled
 verified_at: 2026-05-30
-archived: false
+archived: true
 handoff_context: openspec/changes/reader-ai-eval-report-runner/.comet/handoff/design-context.json
 handoff_hash: a08b5f2bee7044774df3c8329aad5b1ec595bc5953e5969eac228d7add6979a3
