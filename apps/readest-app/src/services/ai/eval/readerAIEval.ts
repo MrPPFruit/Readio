@@ -344,3 +344,94 @@ export function buildReaderAITraceRunSummaries(
 
   return Array.from(summaries.values());
 }
+
+export type ReaderAIEvalCategorySummary = {
+  total: number;
+  passed: number;
+  insufficientAnswers: number;
+  citationValid: number;
+  firstOutputMs: {
+    min: number | null;
+    max: number | null;
+    average: number | null;
+  };
+  overBudgetStages: Record<string, number>;
+};
+
+export type ReaderAIEvalReport = {
+  totalCases: number;
+  totalResults: number;
+  passed: number;
+  failed: number;
+  byCategory: Record<string, ReaderAIEvalCategorySummary>;
+  runSummaries: ReaderAITraceRunSummary[];
+};
+
+export type BuildReaderAIEvalReportInput = {
+  cases: ReaderAIEvalCase[];
+  results: ReaderAIEvalResult[];
+  runSummaries?: ReaderAITraceRunSummary[];
+};
+
+const createEmptyCategorySummary = (): ReaderAIEvalCategorySummary => ({
+  total: 0,
+  passed: 0,
+  insufficientAnswers: 0,
+  citationValid: 0,
+  firstOutputMs: { min: null, max: null, average: null },
+  overBudgetStages: {},
+});
+
+export function buildReaderAIEvalReport({
+  cases,
+  results,
+  runSummaries = [],
+}: BuildReaderAIEvalReportInput): ReaderAIEvalReport {
+  const casesById = new Map(cases.map((evalCase) => [evalCase.id, evalCase]));
+  const byCategory: Record<string, ReaderAIEvalCategorySummary> = {};
+  const latencyTotals: Record<string, { total: number; count: number }> = {};
+
+  for (const result of results) {
+    const evalCase = casesById.get(result.caseId);
+    if (evalCase === undefined) continue;
+
+    const category = evalCase.category;
+    const summary = byCategory[category] ?? createEmptyCategorySummary();
+    byCategory[category] = summary;
+    latencyTotals[category] = latencyTotals[category] ?? { total: 0, count: 0 };
+
+    summary.total += 1;
+    if (result.passed) summary.passed += 1;
+    if (result.insufficientAnswer) summary.insufficientAnswers += 1;
+    if (result.citationValid) summary.citationValid += 1;
+
+    summary.firstOutputMs.min =
+      summary.firstOutputMs.min === null
+        ? result.firstOutputMs
+        : Math.min(summary.firstOutputMs.min, result.firstOutputMs);
+    summary.firstOutputMs.max =
+      summary.firstOutputMs.max === null
+        ? result.firstOutputMs
+        : Math.max(summary.firstOutputMs.max, result.firstOutputMs);
+    latencyTotals[category].total += result.firstOutputMs;
+    latencyTotals[category].count += 1;
+
+    addCount(summary.overBudgetStages, result.overBudgetStage ?? 'none');
+  }
+
+  for (const [category, totals] of Object.entries(latencyTotals)) {
+    byCategory[category].firstOutputMs.average =
+      totals.count === 0 ? null : totals.total / totals.count;
+  }
+
+  const passed = results.filter((result) => result.passed).length;
+
+  return {
+    totalCases: cases.length,
+    totalResults: results.length,
+    passed,
+    failed: results.length - passed,
+    byCategory,
+    runSummaries,
+  };
+}

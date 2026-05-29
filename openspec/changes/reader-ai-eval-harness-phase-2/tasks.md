@@ -12,9 +12,9 @@
 
 ## 3. Eval Reporting
 
-- [ ] 3.1 Add metadata-only eval summary helpers for total cases, category breakdown, pass/fail counts, insufficient-answer counts, citation-valid counts, latency summary, and over-budget stage breakdown.
-- [ ] 3.2 Add report tests using synthetic cases/results and trace summaries.
-- [ ] 3.3 Document manual NotebookLM full-book benchmark notes as non-authoritative metadata separate from deterministic pass/fail.
+- [x] 3.1 Add metadata-only eval summary helpers for total cases, category breakdown, pass/fail counts, insufficient-answer counts, citation-valid counts, latency summary, and over-budget stage breakdown.
+- [x] 3.2 Add report tests using synthetic cases/results and trace summaries.
+- [x] 3.3 Document manual NotebookLM full-book benchmark notes as non-authoritative metadata separate from deterministic pass/fail.
 
 ## 4. Verification and Handoff
 

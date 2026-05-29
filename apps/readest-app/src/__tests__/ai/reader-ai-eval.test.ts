@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   READER_AI_EVAL_CASE_CATEGORIES,
+  buildReaderAIEvalReport,
   buildReaderAITraceRunSummaries,
   validateReaderAIEvalCase,
   validateReaderAIEvalResult,
@@ -223,5 +224,111 @@ describe('Reader AI trace aggregation', () => {
       recoveryHint: 'none',
       finalStatus: 'completed',
     });
+  });
+});
+
+describe('Reader AI eval report summary', () => {
+  it('calculates category pass rates, citations, latency, over-budget stages, and traces', () => {
+    const runSummaries = buildReaderAITraceRunSummaries([
+      {
+        runId: 'run-a',
+        stage: 'generation',
+        action: 'generate_answer',
+        status: 'completed',
+        firstOutputMs: 1200,
+      },
+    ]);
+
+    const report = buildReaderAIEvalReport({
+      cases: [
+        {
+          id: 'person-azik-recall',
+          category: 'person_recall',
+          language: 'zh-CN',
+          question: '阿兹克是谁？',
+          expectedBehavior: 'Identify the person using cited read-so-far evidence.',
+          spoilerMode: 'read_so_far',
+        },
+        {
+          id: 'object-clock-recall',
+          category: 'object_recall',
+          language: 'zh-CN',
+          question: '那只钟有什么用？',
+          expectedBehavior: 'Describe the object without quoting source text.',
+          spoilerMode: 'read_so_far',
+        },
+      ],
+      results: [
+        {
+          caseId: 'person-azik-recall',
+          runId: 'run-a',
+          classificationIntent: 'entity_lookup',
+          sourceCount: 3,
+          citationValid: true,
+          insufficientAnswer: false,
+          firstOutputMs: 1200,
+          passed: true,
+          reasons: ['cited correct source'],
+          overBudgetStage: 'none',
+        },
+        {
+          caseId: 'person-azik-recall',
+          runId: 'run-b',
+          classificationIntent: 'entity_lookup',
+          sourceCount: 1,
+          citationValid: false,
+          insufficientAnswer: true,
+          firstOutputMs: 3600,
+          passed: false,
+          reasons: ['missing citation'],
+          overBudgetStage: 'citation_validation',
+        },
+        {
+          caseId: 'object-clock-recall',
+          runId: 'run-c',
+          classificationIntent: 'object_lookup',
+          sourceCount: 2,
+          citationValid: true,
+          insufficientAnswer: false,
+          firstOutputMs: 2400,
+          passed: true,
+          reasons: ['grounded answer'],
+          overBudgetStage: 'retrieval',
+          manualBenchmark: {
+            source: 'notebooklm',
+            mode: 'whole_book',
+            observations: ['more_complete'],
+          },
+        },
+      ],
+      runSummaries,
+    });
+
+    expect(report).toEqual({
+      totalCases: 2,
+      totalResults: 3,
+      passed: 2,
+      failed: 1,
+      byCategory: {
+        person_recall: {
+          total: 2,
+          passed: 1,
+          insufficientAnswers: 1,
+          citationValid: 1,
+          firstOutputMs: { min: 1200, max: 3600, average: 2400 },
+          overBudgetStages: { none: 1, citation_validation: 1 },
+        },
+        object_recall: {
+          total: 1,
+          passed: 1,
+          insufficientAnswers: 0,
+          citationValid: 1,
+          firstOutputMs: { min: 2400, max: 2400, average: 2400 },
+          overBudgetStages: { retrieval: 1 },
+        },
+      },
+      runSummaries,
+    });
+    expect(JSON.stringify(report)).not.toContain('more_complete');
   });
 });
