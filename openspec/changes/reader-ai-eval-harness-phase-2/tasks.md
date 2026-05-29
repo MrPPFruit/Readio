@@ -1,8 +1,8 @@
 ## 1. Eval Schema Hardening
 
-- [ ] 1.1 Extend Reader AI eval case/result types with safe optional metadata for run grouping, manual benchmark notes, and category reporting.
-- [ ] 1.2 Harden eval validators to reject content-bearing fields in cases, results, manual notes, and trace-like inputs.
-- [ ] 1.3 Add synthetic fixture tests proving valid ordinary-reader cases/results pass and unsafe private-content fields fail.
+- [x] 1.1 Extend Reader AI eval case/result types with safe optional metadata for run grouping, manual benchmark notes, and category reporting.
+- [x] 1.2 Harden eval validators to reject content-bearing fields in cases, results, manual notes, and trace-like inputs.
+- [x] 1.3 Add synthetic fixture tests proving valid ordinary-reader cases/results pass and unsafe private-content fields fail.
 
 ## 2. Trace Aggregation
 
