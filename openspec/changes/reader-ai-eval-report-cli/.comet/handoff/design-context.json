@@ -1,0 +1,30 @@
+{
+  "change": "reader-ai-eval-report-cli",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "eee2eee0c5aafc78cc665eb82af9a298cffd5afaf877b334439c8c3cede97c38",
+  "files": [
+    {
+      "path": "openspec/changes/reader-ai-eval-report-cli/proposal.md",
+      "sha256": "6696ea1fedf99f9ef9c72d63804405354c6758bb616592b05fd5717f105d8c7c"
+    },
+    {
+      "path": "openspec/changes/reader-ai-eval-report-cli/design.md",
+      "sha256": "f573d4ab18cfe70698087fed60f86898ef3626bd302bef3cf4d86a53606dbf2f"
+    },
+    {
+      "path": "openspec/changes/reader-ai-eval-report-cli/tasks.md",
+      "sha256": "c89a4ddb70f95a8f6b814a297a851a2e1c56c4c1d279eabdd43a489f298f17a1"
+    },
+    {
+      "path": "openspec/changes/reader-ai-eval-report-cli/specs/reader-ai-eval-report-cli/spec.md",
+      "sha256": "8239ae1e22982030c30e458f8bc3b5ba0ec28a8c30786fee6b856fd1244db91b"
+    },
+    {
+      "path": "openspec/changes/reader-ai-eval-report-cli/specs/reader-ai-eval-report-runner/spec.md",
+      "sha256": "b48ea7bcbfdb7c27033a94d8820837694e93f75b6ce3d7e623e4c61b8083a786"
+    }
+  ]
+}
