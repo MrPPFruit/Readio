@@ -28,6 +28,8 @@ const parseArgs = (
     const token = argv[index];
     const value = argv[index + 1];
 
+    if (index === 0 && token === '--') continue;
+
     if (token === '--input') {
       if (value === undefined || value.startsWith('--')) {
         issues.push('Missing value for argument: --input');
@@ -123,7 +125,7 @@ export async function runReaderAIEvalReportCli(
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { readFile, writeFile } = await import('node:fs/promises');
   const nodeIO: ReaderAIEvalReportCliIO = {
-    readFile,
+    readFile: (path: string): Promise<string> => readFile(path, 'utf8'),
     writeFile,
     stderr: (message: string): void => {
       console.error(message);

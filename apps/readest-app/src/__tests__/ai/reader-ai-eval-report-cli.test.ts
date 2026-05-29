@@ -63,6 +63,24 @@ describe('Reader AI eval report CLI usage', () => {
     expect(memory.errors).toEqual(['Unknown argument: --verbose']);
     expect(memory.writes).toEqual([]);
   });
+
+  it('accepts the npm argument delimiter before file flags', async () => {
+    const memory = createMemoryIO({
+      'input.json': JSON.stringify({
+        cases: [],
+        results: [],
+      }),
+    });
+
+    const exitCode = await runReaderAIEvalReportCli(
+      ['--', '--input', 'input.json', '--json-out', 'report.json', '--markdown-out', 'report.md'],
+      toCliIO(memory),
+    );
+
+    expect(exitCode).toBe(0);
+    expect(memory.errors).toEqual([]);
+    expect(memory.writes).toEqual(['report.json', 'report.md']);
+  });
 });
 
 describe('Reader AI eval report CLI file generation', () => {
