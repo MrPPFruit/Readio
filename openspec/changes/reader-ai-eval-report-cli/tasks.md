@@ -1,8 +1,8 @@
 ## 1. CLI Contract and Usage Validation
 
-- [ ] 1.1 Add a focused script entry under `apps/readest-app/scripts/` for Reader AI eval report generation.
-- [ ] 1.2 Parse explicit `--input`, `--json-out`, and `--markdown-out` arguments with deterministic usage errors for missing values or unknown flags.
-- [ ] 1.3 Add tests proving missing required file arguments exit non-zero and do not write outputs.
+- [x] 1.1 Add a focused script entry under `apps/readest-app/scripts/` for Reader AI eval report generation.
+- [x] 1.2 Parse explicit `--input`, `--json-out`, and `--markdown-out` arguments with deterministic usage errors for missing values or unknown flags.
+- [x] 1.3 Add tests proving missing required file arguments exit non-zero and do not write outputs.
 
 ## 2. File-Based Report Generation
 
