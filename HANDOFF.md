@@ -12,6 +12,26 @@
 - Distribution status: `v0.1.0-alpha.15` prerelease is published on `MrPPFruit/Readio` with a signed APK and checksum. Current local source has additional post-release AI 搜书 fixes. Versioning preference: only major feature upgrade iterations should bump alpha versions, and the user decides when to bump.
 - Working tree note: `./.codepilot-uploads/` and `./temp/` are unrelated/untracked unless explicitly intended.
 
+## Reader AI Eval Harness Phase 2
+
+- Change: `reader-ai-eval-harness-phase-2`.
+- Scope: pure metadata-only utilities under `apps/readest-app/src/services/ai/eval/`; no model calls, real book loading, Reader AI UI changes, prompt changes, retrieval ranking changes, or citation preview changes.
+- Implemented:
+  - safe optional eval case/result metadata;
+  - recursive unsafe-field rejection for persisted eval records;
+  - trace-like metadata aggregation by opaque `runId`;
+  - category-level report summaries for pass/fail, insufficient answers, citation validity, first-output latency, and over-budget stages;
+  - manual NotebookLM benchmark metadata as non-authoritative label-only observations.
+- Validation:
+  - `pnpm --dir apps/readest-app test src/__tests__/ai/reader-ai-eval.test.ts src/__tests__/services/diagnostics/reader-ai-trace.test.ts` passed: 2 files, 10 tests.
+  - `pnpm --dir apps/readest-app lint` passed: TypeScript and Biome checks, 855 files checked.
+  - `pnpm --dir apps/readest-app test` passed: 212 passed / 2 skipped files, 3859 passed / 7 skipped tests.
+- Deferred:
+  - CLI report generation from exported diagnostics;
+  - real service-level eval runner around `streamReaderAIAnswer`;
+  - LLM-as-judge after deterministic grounding checks stabilize;
+  - NotebookLM automation, if ever useful, as a separate change.
+
 ## Latest source-level state
 
 - Library header local search is pure again: the `全网搜书` pill was removed from `LibraryHeader` so local search is not compressed or scope-confused.

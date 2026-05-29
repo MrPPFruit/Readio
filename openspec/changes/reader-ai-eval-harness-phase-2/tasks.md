@@ -18,7 +18,7 @@
 
 ## 4. Verification and Handoff
 
-- [ ] 4.1 Run focused eval and diagnostics tests.
-- [ ] 4.2 Run `pnpm --dir apps/readest-app lint`.
-- [ ] 4.3 Run `pnpm --dir apps/readest-app test`.
-- [ ] 4.4 Update `HANDOFF.md` with Phase 2 eval harness scope, validation evidence, and deferred quality-analysis follow-ups.
+- [x] 4.1 Run focused eval and diagnostics tests.
+- [x] 4.2 Run `pnpm --dir apps/readest-app lint`.
+- [x] 4.3 Run `pnpm --dir apps/readest-app test`.
+- [x] 4.4 Update `HANDOFF.md` with Phase 2 eval harness scope, validation evidence, and deferred quality-analysis follow-ups.
