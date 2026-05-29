@@ -32,6 +32,30 @@
   - LLM-as-judge after deterministic grounding checks stabilize;
   - NotebookLM automation, if ever useful, as a separate change.
 
+## Reader AI Eval Report CLI
+
+- Change: `reader-ai-eval-report-cli`.
+- Scope: thin local file wrapper around the existing pure Reader AI eval report runner; no model calls, real book loading, indexing, retrieval execution, UI/runtime changes, NotebookLM automation, or telemetry upload.
+- Implemented:
+  - `pnpm --dir apps/readest-app reader-ai:report -- --input <input.json> --json-out <report.json> --markdown-out <report.md>`;
+  - deterministic required-argument, unknown-flag, and npm `--` delimiter handling;
+  - JSON file reading/parsing with deterministic invalid JSON and unreadable input errors;
+  - delegation to `buildReaderAIEvalReportRun` for all case/result privacy validation, trace aggregation, and report summary logic;
+  - no partial output writes on usage, parse, or validation failure;
+  - sanitized JSON report and Markdown file writes on success.
+- Validation:
+  - `pnpm --dir apps/readest-app test src/__tests__/ai/reader-ai-eval-report-cli.test.ts src/__tests__/ai/reader-ai-eval-report-runner.test.ts` passed: 2 files, 10 tests.
+  - `pnpm --dir apps/readest-app lint` passed: TypeScript and Biome checks, 859 files checked.
+  - `pnpm --dir apps/readest-app test` passed: 214 passed / 2 skipped files, 3869 passed / 7 skipped tests.
+  - Package CLI smoke passed: `pnpm --dir apps/readest-app reader-ai:report -- --input /tmp/readio-reader-ai-eval-cli-input.json --json-out /tmp/readio-reader-ai-eval-cli-report.json --markdown-out /tmp/readio-reader-ai-eval-cli-report.md`.
+- Deferred:
+  - stdout mode;
+  - multi-file/batch mode;
+  - CI snapshot comparison;
+  - service-level eval execution around `streamReaderAIAnswer`;
+  - NotebookLM automation;
+  - LLM-as-judge.
+
 ## Reader AI Eval Report Runner
 
 - Change: `reader-ai-eval-report-runner`.

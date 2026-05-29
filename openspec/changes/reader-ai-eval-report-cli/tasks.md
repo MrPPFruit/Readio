@@ -19,7 +19,7 @@
 
 ## 4. Verification and Handoff
 
-- [ ] 4.1 Run focused Reader AI eval/report CLI tests.
-- [ ] 4.2 Run `pnpm --dir apps/readest-app lint`.
-- [ ] 4.3 Run `pnpm --dir apps/readest-app test`.
-- [ ] 4.4 Update `HANDOFF.md` with CLI wrapper scope, validation evidence, and deferred follow-ups.
+- [x] 4.1 Run focused Reader AI eval/report CLI tests.
+- [x] 4.2 Run `pnpm --dir apps/readest-app lint`.
+- [x] 4.3 Run `pnpm --dir apps/readest-app test`.
+- [x] 4.4 Update `HANDOFF.md` with CLI wrapper scope, validation evidence, and deferred follow-ups.
