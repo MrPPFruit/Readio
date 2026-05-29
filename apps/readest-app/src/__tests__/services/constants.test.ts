@@ -388,6 +388,11 @@ describe('services/constants', () => {
       );
     });
 
+    it('uses Luo as the default CJK reading font', () => {
+      expect(DEFAULT_BOOK_FONT.defaultCJKFont).toBe('Luo');
+      expect(CJK_SERIF_FONTS).toContain('Luo');
+    });
+
     it('has a valid font weight', () => {
       expect(DEFAULT_BOOK_FONT.fontWeight).toBeGreaterThanOrEqual(100);
       expect(DEFAULT_BOOK_FONT.fontWeight).toBeLessThanOrEqual(900);
@@ -826,6 +831,7 @@ describe('services/constants', () => {
       expect(CJK_FONTS_PATTENS.test('PingFang SC')).toBe(true);
       expect(CJK_FONTS_PATTENS.test('Hiragino Sans')).toBe(true);
       expect(CJK_FONTS_PATTENS.test('Source Han Sans')).toBe(true);
+      expect(CJK_FONTS_PATTENS.test('Luo')).toBe(true);
     });
 
     it('CJK_FONTS_PATTENS is case-insensitive', () => {

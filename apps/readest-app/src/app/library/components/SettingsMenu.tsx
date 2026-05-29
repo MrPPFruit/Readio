@@ -27,6 +27,13 @@ import { setAboutDialogVisible } from '@/components/AboutWindow';
 import { setMigrateDataDirDialogVisible } from '@/app/library/components/MigrateDataWindow';
 import { requestStoragePermission } from '@/utils/permission';
 import { saveSysSettings } from '@/helpers/settings';
+import {
+  clearDiagnosticsLogs,
+  configureDiagnosticsLogger,
+  exportDiagnosticsBundle,
+  logDiagnosticError,
+  logDiagnosticEvent,
+} from '@/services/diagnostics/logger';
 import { selectDirectory } from '@/utils/bridge';
 import { formatLocaleDateTime } from '@/utils/book';
 import UserAvatar from '@/components/UserAvatar';
@@ -62,6 +69,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
     settings.autoImportBooksOnOpen,
   );
   const [isTelemetryEnabled, setIsTelemetryEnabled] = useState(settings.telemetryEnabled);
+  const [diagnostics, setDiagnostics] = useState(settings.diagnostics);
   const [alwaysInForeground, setAlwaysInForeground] = useState(settings.alwaysInForeground);
   const [savedBookCoverForLockScreen, setSavedBookCoverForLockScreen] = useState(
     settings.savedBookCoverForLockScreen || '',
@@ -176,6 +184,36 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
       optInTelemetry();
     } else {
       optOutTelemetry();
+    }
+  };
+
+  const toggleDiagnostics = () => {
+    const nextDiagnostics = { ...diagnostics, enabled: !diagnostics.enabled };
+    void saveSysSettings(envConfig, 'diagnostics', nextDiagnostics);
+    setDiagnostics(nextDiagnostics);
+    if (appService) {
+      configureDiagnosticsLogger(appService, nextDiagnostics);
+    }
+    void logDiagnosticEvent('diagnostics.toggled', 'info', { enabled: nextDiagnostics.enabled });
+  };
+
+  const handleExportDiagnosticsLogs = async () => {
+    try {
+      await exportDiagnosticsBundle();
+    } catch (error) {
+      void logDiagnosticError('diagnostics.export_failed', error);
+    } finally {
+      setIsDropdownOpen?.(false);
+    }
+  };
+
+  const handleClearDiagnosticsLogs = async () => {
+    try {
+      await clearDiagnosticsLogs();
+    } catch (error) {
+      void logDiagnosticError('diagnostics.clear_failed', error);
+    } finally {
+      setIsDropdownOpen?.(false);
     }
   };
 
@@ -444,6 +482,14 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onPullLibrary, setIsDropdow
                 onClick={handleRefreshMetadata}
                 disabled={isRefreshingMetadata}
               />
+              <MenuItem
+                label={_('Local Diagnostic Logs')}
+                description={diagnostics.enabled ? _('Enabled') : _('Disabled')}
+                toggled={diagnostics.enabled}
+                onClick={toggleDiagnostics}
+              />
+              <MenuItem label={_('Export Diagnostic Logs')} onClick={handleExportDiagnosticsLogs} />
+              <MenuItem label={_('Clear Diagnostic Logs')} onClick={handleClearDiagnosticsLogs} />
               {appService?.isAndroidApp && appService?.distChannel !== 'playstore' && (
                 <MenuItem
                   label={_('Save Book Cover')}

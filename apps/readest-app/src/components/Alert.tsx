@@ -6,9 +6,10 @@ import { useKeyDownActions } from '@/hooks/useKeyDownActions';
 const Alert: React.FC<{
   title: string;
   message: string;
+  children?: React.ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
-}> = ({ title, message, onCancel, onConfirm }) => {
+}> = ({ title, message, children, onCancel, onConfirm }) => {
   const _ = useTranslation();
   const [isProcessing, setIsProcessing] = React.useState(false);
   const divRef = useKeyDownActions({ onCancel, onConfirm });
@@ -42,6 +43,7 @@ const Alert: React.FC<{
           <div className='flex flex-col gap-y-2'>
             <h3 className='text-start text-sm font-medium sm:text-center'>{title}</h3>
             <div className='text-start text-sm sm:text-center'>{message}</div>
+            {children}
           </div>
         </div>
         <div className='buttons flex flex-wrap items-center justify-end gap-2 self-end sm:max-w-[20vw] sm:self-center'>

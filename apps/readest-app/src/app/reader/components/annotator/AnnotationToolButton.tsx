@@ -32,7 +32,7 @@ const AnnotationToolButton: React.FC<AnnotationToolButtonProps> = ({
         onClick={handleClick}
         aria-label={tooltipText}
         className={clsx(
-          'flex min-h-10 min-w-10 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1',
+          'flex min-h-9 min-w-9 flex-col items-center justify-center gap-0.5 rounded-md px-0.5 py-0.5',
           disabled
             ? 'cursor-not-allowed opacity-50'
             : 'not-eink:hover:bg-gray-500 eink:hover:border',

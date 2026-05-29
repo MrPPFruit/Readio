@@ -8,6 +8,7 @@ export interface PackReaderContextOptions {
   maxContextChunks: number;
   spoilerProtection: boolean;
   selectionText?: string;
+  preferSectionDiversity?: boolean;
 }
 
 const MIN_INFORMATION_CHARS = 6;
@@ -22,6 +23,35 @@ const countTokenMatches = (tokens: string[], value: string): number => {
   );
 };
 
+const selectDiverseSections = <T extends { chunk: ScoredChunk }>(
+  ranked: T[],
+  maxContextChunks: number,
+): T[] => {
+  const selected: T[] = [];
+  const selectedIndexes = new Set<number>();
+  const usedSections = new Set<string>();
+
+  for (let round = 0; selected.length < maxContextChunks; round += 1) {
+    let addedThisRound = false;
+
+    for (let index = 0; index < ranked.length && selected.length < maxContextChunks; index += 1) {
+      if (selectedIndexes.has(index)) continue;
+      const entry = ranked[index]!;
+      const sectionKey = `${entry.chunk.sectionIndex}:${entry.chunk.chapterTitle}`;
+      if (round === 0 && usedSections.has(sectionKey)) continue;
+
+      selected.push(entry);
+      selectedIndexes.add(index);
+      usedSections.add(sectionKey);
+      addedThisRound = true;
+    }
+
+    if (!addedThisRound) break;
+  }
+
+  return selected;
+};
+
 export function packReaderContext({
   question,
   chunks,
@@ -29,6 +59,7 @@ export function packReaderContext({
   maxContextChunks,
   spoilerProtection,
   selectionText,
+  preferSectionDiversity = false,
 }: PackReaderContextOptions): ScoredChunk[] {
   const seenIds = new Set<string>();
   const seenTexts = new Set<string>();
@@ -53,7 +84,7 @@ export function packReaderContext({
   const queryTokens = tokenizeSearchText(question);
   const selectionTokens = selectionText ? tokenizeSearchText(selectionText) : [];
 
-  return candidates
+  const ranked = candidates
     .map((chunk, index) => {
       const combinedText = `${chunk.chapterTitle}\n${chunk.text}`;
       const queryMatches = countTokenMatches(queryTokens, combinedText);
@@ -74,7 +105,11 @@ export function packReaderContext({
         b.chunk.score - a.chunk.score ||
         (a.chunk.sortIndex ?? a.chunk.pageNumber) - (b.chunk.sortIndex ?? b.chunk.pageNumber) ||
         a.index - b.index,
-    )
-    .slice(0, maxContextChunks)
-    .map(({ chunk }) => chunk);
+    );
+
+  const selected = preferSectionDiversity
+    ? selectDiverseSections(ranked, maxContextChunks)
+    : ranked.slice(0, maxContextChunks);
+
+  return selected.map(({ chunk }) => chunk);
 }

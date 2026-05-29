@@ -5,7 +5,14 @@ import { getAIAvailability } from '@/services/ai/availability';
 import { getReflowableAIPageBoundary } from '@/app/reader/utils/pageInfo';
 import { indexBook, isBookIndexed, type BookDocType } from '@/services/ai/ragService';
 import type { EmbeddingProgress } from '@/services/ai/types';
+import {
+  narrowReaderAISourceFallbackHighlights,
+  refineReaderAIAnswerCitations,
+} from '@/services/ai/citationVerifier';
 import { generateReaderAISuggestions, streamReaderAIAnswer } from '@/services/ai/readerChatService';
+import { logDiagnosticError, logDiagnosticEvent } from '@/services/diagnostics/logger';
+import { logReaderAITraceEvent } from '@/services/diagnostics/readerAITrace';
+import { extractTextFromDocument } from '@/services/ai/utils/chunker';
 import { useAIChatStore } from '@/store/aiChatStore';
 import { useBookDataStore } from '@/store/bookDataStore';
 import { useReaderStore } from '@/store/readerStore';
@@ -34,7 +41,9 @@ interface ReaderAIAssistantProps {
 }
 
 const READER_AI_ANSWER_TIMEOUT_MS = 60_000;
+const READER_AI_CITATION_REFINEMENT_TIMEOUT_MS = 15_000;
 const READER_AI_SUGGESTIONS_TIMEOUT_MS = 20_000;
+const READER_AI_FIRST_OUTPUT_TRACE_BUDGET_MS = 15_000;
 
 const createMessage = (
   role: ReaderAIMessage['role'],
@@ -55,6 +64,75 @@ const getBookTitle = (bookKey: string) => {
   return (
     bookData?.book?.title || formatTitle(bookData?.bookDoc?.metadata.title || '') || '当前书籍'
   );
+};
+
+const extractPlainTextFromHtml = (html: string): string => {
+  if (!html.trim()) return '';
+  try {
+    return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() || '';
+  } catch {
+    return html
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+};
+
+const hasVisibleAnswerText = (answer: string): boolean => {
+  const visibleCandidate = answer
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '');
+  return extractPlainTextFromHtml(visibleCandidate).length > 0;
+};
+
+const getReaderAISourcePreviewText = (source: ReaderAISource): string =>
+  source.previewText ?? source.contextText ?? source.snippet ?? '';
+
+const canReuseSourceHighlights = (
+  originalSource: ReaderAISource,
+  refinedSource: ReaderAISource,
+): boolean =>
+  getReaderAISourcePreviewText(originalSource) === getReaderAISourcePreviewText(refinedSource) &&
+  originalSource.previewStartOffset === refinedSource.previewStartOffset;
+
+const preserveSourceHighlights = (
+  originalSources: ReaderAISource[],
+  refinedSources: ReaderAISource[],
+): ReaderAISource[] =>
+  refinedSources.map((source, index) => {
+    if (source.highlightSpans?.length) return source;
+    const originalSource =
+      originalSources.find((candidate) => candidate.id === source.id) ?? originalSources[index];
+    return originalSource?.highlightSpans?.length &&
+      canReuseSourceHighlights(originalSource, source)
+      ? { ...originalSource, ...source, highlightSpans: originalSource.highlightSpans }
+      : source;
+  });
+
+const loadBookSectionText = async (
+  bookDoc: BookDocType | undefined,
+  sectionIndex: number,
+): Promise<string | null> => {
+  const section = bookDoc?.sections?.[sectionIndex];
+  if (!section) return null;
+
+  try {
+    const doc = await section.createDocument?.();
+    if (doc) {
+      const text = extractTextFromDocument(doc);
+      if (text) return text;
+    }
+  } catch {
+    // Fall through to the section.loadText fallback below.
+  }
+
+  try {
+    const loadedText = await section.loadText?.();
+    if (!loadedText) return null;
+    return extractPlainTextFromHtml(loadedText) || loadedText.trim() || null;
+  } catch {
+    return null;
+  }
 };
 
 const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInsets }) => {
@@ -110,6 +188,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     suggestionSource: 'selection' | 'initial' | 'follow-up',
     nextMessages: ReaderAIMessage[] = messages,
     entrySelection = selection,
+    runId?: string,
   ) => {
     const currentSettings = useSettingsStore.getState().settings.aiSettings;
     if (getAIAvailability(currentSettings).status !== 'ready') return;
@@ -127,6 +206,14 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     const timeoutId = setTimeout(() => controller.abort(), READER_AI_SUGGESTIONS_TIMEOUT_MS);
     setSuggestions([]);
     setSuggestionsLoading(true);
+    if (runId) {
+      void logReaderAITraceEvent({
+        runId,
+        stage: 'suggestions',
+        action: 'refresh_suggestions',
+        status: 'started',
+      });
+    }
     try {
       const generatedSuggestions = await generateReaderAISuggestions({
         settings: { ...currentSettings, spoilerProtection },
@@ -294,6 +381,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     bookHash: string,
     quotedText?: string,
     sources?: ReaderAISource[],
+    runId?: string,
   ) => {
     const { activeConversationId, conversations, createConversation, addMessage } =
       useAIChatStore.getState();
@@ -316,6 +404,15 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
       content: answer,
       ...(sources?.length ? { sources } : {}),
     });
+    if (runId) {
+      void logReaderAITraceEvent({
+        runId,
+        stage: 'persistence',
+        action: 'persist_turn',
+        status: 'completed',
+        sourceCount: sources?.length ?? 0,
+      });
+    }
   };
 
   const askAI = async (question: string) => {
@@ -326,6 +423,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    const runId = crypto.randomUUID();
     const userMessage = createMessage('user', question, selection?.text);
     const assistantMessage = createMessage('assistant', '');
     inFlightMessageIdsRef.current = { userId: userMessage.id, assistantId: assistantMessage.id };
@@ -349,7 +447,27 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     const settings = useSettingsStore.getState().settings.aiSettings;
     const requestSettings = { ...settings, spoilerProtection };
     const availability = getAIAvailability(requestSettings);
+    void logDiagnosticEvent('reader_ai.ask_started', 'info', {
+      bookHashPresent: Boolean(bookKey.split('-')[0]),
+      hasSelection: Boolean(selection?.text),
+      priorMessageCount: priorMessages.length,
+      spoilerProtection,
+      provider: requestSettings.provider,
+      model: requestSettings.providerModels[requestSettings.provider] ?? '',
+    });
+    void logReaderAITraceEvent({
+      runId,
+      stage: 'run',
+      action: 'start_run',
+      status: 'started',
+      firstOutputBudgetMs: READER_AI_FIRST_OUTPUT_TRACE_BUDGET_MS,
+    });
     if (availability.status !== 'ready') {
+      void logDiagnosticEvent('reader_ai.unavailable', 'warn', {
+        status: availability.status,
+        provider: requestSettings.provider,
+        model: requestSettings.providerModels[requestSettings.provider] ?? '',
+      });
       setMessages([
         ...priorMessages,
         userMessage,
@@ -446,17 +564,42 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
         question,
         selectionText: selection?.text,
         signal: controller.signal,
+        runId,
+        loadSectionText: (sectionIndex) =>
+          loadBookSectionText(bookData?.bookDoc as BookDocType | undefined, sectionIndex),
         onSources: (sources) => {
           answerSources = sources;
-          setMessages((currentMessages) =>
-            currentMessages.map((message) =>
-              message.id === assistantMessage.id ? { ...message, sources: answerSources } : message,
-            ),
-          );
         },
       })) {
         if (chunk && generationStatus !== 'generating') setGenerationStatus('generating');
         answer += chunk;
+      }
+
+      clearTimeout(timeoutId);
+      if (timedOut) {
+        void logReaderAITraceEvent({
+          runId,
+          stage: 'run',
+          action: 'complete_run',
+          status: 'timeout',
+          firstOutputBudgetMs: READER_AI_FIRST_OUTPUT_TRACE_BUDGET_MS,
+          overBudgetStage: 'timeout',
+          recoveryHint: 'ask_user_to_retry',
+        });
+        setGenerationStatus('timeout');
+        const timeoutMessage = 'AI 生成超时，请稍后重试，或切换更快的模型。';
+        setError(timeoutMessage);
+        setMessages((currentMessages) =>
+          currentMessages.map((message) =>
+            message.id === assistantMessage.id
+              ? { ...message, content: timeoutMessage, sources: answerSources }
+              : message,
+          ),
+        );
+        return;
+      }
+      if (!controller.signal.aborted && hasVisibleAnswerText(answer)) {
+        let finalSources = answerSources;
         setMessages((currentMessages) =>
           currentMessages.map((message) =>
             message.id === assistantMessage.id
@@ -464,24 +607,97 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
               : message,
           ),
         );
-      }
-
-      clearTimeout(timeoutId);
-      if (!controller.signal.aborted && answer.trim()) {
+        if (answerSources.length > 0) {
+          const refinementController = new AbortController();
+          const abortRefinement = () => refinementController.abort();
+          let refinementTimeoutId: ReturnType<typeof setTimeout> | undefined;
+          const refinementTimeout = new Promise<never>((_, reject) => {
+            refinementTimeoutId = setTimeout(() => {
+              abortRefinement();
+              reject(new DOMException('Citation refinement timed out', 'AbortError'));
+            }, READER_AI_CITATION_REFINEMENT_TIMEOUT_MS);
+          });
+          controller.signal.addEventListener('abort', abortRefinement, { once: true });
+          try {
+            const refined = await Promise.race([
+              refineReaderAIAnswerCitations({
+                settings: requestSettings,
+                answer,
+                sources: answerSources,
+                signal: refinementController.signal,
+              }),
+              refinementTimeout,
+            ]);
+            finalSources = preserveSourceHighlights(answerSources, refined.sources);
+            answerSources = finalSources;
+            setMessages((currentMessages) =>
+              currentMessages.map((message) =>
+                message.id === assistantMessage.id
+                  ? { ...message, content: answer, sources: finalSources }
+                  : message,
+              ),
+            );
+          } catch {
+            finalSources = narrowReaderAISourceFallbackHighlights({
+              answer,
+              sources: answerSources,
+            });
+            answerSources = finalSources;
+            setMessages((currentMessages) =>
+              currentMessages.map((message) =>
+                message.id === assistantMessage.id
+                  ? { ...message, content: answer, sources: finalSources }
+                  : message,
+              ),
+            );
+          } finally {
+            if (refinementTimeoutId) clearTimeout(refinementTimeoutId);
+            controller.signal.removeEventListener('abort', abortRefinement);
+          }
+        }
+        if (controller.signal.aborted) return;
+        void logDiagnosticEvent('reader_ai.ask_completed', 'info', {
+          provider: requestSettings.provider,
+          model: requestSettings.providerModels[requestSettings.provider] ?? '',
+          answerLength: answer.length,
+          sourceCount: finalSources.length,
+          priorMessageCount: priorMessages.length,
+        });
+        void logReaderAITraceEvent({
+          runId,
+          stage: 'run',
+          action: 'complete_run',
+          status: 'completed',
+          firstOutputBudgetMs: READER_AI_FIRST_OUTPUT_TRACE_BUDGET_MS,
+        });
         await persistCompletedExchange(
           question,
           answer,
           bookHash,
           userMessage.quotedText,
-          answerSources,
+          finalSources,
+          runId,
         );
         inFlightMessageIdsRef.current = null;
-        void refreshSuggestions('follow-up', [
-          ...priorMessages,
-          userMessage,
-          { ...assistantMessage, content: answer, sources: answerSources },
-        ]);
+        void refreshSuggestions(
+          'follow-up',
+          [
+            ...priorMessages,
+            userMessage,
+            { ...assistantMessage, content: answer, sources: finalSources },
+          ],
+          selection,
+          runId,
+        );
       } else if (!controller.signal.aborted) {
+        void logReaderAITraceEvent({
+          runId,
+          stage: 'run',
+          action: 'complete_run',
+          status: 'failed',
+          firstOutputBudgetMs: READER_AI_FIRST_OUTPUT_TRACE_BUDGET_MS,
+          recoveryHint: 'ask_user_to_retry',
+        });
         setGenerationStatus('error');
         const emptyAnswerMessage = 'AI 没有返回正文，请重试或切换模型。';
         setError(emptyAnswerMessage);
@@ -497,10 +713,17 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     } catch (streamError) {
       clearTimeout(timeoutId);
       if (timedOut) {
+        void logReaderAITraceEvent({
+          runId,
+          stage: 'run',
+          action: 'complete_run',
+          status: 'timeout',
+          firstOutputBudgetMs: READER_AI_FIRST_OUTPUT_TRACE_BUDGET_MS,
+          overBudgetStage: 'timeout',
+          recoveryHint: 'ask_user_to_retry',
+        });
         setGenerationStatus('timeout');
-        const timeoutMessage = answer.trim()
-          ? `${answer}\n\n回答生成超时，以上是已生成的部分内容。`
-          : 'AI 生成超时，请稍后重试，或切换更快的模型。';
+        const timeoutMessage = 'AI 生成超时，请稍后重试，或切换更快的模型。';
         setError(timeoutMessage);
         setMessages((currentMessages) =>
           currentMessages.map((message) =>
@@ -510,6 +733,20 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
           ),
         );
       } else if ((streamError as Error).name !== 'AbortError') {
+        void logReaderAITraceEvent({
+          runId,
+          stage: 'run',
+          action: 'complete_run',
+          status: 'failed',
+          firstOutputBudgetMs: READER_AI_FIRST_OUTPUT_TRACE_BUDGET_MS,
+          recoveryHint: 'ask_user_to_retry',
+        });
+        void logDiagnosticError('reader_ai.ask_failed', streamError, {
+          provider: requestSettings.provider,
+          model: requestSettings.providerModels[requestSettings.provider] ?? '',
+          priorMessageCount: priorMessages.length,
+          sourceCount: answerSources.length,
+        });
         setGenerationStatus('error');
         const providerFailureMessage =
           'AI 请求失败，请检查 API Key、额度、模型名称或服务商状态后重试。';
@@ -532,16 +769,7 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     }
   };
 
-  const handleSourceClick = (source: ReaderAISource) => {
-    if (source.cfi) {
-      useReaderStore.getState().getView(bookKey)?.goTo(source.cfi);
-    } else if (source.href) {
-      useReaderStore.getState().getView(bookKey)?.goTo(source.href);
-    }
-  };
-
   const showReaderAIButton = settings.aiSettings.showReaderAIEntrypoints;
-  const sectionLabel = useReaderStore.getState().getProgress(bookKey)?.sectionLabel;
 
   return (
     <>
@@ -549,10 +777,9 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
       {mode === 'ask' && (
         <ReaderAIAskBox
           source={source}
-          gridInsets={gridInsets}
           initialQuestion={initialQuestion}
-          sectionLabel={sectionLabel}
           suggestions={suggestions}
+          suggestionsLoading={suggestionsLoading}
           spoilerProtection={spoilerProtection}
           onSpoilerProtectionChange={setSpoilerProtection}
           onSubmit={askAI}
@@ -578,7 +805,6 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
           suggestions={suggestions}
           suggestionsLoading={suggestionsLoading}
           indexingProgress={showIndexingProgress ? indexingProgress : undefined}
-          onSourceClick={handleSourceClick}
           onSpoilerProtectionChange={setSpoilerProtection}
           onSubmit={askAI}
           onClose={closeAssistant}

@@ -1,0 +1,26 @@
+{
+  "change": "improve-reader-ai-harness-observability",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "52061919ed18c3105b09125ae87c083cd084caf4b242acd5eba599f764a434cf",
+  "files": [
+    {
+      "path": "openspec/changes/improve-reader-ai-harness-observability/proposal.md",
+      "sha256": "fb3896a33bd06f89bfe1f70780a2a9be9e05f9f0e48f368f645b8f29ca16abc0"
+    },
+    {
+      "path": "openspec/changes/improve-reader-ai-harness-observability/design.md",
+      "sha256": "0a00a0d4fce693c3a802abfc21ca5c2a8c988990cf7fb690140948e580c80891"
+    },
+    {
+      "path": "openspec/changes/improve-reader-ai-harness-observability/tasks.md",
+      "sha256": "95185daa01986ca21610b00fc570325609ba3756114cc3cccf67e603e490400e"
+    },
+    {
+      "path": "openspec/changes/improve-reader-ai-harness-observability/specs/reader-ai-harness-observability/spec.md",
+      "sha256": "183102b9809c039e3f2ff8d8485e7fa98b117a589b5ea802327c688067261181"
+    }
+  ]
+}

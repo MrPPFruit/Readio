@@ -1,175 +1,729 @@
-# HANDOFF — Readio alpha.14 current state
+# HANDOFF — Readio alpha.15 current state
 
 ## Current goal and progress
 
 - Product line: Readio on the Readest-based mainline.
 - Repo: this repository checkout.
-- Branch: `readio/restart-readest-base`.
-- Upstream Readest baseline: `528a13e36aaba55b03ccf4b1039c5d8e91060f11`.
-- Current app version: `0.1.0-alpha.14` in `./apps/readest-app/package.json`.
+- Branch: `improve-reader-ai-harness-observability` (branched from `readio/restart-readest-base`).
+- Current app version: `0.1.0-alpha.15` in `./apps/readest-app/package.json`.
 - Android package/identifier: `com.ppg.readio`.
-- Android `versionCode`: `1001014` in `./apps/readest-app/src-tauri/tauri.conf.json`.
-- Current release APK: `./apks/readio-v0.1.0-alpha.14-android-arm64-release.apk`.
-- GitHub Release asset is the source of truth for distributed APKs.
-- Working tree note: `./HANDOFF.md` tracks current release state. `./.codepilot-uploads/` and `./temp/` are unrelated and should not be committed unless explicitly intended.
+- Android `versionCode`: `1001015` in `./apps/readest-app/src-tauri/tauri.conf.json`.
+- Current active feature: local-only privacy-safe diagnostics logging for bug/crash investigation; Reader AI citation preview/highlight optimization and AI 搜书 full prototype migration remain in the local post-release source state.
+- Distribution status: `v0.1.0-alpha.15` prerelease is published on `MrPPFruit/Readio` with a signed APK and checksum. Current local source has additional post-release AI 搜书 fixes. Versioning preference: only major feature upgrade iterations should bump alpha versions, and the user decides when to bump.
+- Working tree note: `./.codepilot-uploads/` and `./temp/` are unrelated/untracked unless explicitly intended.
 
-## Latest validated release state
+## Latest source-level state
 
-- alpha.14 is the latest GitHub prerelease (2026-05-16): `https://github.com/MrPPFruit/Readio/releases/tag/v0.1.0-alpha.14`.
-- alpha.14 ships Reader AI/RAG Phase B core routing and benchmark hardening: intent/scope routing, spoiler-safe source boundaries, MiMo stream handling, volume-aware citations, entity-list and entity lookup current-context mixing, whole-book scope behavior tests, and selection/current-recap/analysis retrieval routing.
-- alpha.14 release asset verification:
-  - Release tag: `v0.1.0-alpha.14`.
-  - Release commit: `de999e85 chore(release): bump Android alpha to 0.1.0-alpha.14`.
-  - APK asset: `readio-v0.1.0-alpha.14-android-arm64-release.apk`.
-  - SHA-256: `bc22d3bc4a01d39ee5ece56c69c9118be9a13ebff3dc788cfe0d91244127f0b2`.
-  - GitHub release download matched the uploaded local artifact hash.
-  - GitHub asset digest reported `sha256:bc22d3bc4a01d39ee5ece56c69c9118be9a13ebff3dc788cfe0d91244127f0b2`.
-- alpha.14 emulator smoke test:
-  - Installed GitHub-downloaded APK on `emulator-5554` with `adb install -r`.
-  - Started `com.ppg.readio/.MainActivity` successfully.
-  - Launch screenshot `/tmp/readio-alpha14-launch.png` showed the library home with Continue Reading for 《诡秘之主》 and Alice.
-  - Recent logcat check found no app crash.
-- alpha.13 brightness fixes remain included: follow-system brightness with numeric display + accent color, registered `reset_screen_brightness` permission, reverted to window-level brightness control.
-- alpha.10 Reader AI / RAG / selection / annotator improvement batch remains included:
-  - APK build succeeded and APK signature verification passed with v2=true, v3=true, 1 signer.
-  - GitHub Release downloaded asset hash matched the uploaded local artifact hash.
-  - Emulator validation passed on `emulator-5554`: app launched, home/library displayed Continue Reading and Alice book, Alice reader opened, Reader AI entry opened via reader controls.
-  - Reader AI entry Android WebView pointer timing issue is fixed by opening the `ReaderAIButton` on primary `pointerdown` and deduping the later `click`.
-  - Same-location citation ordering preserves service ordering so citation `[1]` does not jump to the wrong source.
-  - Android `selectionchange` during long-press/drag is cached and processed after `touchend`, avoiding loss of real long-press selections.
+- Library header local search is pure again: the `全网搜书` pill was removed from `LibraryHeader` so local search is not compressed or scope-confused.
+- Bookshelf keeps the global search entry as a quiet centered footer after the final shelf item: no outer card, no tinted frame, no shadow; copy is `书不在架上，也许在远处？` / `想读的那本，或许正在等你` with a simple outlined `寻书` button.
+- Current-reading card keeps a top-right floating `寻书` entry; its hit area is separated from the continue-reading hit area so tapping `寻书` opens global AI search instead of opening the reader.
+- AI 搜书 surface remains a full-screen/page-like workspace launched from Library, not a cramped modal:
+  - root surface uses `role="region"`, `aria-label="全网搜书"`, `h-[100dvh]`, and `w-screen`;
+  - Library mounts it through `ModalPortal showOverlay={false}` so the page-like surface does not inherit the modal black scrim;
+  - top visible UI is now only the search field; the old title/icon/subtitle/visible close button were removed;
+  - the search input auto-focuses on open and `Escape` closes the surface for keyboard fallback;
+  - the surface pushes a browser history entry and closes on `popstate`, so Android Back returns from the search workspace to Library instead of exiting the app;
+  - idle empty state is unboxed plain text: `从一个念头开始，去遇见一本书。`;
+  - copyright/external warnings remain `alertdialog` overlays because those are true confirmations.
+- Latest local reader fix: returning from Reader to Library now waits for reading-progress/config save to finish before navigating, preventing the `Continue Reading` card from briefly jumping between the previous and current books.
+- Reader CJK default font is now bundled `Luo` from `tw93/Luo` under SIL Open Font License 1.1: `./apps/readest-app/public/fonts/Luo-Regular.woff2` plus `./apps/readest-app/public/fonts/Luo-OFL.txt`. Reader iframe font mounting injects `@font-face { font-family: "Luo" }`; new/default CJK reading settings use `Luo`; old global settings that still had the previous bundled default `LXGW WenKai GB Screen` migrate to `Luo` once via settings version 2 while preserving user-selected fonts and later intentional re-selection of `LXGW WenKai GB Screen`.
+- AI 搜书 implementation now includes:
+  - natural-language empty state without example chips/prompts;
+  - `最近寻书` history snapshots under the search box: opens a standardized `Dialog` bottom sheet, restores saved result snapshots without rerunning search, supports single-record deletion, and supports long-press/context multi-select batch deletion;
+  - prototype-aligned detail bottom sheet with centered cover/title/metadata and source rows that keep `访问`, plus show `下载` beside it for deterministic direct-open downloadable sources;
+  - Tier 1 search through `searchAIBooksTier1`;
+  - AI progress/thinking card showing only the latest three readable logs while the internal event stream still records AI intent understanding, source start/result/error states, AI scoring/deduping, and done/deep-search summaries;
+  - stats bar;
+  - fixed source filter pills: Gutendex, GitHub, Open Library, Internet Archive, 聚合站;
+  - rich result cards with cover/metadata/format/license/`相关度 xx` score/import/open actions; low-score results are filtered below score 20 and AI reason text is not shown in cards/detail;
+  - bottom-sheet detail dialog with metadata, badges, source links, import/open actions;
+  - external aggregation section;
+  - checkbox-gated copyright modal for aggregation links, centered over a semi-transparent scrim;
+  - Tier 2 deep search through `searchAIBooksTier2`, disabled after completion.
+- AI 搜书 service now has:
+  - Tier 1: Gutendex, Open Library, GitHub, BYOK AI intent/scoring;
+  - Tier 2: Internet Archive deep search;
+  - user-facing Chinese progress events for source start/completion/failure, AI organizing/scoring, and duplicate merging;
+  - deterministic fallback for intent/scoring;
+  - AI scoring retry and 20-candidate batching;
+  - prototype-aligned result visibility threshold: merged Tier 1/Tier 2 results below score 20 are filtered before UI display;
+  - cross-language dedupe and source-link dedupe;
+  - noise filtering for weak GitHub/Internet Archive hits;
+  - direct downloads restricted to deterministic direct-open allowlisted sources.
+- Aggregation domain registry:
+  - allowed/search-only hosts: `z-library.bz`, `annas-archive.is`, `annas-archive.gs`, `annas-archive.li`, `libgen.li`;
+  - explicitly blocks known unsafe `z-lib.is`;
+  - aggregation links are external-only and must not become direct downloads.
 
-## Validation evidence to preserve
+## Active local Comet build: Reader AI harness observability Phase 1
 
-- Latest Reader AI/RAG Phase A verification (2026-05-15):
-  - Committed as `e4a504bf feat(ai): improve reader retrieval context quality`.
-  - Follow-up regression test committed as `c0a0dc10 test(ai): cover spoiler setting changes within conversation`.
-  - `pnpm -C "./apps/readest-app" test -- --watch=false src/__tests__/ai/chunker.test.ts src/__tests__/ai/bm25-search.test.ts src/__tests__/ai/context-pack.test.ts src/__tests__/ai/rag-service.test.ts src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/tauri-chat-adapter.test.ts` passed after review fixes; Vitest selected the full app suite and reported `191 files / 3507 tests passed`, `2 files / 7 tests skipped`.
-  - Same-conversation spoiler toggle regression test passed; subsequent full Vitest run reported `191 files / 3508 tests passed`.
-  - `pnpm -C "./apps/readest-app" lint` passed after final blocker fix; `tsgo --noEmit && biome check .`, `811 files checked`.
-- Reader AI/RAG Phase B classifier + prompt/context metadata verification (2026-05-15):
-  - Committed as `fbf9f215 feat(ai): add reader question intent and scope routing`.
-  - Added deterministic `intent + scope` classifier and passed classification metadata through `readerChatService`, `TauriChatAdapter`, and `/api/ai/chat` reader context validation into `buildSystemPrompt`.
-  - Review fixes: API validation rejects classification scopes that conflict with effective spoiler protection; whole-book prompts use `source_scope="whole_book_allowed" reading_position="..."` instead of current `page_limit` metadata; high-risk spoiler wording now still routes through read-so-far retrieval/prompting instead of an early canned return; empty whole-book prompts no longer claim page-limited context.
-  - `pnpm -C "./apps/readest-app" test -- --watch=false src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/api-chat-route.test.ts src/__tests__/ai/question-routing.test.ts src/__tests__/ai/tauri-chat-adapter.test.ts` passed; Vitest selected the full app suite and reported `192 files / 3514 tests passed`, `2 files / 7 tests skipped`.
-  - `pnpm -C "./apps/readest-app" lint` passed; `tsgo --noEmit && biome check .`, `813 files checked`.
-  - Final code review approved after blocker fixes.
-- Reader AI Android/Tauri empty-answer fix verification (2026-05-15):
-  - Root cause: local retrieval could surface citations before provider text, while Tauri native HTTP may return stream text via `response.text()` without a readable `body`; this produced an AI answer panel with citations but no answer body.
-  - Fixed `openAICompatibleModel.ts` to parse OpenAI-compatible SSE from `response.text()` when a Tauri response has no readable stream body.
-  - Fixed `ReaderAIAssistant.tsx` to show `AI 没有返回正文，请重试或切换模型。` when generation completes with sources but no answer text.
-  - Focused tests passed: `openai-compatible-model.test.ts` reported `4 passed`; `reader-ai-assistant.test.tsx` reported `29 passed`.
-  - AI test suite passed: `pnpm -C "./apps/readest-app" test src/__tests__/ai -- --runInBand`, `21 files / 212 tests passed`.
-  - Lint/type check passed: `pnpm -C "./apps/readest-app" lint`, `tsgo --noEmit && biome check .`, `813 files checked`.
-  - Rebuilt signed APK at `./apks/readio-v0.1.0-alpha.13-android-arm64-release.apk`, installed on `emulator-5554`, opened Reader AI in 《诡秘之主》 page `2868 / 14955`, asked `总结本章到这里`, and verified DOM contained the clear empty-answer message plus citations and the original question. Recent logcat showed no app crash.
-- Reader AI/MiMo quality-test fix set verification (2026-05-16):
-  - Committed `ceef48e5 fix(ai): align reader AI page boundaries and MiMo streaming output` and `6bfb95ae style(ai): apply reader AI formatting updates`.
-  - Aligns reflowable reader display pages with AI chunk page boundaries via `getReflowableAIPageBoundary()` and `currentAIPage` fallback handling.
-  - MiMo OpenAI-compatible parsing ignores `reasoning_content` and only emits visible answer content.
-  - Question routing now classifies `这章目前讲了什么？` as `chapter_summary`.
-  - `ReaderAIAnswerPanel` handles markdown `<br>` nodes in cited content.
-  - Focused tests passed for page info, OpenAI-compatible model, question routing, reader chat service, reader AI assistant, and reader AI panels.
-  - Lint/type check passed: `pnpm -C apps/readest-app lint`, `tsgo --noEmit && biome check .`, `813 files checked`.
-  - AI target tests passed: `3 files / 68 tests passed` across `bm25-search.test.ts`, `reader-chat-service.test.ts`, and `reader-ai-panels.test.tsx`.
-  - Full app tests passed: `pnpm -C apps/readest-app test -- --runInBand`, `192 files / 3526 tests passed`, `2 files / 7 tests skipped`.
-  - Emulator + MiMo spot check passed for 《诡秘之主》 question `塔罗会当前成员有哪些？`: answer listed current members without future-member spoilers and cited `第五十一章 五人聚会` first.
-- Reader AI spoiler boundary hardening verification (2026-05-16):
-  - Root cause evidence: Readio + MiMo Q2 `克莱恩是谁？请按当前阅读进度简短回答并给出依据。` leaked later evidence such as `夏洛克·莫里亚蒂` / `贝克兰德` and cited future chapters including `第一百三十四章 超过一分钟了` while spoiler protection was on.
-  - Added RED regression in `reader-chat-service.test.ts`: read-so-far entity answers must exclude later book-order chunks even when stale/estimated page numbers appear inside the current AI page boundary.
-  - RED confirmed: focused test failed because `<BOOK_PASSAGES>` still contained `第一百三十四章 超过一分钟了` and `夏洛克·莫里亚蒂`.
-  - Minimal fix: `isChunkWithinPageBoundary()` now also checks `sortIndex < (maxPage + 1) * SIZE_PER_PAGE` when `sortIndex` exists, so page-boundary filtering is tied back to absolute book offset and stale low page numbers cannot smuggle later chunks into spoiler-protected prompts.
-  - Focused tests passed: `pnpm -C apps/readest-app exec vitest run src/__tests__/ai/reader-chat-service.test.ts`, `24 tests passed`; `pnpm -C apps/readest-app exec vitest run src/__tests__/ai/bm25-search.test.ts`, `8 tests passed`.
-  - Lint/type check passed: `pnpm -C apps/readest-app lint`, `tsgo --noEmit && biome check .`, `813 files checked`.
-  - Full app tests passed: `pnpm -C apps/readest-app test -- --runInBand`, `192 files / 3530 tests passed`, `2 files / 7 tests skipped`.
-- Previous alpha.10/alpha.13 release evidence:
-  - Full Vitest run passed: `189 files / 3475 tests passed`.
-  - App lint passed: `pnpm --filter @readest/readest-app lint`, `809 files checked`.
-  - Type check passed: `pnpm --filter @readest/readest-app exec tsgo --noEmit`.
-  - APK rebuild/install/smoke test passed.
-  - Reader AI final screenshot evidence: `/tmp/readio_review_fixed_ai_panel_2.png`.
+- Change: `improve-reader-ai-harness-observability`; build mode `executing-plans`; isolation `branch`.
+- Scope completed so far: functional diagnostics only, no intentional UI/UX, prompt, answer style, retrieval ranking, citation chip, or source-preview visual changes.
+- Added metadata-only Reader AI trace helper: `./apps/readest-app/src/services/diagnostics/readerAITrace.ts` emits `reader_ai.trace` with `schemaVersion: 1`, `component: reader_ai_harness`, `privacyTier: metadata_only`, and an explicit allowlist.
+- Added opaque per-turn `runId` generation in `ReaderAIAssistant`; it is passed into `streamReaderAIAnswer` and service-side helpers. UI message IDs are not reused as trace IDs.
+- Added trace stages/actions for run lifecycle, retrieval plan, hybrid search, entity sidecar lookup, source-language rewrite, current-context injection, context pack, generation, citation validation/repair, insufficient-answer fallback, persistence, and follow-up suggestions.
+- Trace payloads use counts/durations/enums only: no raw question, answer, source text, snippets, prompts, book title/author/hash/path, chapter title, or API key should be emitted by the new trace helper.
+- Added first-output/retrieval latency budget metadata (`15_000ms` first output target and `3_000ms` retrieval trace budget) plus normalized over-budget stages/recovery hints.
+- Added minimal local eval foundation under `./apps/readest-app/src/services/ai/eval/`:
+  - ordinary-reader categories: person recall, object recall, event recap, relationship recall, current recap, citation grounding, spoiler safety;
+  - case/result validation utility rejects committed raw source/answer/prompt/book text;
+  - README documents manual NotebookLM full-book benchmark usage and read-so-far vs whole-book spoiler-mode separation.
+- Focused validation passed: `pnpm --dir apps/readest-app test src/__tests__/services/diagnostics/reader-ai-trace.test.ts src/__tests__/ai/reader-ai-eval.test.ts src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/reader-ai-assistant.test.tsx` → `4 passed` files, `132 passed` tests.
+- Lint passed: `pnpm --dir apps/readest-app lint` → `Checked 855 files in 221ms. No fixes applied.`
+- Full app suite passed: `pnpm --dir apps/readest-app test` → `212 passed | 2 skipped` test files, `3855 passed | 7 skipped` tests.
+- Remaining build completion step: run the Comet build guard.
+- Key new/changed files for this phase:
+  - `./apps/readest-app/src/services/diagnostics/readerAITrace.ts`
+  - `./apps/readest-app/src/services/ai/readerChatService.ts`
+  - `./apps/readest-app/src/app/reader/components/ai/ReaderAIAssistant.tsx`
+  - `./apps/readest-app/src/services/ai/eval/readerAIEval.ts`
+  - `./apps/readest-app/src/services/ai/eval/README.md`
+  - `./apps/readest-app/src/__tests__/services/diagnostics/reader-ai-trace.test.ts`
+  - `./apps/readest-app/src/__tests__/ai/reader-chat-service.test.ts`
+  - `./apps/readest-app/src/__tests__/ai/reader-ai-assistant.test.tsx`
+  - `./apps/readest-app/src/__tests__/ai/reader-ai-eval.test.ts`
+
+## Latest local post-release fix: local-only diagnostics logging
+
+- Implemented local-only diagnostics logging for future bug/crash investigation.
+- Diagnostics storage is bounded JSONL under app log storage:
+  - `diagnostics/current.jsonl`
+  - `diagnostics/previous.jsonl`
+  - current log rotates to previous around 250 KB.
+- Diagnostics are enabled by default with debug breadcrumbs off by default; settings migration preserves existing user choices.
+- Advanced Settings now exposes:
+  - Local Diagnostic Logs toggle;
+  - Export Diagnostic Logs;
+  - Clear Diagnostic Logs.
+- Runtime initialization configures the diagnostics logger after settings load, installs global unhandled error/rejection handlers, and logs settings-load failure if settings initialization fails.
+- Instrumented privacy-safe breadcrumbs/errors for:
+  - Reader AI ask lifecycle: `reader_ai.ask_started`, `reader_ai.unavailable`, `reader_ai.ask_completed`, `reader_ai.ask_failed`;
+  - Reader AI retrieval/generation: `reader_ai.retrieval_completed`, `reader_ai.generation_failed`;
+  - citation refinement: `reader_ai.citation_refinement_started`, `reader_ai.citation_refinement_completed`, `reader_ai.citation_refinement_failed`;
+  - AI 搜书: `ai_book_search.search_started`, `ai_book_search.search_completed`, `ai_book_search.search_failed`, `ai_book_search.import_failed`;
+  - library import/download: `library.import_failed`, `library.import_completed`, `library.download_failed`;
+  - diagnostics/settings: `diagnostics.toggled`, `diagnostics.export_failed`, `diagnostics.clear_failed`, `settings.load_failed`, `global.unhandled_error`, `global.unhandled_rejection`.
+- Privacy boundaries audited:
+  - no raw question, prompt, answer, selected text, messages, source preview, chunk text, snippet, citation quote, title/author, download URL, full local path, book filename, hash, API key, or token is intentionally passed to diagnostics metadata;
+  - redaction drops content-bearing metadata keys recursively and redacts sensitive keys, bearer/API tokens, local paths, URLs, and standalone book filenames before writing/exporting;
+  - export re-redacts pre-existing log text before saving the bundle.
+- TDD evidence:
+  - diagnostics redaction/logger/settings/menu tests were added first and verified red before implementation;
+  - Reader AI diagnostics tests verified failures do not leak raw question/selection/source text;
+  - AI 搜书 diagnostics tests verified search/import failures and lifecycle logs do not leak raw query/title/filename/download URL;
+  - library diagnostics tests verified import/download failures do not leak file paths, filenames, titles, or hashes;
+  - final redaction hardening test first failed because URLs/standalone book filenames could survive error-string redaction, then passed after adding URL/filename redaction.
+- Fresh validation after diagnostics work:
+  - Focused diagnostics/AI/library regression: `pnpm --dir "apps/readest-app" test src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/epub-scan-import-flow.test.tsx src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/citation-verifier.test.ts src/__tests__/ai/reader-ai-assistant.test.tsx src/__tests__/services/diagnostics/redact.test.ts src/__tests__/services/diagnostics/logger.test.ts src/__tests__/services/settings-diagnostics.test.ts src/__tests__/app/library/settings-menu-diagnostics.test.tsx`; result `9 passed` test files, `196 passed` tests.
+  - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `849 files checked`, no fixes applied.
+  - Full suite: `pnpm --dir "apps/readest-app" test`; result `209 passed`, `2 skipped` test files; `3815 passed`, `7 skipped` tests.
+  - Rust fmt/clippy not run because no `src-tauri/` files were changed by diagnostics logging.
+- May 26 Reader AI mention-query hotfix:
+  - User-reported bug: asking whether prior text mentions `阿兹克` produced an insufficient-evidence answer even though earlier text contained Azik/Azik先生 content.
+  - Root cause 1: citation grounding treated affirmative mention/existence clauses such as `前文确实提到过阿兹克。[1]` like broad factual claims. Generic words (`前文`, `提到`, `确实`, etc.) diluted lexical overlap, so a source containing the named entity was incorrectly flagged as `unsupported_clause` and the answer was replaced with the guarded insufficient-evidence fallback.
+  - Fix 1: `citationGrounding` now recognizes affirmative mention/existence clauses separately, removes mention/noise words, and accepts the citation when the remaining named entity tokens are present in the cited source. Absence claims (`没有提到...`) remain governed by the stricter explicit-absence rule.
+  - Root cause 2: the same user-visible question (`前文有没有关于阿兹克的内容？`) was still routed as `general`, not `entity_lookup`, and the entity prompt did not explicitly require synthesizing multiple prior mentions. This allowed the model to produce a terse yes/no-style answer even when several source chunks about 阿兹克 were available.
+  - Fix 2: `questionRouting` now treats mention/content questions such as `有没有关于 X 的内容` / `是否提到 X` as `entity_lookup`, and the entity prompt now instructs the model to synthesize relevant mentions across the provided sources instead of answering only yes/no.
+  - TDD evidence: added failing regression cases in `citation-grounding.test.ts` for `前文确实提到过阿兹克。[1]` and `前文有关于阿兹克的内容。[1]`; added failing routing/prompt regression for `前文有没有关于阿兹克的内容？` with three Azik source chunks. These failed before their respective fixes and passed after.
+  - Focused validation: `pnpm --dir "apps/readest-app" test src/__tests__/ai/citation-grounding.test.ts src/__tests__/ai/citation-verifier.test.ts src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/question-routing.test.ts -- --runInBand`; result `4 passed` test files, `104 passed` tests.
+  - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `849 files checked`, no fixes applied.
+- May 26 Reader AI answer-style improvement:
+  - User feedback: Reader AI answers were still too terse; answers should be as comprehensive, detailed, and structured as correctness and citations allow.
+  - Fix: `prompts.ts` RESPONSE STYLE now instructs Readio to be as complete as available evidence allows, prefer clear bullets/paragraphs when sources support detail, cover identity/events/relationships/motivations/implications when supported, avoid collapsing multi-source evidence into one-sentence yes/no replies, and explicitly state unsupported gaps instead of filling them.
+  - Follow-up tone fix: Reader AI should answer like a knowledgeable storyteller who knows the text well, making the explanation feel like a live conversation about the story and avoiding cold/generic AI phrasing while staying grounded only in cited passages.
+  - TDD evidence: added prompt regressions in `reader-chat-service.test.ts` for comprehensive structured answer guidance and knowledgeable-storyteller conversational tone; both failed before their prompt changes and passed after.
+  - Fresh validation: targeted prompt test `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts -- -t "knowledgeable storyteller|comprehensive structured answers" --runInBand`; result `1 passed` file, `70 passed` tests.
+  - Focused Reader AI validation: `pnpm --dir "apps/readest-app" test src/__tests__/ai/citation-grounding.test.ts src/__tests__/ai/citation-verifier.test.ts src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/question-routing.test.ts -- --runInBand`; result `4 passed` test files, `105 passed` tests.
+  - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `849 files checked`, no fixes applied.
+- May 26 Reader AI entity evidence-coverage fix:
+  - User feedback: even after richer prompt/tone changes, `阿兹克是谁？`-style answers stayed too shallow and missed known read-so-far facts such as teacher/mentor relationship, amnesia/mystery, rescue/help, and repeated prior mentions.
+  - NotebookLM skill was invoked for benchmark guidance. The remembered login profile is `NOTEBOOKLM_HOME=/Users/ppg/.notebooklm/profiles/default` and the Readio notebook ID is `1f45c537-1155-4b4f-9ae8-436c5151ef61`; plain `notebooklm ask` works for manual benchmark, while `ask --json` previously returned an empty error.
+  - Agent review concluded the main quality blocker was RAG evidence coverage, not wording: entity lookup used the normal small context budget and boosted shallow current-section mentions enough to crowd out distributed prior evidence.
+  - Fix: `entity_lookup` now uses a larger evidence budget (`max(settings.maxContextChunks, 8)` with broader retrieval K), and pure entity questions no longer apply the 1000-point current-context boost unless the user explicitly asks about current/here/list context.
+  - Fix: `packReaderContext` now supports `preferSectionDiversity`, used for entity lookup, so a single section's repeated shallow mentions cannot fill the whole context before older/other-section identity, relationship, action, and mystery evidence is included.
+  - TDD evidence: added RED tests showing shallow current `阿兹克` mentions crowded out teacher/amnesia/rescue/mystery sources and same-section chunks filled entity context; both failed before the retrieval/packing changes and passed after.
+  - Focused validation: `pnpm --dir "apps/readest-app" test src/__tests__/ai/context-pack.test.ts src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/question-routing.test.ts src/__tests__/ai/citation-grounding.test.ts src/__tests__/ai/citation-verifier.test.ts`; result `5 passed` test files, `113 passed` tests.
+  - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `849 files checked`, no fixes applied.
+- May 26 Reader AI lightweight entity sidecar implementation:
+  - Goal: improve entity-answer coverage generically without hardcoding `阿兹克` and without changing Reader AI UI, citation chips, or source preview visuals.
+  - Added `src/services/ai/entitySidecar.ts`: builds a local book-derived sidecar from indexed chunks, conservatively extracting aliases/honorific variants, explicit `又称/也叫/即/被称为` aliases, non-generic role descriptors, short fact sentences, and original chunk ids only.
+  - Storage now persists one `entitySidecar` per `bookHash` in `aiStore`; clearing/reindexing AI data clears the matching sidecar cache/store entry.
+  - Indexing builds the sidecar after chunk indexing. Build/search failure is non-blocking: the old BM25/RAG path remains the fallback.
+  - `entity_lookup` now consults the sidecar to add book-derived alias queries and original fact chunks before context packing, while respecting spoiler/page boundaries.
+  - Diagnostics add metadata-only debug events/errors for sidecar build/search (`reader_ai.entity_sidecar_built`, `reader_ai.entity_sidecar_hit`, `reader_ai.entity_sidecar_failed`) with counts and operation labels only; no entity names, query text, chunk text, or raw book content are logged.
+  - Tests use generic fictional entities (`林澈`, `灰塔导师`, `灰塔看守者`) to prove alias extraction, page-boundary filtering, generic-role non-alias behavior, expanded-query construction, persistence/clear behavior, sidecar indexing, and entity lookup inclusion without making an Azik-specific rule.
+  - Fresh validation after sidecar implementation:
+    - Focused sidecar/RAG tests: `pnpm --dir "apps/readest-app" test src/__tests__/ai/entity-sidecar.test.ts src/__tests__/ai/rag-service.test.ts src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/context-pack.test.ts -- --runInBand`; result `4 passed` test files, `103 passed` tests.
+    - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `851 files checked`, no fixes applied.
+    - Full suite: `pnpm --dir "apps/readest-app" test`; result `210 passed`, `2 skipped` test files; `3833 passed`, `7 skipped` tests.
+  - May 26 ordinary-reader QA follow-up:
+    - User QA preference: test questions should mimic ordinary reader recall needs (forgotten people, objects, events, relationships, and recaps), not advanced literary analysis.
+    - NotebookLM full-book benchmark questions covered ordinary reader cases such as `阿兹克是谁？`, `0-08 是什么？`, and `克莱恩和因斯·赞格威尔有什么仇？`; cross-language and spoiler-protected benchmarking remain lower priority than same-language full-book quality.
+    - Root cause 1: `0-08`-style numbered artifacts were not extracted by the sidecar because entity extraction only recognized names starting with Han/Latin letters. Fix: `entitySidecar` now conservatively indexes book-local numbered/code entities like `0-08` and can retrieve their original fact chunks for object recap questions.
+    - Root cause 2: `entityRecallPattern` existed but was not used in `questionRouting`, so ordinary-reader prompts like `我忘了克莱恩之前为什么会和因斯·赞格威尔有仇，发生过哪些关键事情？` fell through to `current_recap`. Fix: entity recall questions now route to `entity_lookup` before generic recap matching.
+    - Root cause 3: sidecars were only built during new indexing, so existing already-indexed books would not benefit after app upgrade unless the user manually rebuilt the AI index. Fix: `entity_lookup` now lazily builds and saves a missing sidecar from existing stored chunks; failures remain non-blocking and fall back to the original BM25/RAG path.
+    - TDD evidence: added RED tests for numbered artifacts, reader-forgot entity recall, and existing-index lazy sidecar migration; all failed before their fixes and passed after.
+    - Fresh validation: focused Reader AI tests `pnpm --dir "apps/readest-app" test src/__tests__/ai/question-routing.test.ts src/__tests__/ai/entity-sidecar.test.ts src/__tests__/ai/rag-service.test.ts src/__tests__/ai/reader-chat-service.test.ts -- --runInBand`; result `4 passed` test files, `102 passed` tests.
+    - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `851 files checked`, no fixes applied.
+    - Full suite: `pnpm --dir "apps/readest-app" test`; result `210 passed`, `2 skipped` test files; `3834 passed`, `7 skipped` tests.
+  - May 26 Android Reader AI source-preview freeze fix:
+    - Real emulator full-book question `阿兹克是谁？请尽量详细、有条理地回答。` froze Android WebView before the model request.
+    - Root cause: source preview construction called `loadSectionText()` before answer generation. On Tauri/Android, the underlying `section.createDocument()`/DOM extraction path can synchronously block the WebView main thread; a Promise timeout cannot fire while the event loop is blocked.
+    - Fix: `readerChatService` now skips original-section preview loading on Tauri and uses chunk-based previews there, so source construction cannot block the model call. Web builds can still use original-section previews.
+    - TDD evidence: `reader-chat-service.test.ts` regression `skips original section loading on Tauri so preview work cannot block model calls` failed before the fix because `loadSectionText` was called, then passed after the fix.
+  - May 26 Android Reader AI invalid-citation fallback fix:
+    - After the freeze fix, the same real emulator question no longer froze but returned the guarded insufficient-evidence answer. IndexedDB inspection proved this was not empty retrieval: the persisted assistant message had 10 sources, including relevant evidence for the entity's mentor/teacher relationship, memory loss/cycles, special identity, death-god descendant clue, and helping/saving the protagonist.
+    - Root cause: answer-level citation grounding was too brittle for structured entity answers. `getCitationClause()` did not treat semicolons as citation sentence boundaries, so a clause like `事实A[1]；事实B[2]；事实C[3]` could validate source 1 against all later facts. Even after boundary handling, broad Chinese entity clauses with comma-separated local facts could be rejected because overlap was diluted by generic connector text.
+    - Fix: `citationGrounding` now treats Chinese/English semicolons as sentence boundaries, stops a citation clause immediately after post-citation semicolon punctuation, and accepts segmented Chinese local clauses only when each meaningful segment has enough support in the cited source. The existing negative regression still rejects a single citation that combines multiple facts when the cited source supports only one fact.
+    - TDD evidence: new generic fictional-entity regression `accepts comma-separated multi-source entity facts when each citation supports its local clause` failed before the fix with `unsupported_clause`, then passed after. The existing `rejects multi-fact cited clauses when the source only supports one fact` test caught an over-broad intermediate attempt and remains passing.
+    - Fresh validation: focused citation file `pnpm --dir "apps/readest-app" test --watch=false src/__tests__/ai/citation-grounding.test.ts`; result `1 passed` file, `17 passed` tests. Full suite also passed during the regression run: `210 passed`, `2 skipped` test files; `3837 passed`, `7 skipped` tests. Lint/type check `pnpm --dir "apps/readest-app" lint` passed with `851 files checked`, no fixes applied.
+  - May 26 Android Reader AI markdown horizontal-rule render fix:
+    - Real emulator `0-08是什么东西？它之前做过什么？` generated and persisted a complete answer (`contentLength: 945`, `sourceCount: 10`), but the UI entered the app error boundary with React production error `Minified React error #137` and argument `hr`.
+    - Root cause: the answer contained Markdown `---`, `marked` converted it to `<hr>`, and `ReaderAIAnswerPanel.renderHtmlNode()` passed `children` to `React.createElement('hr', ...)`. React forbids children on void HTML elements.
+    - Fix: `ReaderAIAnswerPanel.tsx` now treats all standard HTML void tags (`br`, `hr`, `img`, `input`, etc.) as childless and returns `React.createElement(tagName, props)` before rendering child nodes.
+    - TDD evidence: `reader-ai-panels.test.tsx` regression `renders cited markdown horizontal rules without crashing the answer panel` failed red with `hr is a void element tag and must neither have children nor use dangerouslySetInnerHTML`, then passed after the generic void-tag fix.
+    - Fresh validation: focused new test passed; full `reader-ai-panels.test.tsx` passed (`58 passed`); `pnpm --dir "apps/readest-app" lint` passed (`851 files checked`); full `pnpm --dir "apps/readest-app" test --watch=false` passed (`210 passed`, `2 skipped` files; `3838 passed`, `7 skipped` tests).
+    - Android validation: rebuilt `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk` with v2/v3 signature verification, installed on `emulator-5554`, launched `com.ppg.readio/.MainActivity`, navigated to the reader, rendered the persisted real `0-08` answer through the Reader AI panel, and confirmed `hasHr=true`, `hasReact137=false`, `hasGenericError=false`, `citationButtons=10`. Screenshot: `/tmp/readio-0-08-answer-fixed.png`. Recent filtered logcat after render showed no `Minified React error #137`, no `hr is a void element`, and no `FATAL EXCEPTION`/`AndroidRuntime`.
+    - Final post-rebuild Android smoke: latest signed APK rebuilt at May 26 20:02 (`./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, 53M, v2/v3 verified, signer count 1), installed on `emulator-5554` with `adb install -r` success, app relaunched as `com.ppg.readio/.MainActivity`, WebView CDP attached for PID `31412`, reader loaded successfully, persisted `0-08` answer rendered with `ok=true`, `hasReader=true`, `hasAIPanel=true`, `hasAnswer=true`, `hasHr=true`, `citationButtons=10`, `hasReactError=false`, and `hasErrorBoundary=false`. Recent filtered logcat again had no `Minified React error`, `hr is a void element`, `FATAL EXCEPTION`, `AndroidRuntime`, or `am_crash` markers.
+  - Remaining limitation: this is a lightweight, rule-based sidecar, not a full knowledge graph. It improves generic entity/object recall and alias coverage, but deeper NotebookLM-style quality still depends on future richer entity fact extraction, ranking, and real-book QA.
+- Key diagnostics files:
+  - `./apps/readest-app/src/services/diagnostics/types.ts`
+  - `./apps/readest-app/src/services/diagnostics/redact.ts`
+  - `./apps/readest-app/src/services/diagnostics/logger.ts`
+  - `./apps/readest-app/src/__tests__/services/diagnostics/redact.test.ts`
+  - `./apps/readest-app/src/__tests__/services/diagnostics/logger.test.ts`
+  - `./apps/readest-app/src/__tests__/services/settings-diagnostics.test.ts`
+  - `./apps/readest-app/src/__tests__/app/library/settings-menu-diagnostics.test.tsx`
+- When asking users for bug reports, prefer having them export diagnostics from Advanced Settings and review the JSON before sharing. Logs are local-only and redacted, but users should still inspect exports before sending.
+
+## Latest local post-release fix: Reader AI citation preview/highlight optimization
+
+- Reader AI citation previews now behave as a pure original-text preview with concrete cited-reference highlighting rather than an evidence card or AI-answer repetition.
+- Stage 1 completed:
+  - source preview construction de-duplicates chunk overlap instead of exposing repeated indexing overlap text;
+  - `ReaderAISource` now carries optional chunk offsets, `previewText`, `previewStartOffset`, and verified `highlightSpans` while preserving historical message compatibility;
+  - citation preview rendering prefers `previewText`, renders span-level highlights, keeps legacy `contextText/snippet` fallback, and centers the first highlight with `scrollIntoView({ block: 'center', inline: 'nearest' })` when the preview opens.
+- Stage 2 completed:
+  - `streamReaderAIAnswer` accepts `loadSectionText` so previews can use original section/chapter text when `ReaderAIAssistant` has `bookData.bookDoc` available;
+  - section text loading prefers `section.createDocument()` + `extractTextFromDocument(doc)`, falls back to `section.loadText()` text extraction, and returns `null` on failure;
+  - original-section highlights map chunk offsets into the original text when sane, otherwise fall back to exact chunk/snippet search;
+  - spoiler protection clips/falls back to safe readable boundaries, and very long sections use a large window around the highlight with `previewStartOffset`.
+- Stage 3 completed:
+  - new constrained reviewer helper `src/services/ai/citationVerifier.ts` asks the existing BYOK provider for strict JSON exact quotes only;
+  - returned reviewer quotes are accepted only if they appear verbatim in the source preview, then converted into `source: 'reviewer'` highlight spans;
+  - reviewer/refinement success persists verified refined citations/sources;
+  - reviewer/refinement failure or timeout now keeps the already streamed citation markers and sources visible instead of removing them after a delay;
+  - `ReaderAIAssistant` runs reviewer refinement after streaming and before persistence when possible, updates the in-memory assistant message sources, and uses an independent 15s refinement timeout so answer completion cannot remain stuck in `正在生成回答…`.
+- Key files changed for this optimization:
+  - `./apps/readest-app/src/types/readerAI.ts`
+  - `./apps/readest-app/src/services/ai/readerChatService.ts`
+  - `./apps/readest-app/src/services/ai/citationVerifier.ts`
+  - `./apps/readest-app/src/services/ai/ragService.ts`
+  - `./apps/readest-app/src/app/reader/components/ai/ReaderAIAnswerPanel.tsx`
+  - `./apps/readest-app/src/app/reader/components/ai/ReaderAIAssistant.tsx`
+  - `./apps/readest-app/src/__tests__/ai/reader-chat-service.test.ts`
+  - `./apps/readest-app/src/__tests__/ai/reader-ai-panels.test.tsx`
+  - `./apps/readest-app/src/__tests__/ai/reader-ai-assistant.test.tsx`
+  - `./apps/readest-app/src/__tests__/ai/citation-verifier.test.ts`
+- Review/debug notes:
+  - Stage 1 and Stage 2 implementation/review loops found and fixed offset-adjacent chunk joining, spoiler `endPageNumber` filtering, invalid partial offset acceptance, and loader wiring coverage.
+  - Stage 3 review approved after clarifying that `ReaderAIAnswerPanel` UI changes were Stage 1 scope already reviewed.
+  - Later emulator E2E exposed a separate hang risk: the main answer timeout was cleared after streaming, but citation refinement could still hang indefinitely. The follow-up fix added a separate refinement timeout.
+  - User reported citations disappearing after a delay. Root cause: the refinement timeout/failure catch in `ReaderAIAssistant` stripped already streamed citation markers and cleared sources after roughly 15s. The fix keeps streamed markers/sources on refinement failure or timeout, while successful refinement can still replace them with verified spans.
+  - One emulator pass showed the AI panel no longer visible after submission; root-cause investigation found no crash/fatal logs and a controlled second reproduction kept the panel open, so no code change was made for that non-reproducible interaction.
+  - May 26 follow-up citation-preview positioning fix:
+    - User feedback: clicking a citation should open the original-text preview scrolled to the cited passage, with the beginning of the citation visible around the center of the preview area. This behavior had regressed.
+    - Root cause 1: span-level highlights assigned the scroll ref to the entire highlighted `<span>`. Real citations can highlight hundreds of Chinese characters, so `scrollIntoView({ block: 'center' })` centered the large highlight box rather than the start of the cited passage.
+    - Fix 1: `ReaderAIAnswerPanel` now inserts a zero-size `data-testid="reader-ai-source-highlight-start"` anchor immediately before the first span-level highlight and scrolls that anchor instead of the whole highlight.
+    - Root cause 2: real Android `0-08` citation preview used paragraph fallback highlighting (`bg-warning/25` `<p>` nodes) without span-level `highlightSpans`, so there was no scroll target at all and preview stayed at the top.
+    - Fix 2: paragraph fallback now assigns the same scroll ref to the first highlighted paragraph, using callback refs with `useRef<HTMLElement | null>` so both span anchors and paragraph nodes are supported without TypeScript ref mismatch.
+    - TDD evidence: new `reader-ai-panels.test.tsx` regressions first failed because long span highlights scrolled the highlight itself and paragraph fallback made zero `scrollIntoView` calls, then passed after the two fixes.
+    - Fresh validation: focused citation positioning tests passed; full `reader-ai-panels.test.tsx` passed with `60 passed`; `pnpm --dir "apps/readest-app" lint` passed with `851 files checked`; full `pnpm --dir "apps/readest-app" test` passed with `210 passed`, `2 skipped` test files and `3840 passed`, `7 skipped` tests.
+    - Final APK rebuild: `pnpm --dir "apps/readest-app" build-readio-apk` exited 0; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, rebuilt May 26 23:17 local, size `53M`, v2/v3 signature verified, signer count `1`.
+    - Android WebView smoke on `emulator-5554`: installed latest rebuilt APK with `adb install -r` (`Success`), launched `com.ppg.readio/.MainActivity`, attached CDP on `tcp:9223`, loaded reader for book `801f2e5144f292e50aec55bcfb61cb29`, rendered persisted real `0-08` Reader AI answer with `ok=true`, `hasReact137=false`, `hasGenericError=false`, `hasHr=true`, `citationButtons=10`, `sourceCount=10`.
+    - Citation positioning smoke result: opening citation `[1]` produced `mode="paragraph-fallback"`, `hasDialog=true`, `hasRegion=true`, `warningTargetCount=2`, `regionScrollTop=4647.619`, `regionClientHeight=425`, `regionScrollHeight=6400`, and centered the highlighted paragraph with `targetCenterOffsetFromCenter=0.0476px`.
+    - Recent logcat marker check after smoke inspected 853 lines and found `fatal_marker_count=0` for `AndroidRuntime`, `FATAL EXCEPTION`, React error, `hr is a void element`, crash, and `SIGSEGV` markers.
+- Fresh final verification for this optimization:
+  - Focused Reader AI assistant tests: `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-ai-assistant.test.tsx -- --runInBand`; result `1 passed` test file; `35 passed` tests.
+  - Related citation/panel tests: `pnpm --dir "apps/readest-app" test src/__tests__/ai/citation-verifier.test.ts src/__tests__/ai/reader-ai-panels.test.tsx -- --runInBand`; result `2 passed` test files; `65 passed` tests.
+  - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `840 files checked`, no fixes applied.
+  - Full app tests: `pnpm --dir "apps/readest-app" test -- --runInBand --bail=1`; result `204 passed`, `2 skipped` test files; `3734 passed`, `7 skipped` tests.
+  - Android APK build: `pnpm --dir "apps/readest-app" build-readio-apk`; result exit `0`; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, size `53M`, v2/v3 signature verified.
+  - Android emulator install: `adb install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+  - Latest delayed-disappearing-citation regression verification: focused Reader AI assistant tests pass with the new timeout/failure behavior (`35 passed`), related citation/panel tests pass (`65 passed`), lint passes (`840 files checked`), and full app tests pass (`204 passed`, `2 skipped`; `3734 passed`, `7 skipped`).
+- May 25 follow-up fixes from Android WebView QA:
+  - Root cause 1: `ReaderAIAssistant` replaced streamed `answerSources` wholesale with citation-refinement sources. If refinement returned a source without `highlightSpans`, the UI preview had no source highlight even though the original RAG source had grounded chunk spans.
+  - Fix 1: `ReaderAIAssistant` now preserves original source `highlightSpans` by source `id` (falling back to index) when refinement omits spans; reviewer/refinement spans still win when present.
+  - Root cause 2: original-section preview text was loaded from the real section, but `ReaderAISource.chapterTitle` still came from stale chunk metadata. Android WebView showed preview body `Chapter 2 / The Pool of Tears` under a `Chapter 3 - A Caucus-Race and a Long Tale` source title.
+  - Fix 2: `readerChatService` now derives a simple `Chapter N - Title` source title from the loaded original section heading when original section preview loading succeeds, while preserving chunk metadata as fallback.
+  - New regression coverage:
+    - `reader-ai-assistant.test.tsx`: citation refinement preserves source highlight spans when refined sources omit them.
+    - `reader-chat-service.test.ts`: source previews use the loaded original section title when chunk metadata is stale.
+  - TDD evidence:
+    - RED title test before fix failed with received `Chapter 3 - A Caucus-Race and a Long Tale`, expected `Chapter 2 - The Pool of Tears`.
+    - GREEN focused title test: `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts -- -t "uses the loaded original section title for source previews when chunk metadata is stale"`; result `1 passed` file, `60 passed` tests.
+    - Related Reader AI/citation regression: `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/reader-ai-assistant.test.tsx src/__tests__/ai/citation-verifier.test.ts src/__tests__/ai/citation-grounding.test.ts`; result `4 passed` files, `120 passed` tests.
+  - Fresh required verification after the fixes:
+    - Full suite: `pnpm --dir "apps/readest-app" test`; result `205 passed`, `2 skipped` test files; `3767 passed`, `7 skipped` tests.
+    - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `842 files checked`, no fixes applied.
+    - Rust fmt/clippy were not run because no `src-tauri/` source files were changed by this fix.
+  - Android emulator/WebView QA evidence:
+    - Rebuilt signed APK: `pnpm --dir "apps/readest-app" build-readio-apk`; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, v2/v3 signature verified, signer count `1`, size `53M`.
+    - Installed on `emulator-5554`: `adb install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+    - Launched `com.ppg.readio/.MainActivity`; WebView CDP forwarded on `tcp:9333` for PID `22147`.
+    - Alice reader opened at `Chapter 2 - The Pool of Tears`, page `34 / 316`.
+    - WebView Reader AI question `Why did Alice make the pool of tears?` produced citations whose list/card labels are both `Chapter 2 - The Pool of Tears`.
+    - Citation preview `引用 [2]` title is `Chapter 2 - The Pool of Tears` and `data-testid="reader-ai-source-highlight"` rendered the quote `” But she went on all the same, shedding gallons of tears, until there was a large pool all around her, about four inches deep and reaching half down the hall.`
+  - May 25 second Android WebView QA exposed another highlight root cause: `narrowRangeToBestMatchingSentence()` used question-token matching only, so in ambiguous multi-sentence chunks it could choose the earlier question-context sentence (`to go on crying in this way`) over the answer evidence sentence (`shedding gallons of tears...`).
+  - Fix 3: `readerChatService` now keeps the full original chunk range when multiple sentences meet the minimum token threshold and the top sentence does not clearly beat the second sentence; this leaves enough original text for citation refinement/reviewer fallback to highlight the answer evidence instead of boxing it into the wrong context sentence.
+  - New regression coverage:
+    - `reader-chat-service.test.ts`: `keeps the full original chunk range when question tokens ambiguously match multiple sentences`.
+  - TDD/verification evidence for Fix 3:
+    - RED focused test before fix failed because the highlight quote was only `“You ought to be ashamed of yourself,” ... “to go on crying in this way!` instead of the full chunk containing `shedding gallons of tears...`.
+    - GREEN focused reader-chat-service test: `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts -- --runInBand`; result `1 passed` test file; `61 passed` tests.
+    - Related Reader AI/citation tests: `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/reader-ai-assistant.test.tsx src/__tests__/ai/citation-verifier.test.ts src/__tests__/ai/citation-grounding.test.ts -- --runInBand`; result `4 passed` test files; `122 passed` tests.
+    - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `842 files checked`, no fixes applied.
+    - Full suite: `pnpm --dir "apps/readest-app" test -- --runInBand --bail=1`; result `205 passed`, `2 skipped` test files; `3769 passed`, `7 skipped` tests.
+  - Fresh Android rebuild/install/WebView QA after Fix 3:
+    - Rebuilt signed APK: `pnpm --dir "apps/readest-app" build-readio-apk`; result exit `0`; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, v2/v3 signature verified, signer count `1`, size `53M`.
+    - Installed on `emulator-5554`: `adb -s emulator-5554 install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+    - Installed package check: `versionName=0.1.0-alpha.15`, `versionCode=1001015`.
+    - Launched `com.ppg.readio/.MainActivity`; WebView CDP forwarded on `tcp:9333` for PID `23239`.
+    - Alice reader opened at `Chapter 2 - The Pool of Tears`, page `34 / 316`.
+    - WebView question `What did Alice do when she went on crying?` persisted grounded sources, including source `32bb20d7452627491831bb64a8d0dd94-4-3` with title `Chapter 2 - The Pool of Tears` and full highlight containing `shedding gallons of tears...`, but the model response/repair returned the guarded insufficient-evidence answer without visible citation buttons.
+    - Direct WebView citation-path QA question `Quote the sentence that says Alice was shedding gallons of tears.` returned answer text with citation `[1]`, citation list/card label `Chapter 2 - The Pool of Tears`, preview title `Chapter 2 - The Pool of Tears`, and rendered `data-testid="reader-ai-source-highlight"` quote `” But she went on all the same, shedding gallons of tears, until there was a large pool all around her, about four inches deep and reaching half down the hall.`
+  - Code review follow-up after Fix 3:
+    - Review found no critical citation regressions. The broad working-tree note is a submission/staging caution: stage only citation-related files unless intentionally releasing all local alpha.15 changes.
+    - Important feedback accepted: original-section title derivation only recognized English `Chapter N` headings, so non-English original section headings such as `第一章\n灰雾之上` would fall back to stale chunk metadata.
+    - Fix 4: `getOriginalSectionTitle()` now keeps the existing English `Chapter N - Title` behavior and also accepts Chinese chapter-like headings matching `第...章节卷部篇回`, deriving titles such as `第一章 - 灰雾之上` from loaded original section text while preserving chunk metadata fallback for arbitrary prose.
+    - TDD evidence for Fix 4: focused RED failed before the production change with `expected 'Stale Metadata Title' to be '第一章 - 灰雾之上'`; focused GREEN command `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts -- -t "Chinese chapter heading" --runInBand` passed with `1 passed` file and `62 passed` tests.
+    - Full reader-chat-service regression: `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts -- --runInBand`; result `1 passed` file, `62 passed` tests.
+    - Related Reader AI/citation regression: `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/reader-ai-assistant.test.tsx src/__tests__/ai/citation-verifier.test.ts src/__tests__/ai/citation-grounding.test.ts -- --runInBand`; result `4 passed` files, `123 passed` tests.
+    - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `842 files checked`, no fixes applied.
+    - Full suite: `pnpm --dir "apps/readest-app" test`; result `205 passed`, `2 skipped` test files; `3770 passed`, `7 skipped` tests.
+    - Rebuilt signed APK after Fix 4: `pnpm --dir "apps/readest-app" build-readio-apk`; result exit `0`; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, v2/v3 signature verified, signer count `1`, size `53M`.
+    - Installed rebuilt APK on `emulator-5554`: `adb -s emulator-5554 install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`; installed package check `versionName=0.1.0-alpha.15`, `versionCode=1001015`, `minSdk=26`, `targetSdk=36`.
+    - Post-Fix-4 Android WebView QA: launched `com.ppg.readio/.MainActivity`; WebView CDP forwarded on `tcp:9333` for PID `23849`; Alice reader opened at `Chapter 2 - The Pool of Tears`, page `34 / 316`.
+    - First post-Fix-4 WebView question `Quote the sentence that says Alice was shedding gallons of tears.` again produced a guarded insufficient-evidence answer with no visible citation buttons, but persisted sources still included `Chapter 2 - The Pool of Tears` and source `32bb20d7452627491831bb64a8d0dd94-4-3` with highlight `” But she went on all the same, shedding gallons of tears, until there was a large pool all around her, about four inches deep and reaching half down the hall.`
+    - Closer citation-path WebView question `Which sentence says there was a large pool all around Alice, about four inches deep? Quote it with a citation.` returned answer text with `[1]`, citation button/card label `Chapter 2 - The Pool of Tears`, preview title `Chapter 2 - The Pool of Tears`, and rendered `data-testid="reader-ai-source-highlight"` quote `” But she went on all the same, shedding gallons of tears, until there was a large pool all around her, about four inches deep and reaching half down the hall.`
+  - May 25 Frankenstein Android WebView QA exposed another citation-highlighting root cause: when reviewer extraction returned no usable quote for a later citation, `citationVerifier` deterministic fallback only scored existing `source.highlightSpans`, so citation 2 for `承诺之风 / 遐想更加热切和生动` reused citation 1's cold-breeze highlight instead of selecting the later `wind of promise / daydreams` sentence from the same preview.
+  - Fix 5: `citationVerifier` fallback now derives high-signal citation search terms from the cited clause, filters low-signal English tokens, adds cross-language terms for `承诺|遐想|热切|生动` (`promise`, `daydream`, `daydreams`, `fervent`, `vivid`), scans the full source preview for those terms, expands matched terms to complete source sentences, and chooses the best clause-relevant span over stale existing chunk highlights.
+  - New regression coverage:
+    - `citation-verifier.test.ts`: `falls back to later preview evidence when the existing highlight supports a different citation clause`.
+  - TDD/verification evidence for Fix 5:
+    - RED focused test before fix failed because the received highlight was `I feel a cold northern breeze play upon my cheeks, which braces my nerves and fills me with delight.` while the expected span was `Inspirited by this wind of promise, my daydreams become more fervent and vivid.`
+    - GREEN focused citation verifier: `pnpm --dir "apps/readest-app" test src/__tests__/ai/citation-verifier.test.ts -- --runInBand`; result `1 passed` file, `16 passed` tests.
+    - Focused Reader AI regression: `pnpm --dir "apps/readest-app" test src/__tests__/ai/reader-chat-service.test.ts src/__tests__/ai/reader-ai-assistant.test.tsx src/__tests__/ai/reader-ai-panels.test.tsx src/__tests__/ai/citation-verifier.test.ts src/__tests__/ai/citation-grounding.test.ts -- --runInBand`; result `5 passed` files, `193 passed` tests.
+    - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `842 files checked`, no fixes applied.
+    - Full suite: `pnpm --dir "apps/readest-app" test`; result `205 passed`, `2 skipped` test files; `3783 passed`, `7 skipped` tests.
+    - Rebuilt signed APK after Fix 5: `pnpm --dir "apps/readest-app" build-readio-apk`; result exit `0`; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, v2/v3 signature verified, signer count `1`, size `53M`.
+    - Installed rebuilt APK on `emulator-5554`: `adb -s emulator-5554 install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+  - Post-Fix-5 Android WebView QA: opened Frankenstein, opened Reader AI, submitted `Walton 对北方冷风有什么感受？`, and confirmed visible answer citations stayed continuous as `[1]` and `[2]`; citation 1 preview highlighted the complete cold-breeze sentence, while citation 2 preview highlighted `Inspirited by this wind of promise, my daydreams become more fervent and vivid.` instead of reusing citation 1's cold-breeze sentence.
+  - Validation workflow decision after repeated emulator time cost: do not rebuild/install APK for every Reader AI logic or visual micro-adjustment. Prefer fast local proof first: focused Vitest for grounding/citation/refinement logic, jsdom/component tests for suggestion/citation click behavior, local browser/WebView CDP DOM inspection for rendered answer/source/highlight state, and only use Android emulator for Android-specific behavior (Back, keyboard, safe-area, Tauri/WebView resource loading) plus final APK smoke before delivery/release.
+  - Same-language QA priority: Chinese question/Chinese answer on Chinese books and English question/English answer on English books are the current quality gate. Cross-language asking is lower priority unless it crashes, misleads severely, or regresses same-language behavior.
+  - Validation workflow decision after repeated emulator time cost: use focused Vitest for grounding/citation/refinement logic, jsdom/component tests for suggestion/citation click behavior, local browser/WebView CDP DOM inspection for rendered answer/source/highlight state, and reserve Android emulator for Android-specific behavior (Back, keyboard, safe-area, Tauri/WebView resource loading) plus final APK smoke before delivery/release.
+  - Fresh fast validation after adopting the faster workflow: focused citation/grounding/chat tests passed (`citation-verifier.test.ts`, `citation-grounding.test.ts`, `reader-chat-service.test.ts`: `96 passed`); focused Reader AI UI tests passed (`reader-ai-assistant.test.tsx`, `reader-ai-panels.test.tsx`, `ReaderAIAskBox.test.tsx`: `107 passed`); lint/type check passed (`842 files checked`); full app suite passed (`205 passed`, `2 skipped` files; `3783 passed`, `7 skipped` tests). No emulator run was performed for this fast-validation pass because the covered changes are logic/jsdom-verifiable rather than Android-specific.
+  - Final cleanup note: current diff review shows Reader AI/citation/highlight changes are covered by focused tests, but the working tree also contains broader alpha.15 local changes (icons, library/search UI, sheet unification, fonts, AI 搜书). Stage/release only intentionally selected files if making a commit or release artifact.
+  - May 25 final closure verification before release decision:
+    - Diff scope reviewed with `git status --short` and `git diff --stat`; working tree remains broad and includes earlier alpha.15 changes, so do not stage with `git add .`.
+    - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `842 files checked`, no fixes applied.
+    - Full suite: `pnpm --dir "apps/readest-app" test`; result exit `0`; `205 passed`, `2 skipped` test files; `3783 passed`, `7 skipped` tests.
+    - Signed Android APK build: `pnpm --dir "apps/readest-app" build-readio-apk`; result exit `0`; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, size `53M`, v2/v3 signature verified, signer count `1`.
+    - Final Android smoke on `emulator-5554` (Android 15, `sdk_gphone64_arm64`): `adb -s emulator-5554 install -r ...` result `Success`; installed package `versionName=0.1.0-alpha.15`, `versionCode=1001015`; launched `com.ppg.readio/.MainActivity`; Library rendered; current reading card opened Reader; Reader controls showed AI entry; AI ask sheet opened; suggestion tap filled the input instead of directly submitting; submit entered the AI answer page and began model connection; focused window stayed `com.ppg.readio/com.ppg.readio.MainActivity`; recent crash-log check found no `FATAL EXCEPTION`/`AndroidRuntime`/`am_crash` entries.
+
+## Latest local post-release fix: unified Readio half-sheets on shared Dialog
+
+- Readio half-sheet UI standard is now persisted in memory at `~/.claude/projects/-Users-ppg-Documents-CloudCodeWorkSpace-Program-Readio-Readest/memory/feedback_readio_sheet_ui_standard.md` and linked from memory `MEMORY.md`.
+- Current half-sheet targets are unified on the shared `Dialog` bottom-sheet standard: bottom-up sheet, rounded top container, drag handle, dim/blurred backdrop, backdrop/Escape/Android Back/down-drag close, focus containment/restoration, and no visible top-right X.
+- Unified targets in local source:
+  - `ReaderAIAskBox`: now uses `Dialog` with accessible drag handle and no visible close X; suggestion chips preserve the original one-tap direct-submit behavior.
+  - `ReaderAIAnswerPanel` citation/source preview: now uses `Dialog`; the main AI answer panel intentionally remains full-screen and keeps its explicit close button.
+  - `AIBookSearchDialog` result detail and `最近寻书` history sheet: now use `Dialog`; copyright/external warnings intentionally remain centered `alertdialog` overlays above the sheet.
+  - `BookDetailModal` delete confirmation: now uses `Dialog` instead of the old custom bottom `Alert` wrapper, with a specific drag-handle label.
+- Shared `Dialog` improvements added for this standard: `aria-describedby`, optional accessible drag-handle label, `aria-modal`, keyboard focus trap, focus restoration on close/unmount, stale-closure-safe `dismissible`/`onClose` refs, a topmost-dialog stack for nested Escape/Tab/Android Back handling, dialog-level keydown cleanup, non-dismissible drag-handle protection, and snap-sheet drag handling in test/non-mobile contexts.
+- Review-fix test coverage added in `apps/readest-app/src/__tests__/components/Dialog.test.tsx` for nested `Dialog` topmost handling and `dismissible={false}` drag-handle behavior.
+- Final review follow-up fixed `AIBookSearchDialog` copyright alert native Android Back layering: when the centered copyright `alertdialog` is above the non-dismissible detail sheet, Android Back now closes the alert first and leaves the underlying `书籍详情` sheet open.
+- Remaining known lower-priority sheet-like surfaces not yet unified unless requested: `EpubScanImportDialog.tsx` and `CatalogManager.tsx`.
+- Fresh validation after final review fixes:
+  - RED command for copyright alert native Back layering: `pnpm --dir "apps/readest-app" test src/__tests__/app/library/ai-book-search-dialog.test.tsx -- --runInBand`; result before fix: `1 failed`, `33 passed` tests because the `版权提示` alert stayed open after native Back.
+  - Targeted GREEN command: `pnpm --dir "apps/readest-app" test src/__tests__/app/library/ai-book-search-dialog.test.tsx -- --runInBand`; result `1 passed` test file; `34 passed` tests.
+  - Focused command: `pnpm --dir "apps/readest-app" test src/__tests__/components/ReaderAIAskBox.test.tsx src/__tests__/ai/reader-ai-panels.test.tsx src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/components/BookDetailModalDelete.test.tsx src/__tests__/components/Dialog.test.tsx -- --runInBand`
+  - Focused result: `5 passed` test files; `90 passed` tests.
+  - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `838 files checked`, no fixes applied.
+  - Full suite completed from background run after the final patch: `pnpm --dir "apps/readest-app" test`; result `203 passed`, `2 skipped` test files; `3682 passed`, `7 skipped` tests.
+- This caveat has been cleared by the May 22 current-source APK/emulator smoke noted under `Validation evidence for current alpha15 source state`.
+
+## Validation evidence for current alpha15 source state
+
+- May 22 current-source Android emulator smoke passed:
+  - Device: `emulator-5554`, Android `15`, model `sdk_gphone64_arm64`.
+  - Build command: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build-readio-apk`; result exit `0`.
+  - APK artifact: `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, size `53M`, v2/v3 signature verified, signer count `1`.
+  - Install command: `adb install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+  - Installed package check: `com.ppg.readio`, `versionName=0.1.0-alpha.15`, `versionCode=1001015`.
+  - Launch command: `adb shell am start -n com.ppg.readio/.MainActivity`; focused window became `com.ppg.readio/com.ppg.readio.MainActivity`.
+  - Visual smoke: Library rendered with 7 local books and `CONTINUE READING`; opening the first book rendered the Reader page; Android Back returned to Library.
+  - Screenshots captured: `/tmp/readio-emulator-home.png`, `/tmp/readio-emulator-reader.png`, `/tmp/readio-emulator-back.png`.
+  - Crash log check after navigation found no `FATAL EXCEPTION`/`am_crash`; only known non-fatal missing stale cover asset messages for an existing local book cache.
+- Batch 5 UI/accessibility review: initial review requested fixes; re-review approved Batch 5 scope after fixes.
+- Targeted dialog tests passed:
+  - `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx --reporter=verbose`
+  - Result: `1 passed`, `8 tests passed`.
+- Latest UI wording/CTA/detail bottom-sheet targeted tests passed:
+  - Red test before fix: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx --reporter=verbose` failed because `书籍详情` was still a `region` page-flow section instead of a `dialog` bottom sheet.
+  - Green command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx --reporter=verbose`
+  - Green result: `1 passed`, `8 tests passed`.
+  - Regression command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/library-header.test.tsx src/__tests__/app/library/bookshelf-ai-search-cta.test.tsx src/__tests__/app/library/ai-book-search-dialog.test.tsx --reporter=verbose`
+  - Regression result: `3 passed`, `11 tests passed`.
+- Library header tests passed:
+  - `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/library-header.test.tsx --reporter=verbose`
+  - Result: `1 passed`, `2 tests passed`.
+- Batch 6 service/config tests passed:
+  - `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-service.test.ts src/__tests__/config/readio-android-package.test.ts --reporter=verbose`
+  - Result: `2 passed`, `33 tests passed`.
+- AI 搜书 regression set passed:
+  - `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/library-header.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts src/__tests__/config/readio-android-package.test.ts --reporter=verbose`
+  - Result: `4 passed`, `43 tests passed`.
+- Full-screen AI 搜书 surface verification passed after the latest semantic/heading fixes:
+  - `pnpm --dir apps/readest-app test -- ai-book-search-dialog`
+  - Result: `196 passed`, `2 skipped` test files; `3609 passed`, `7 skipped` tests.
+- Portal overlay regression was verified red/green:
+  - Red command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/epub-scan-import-flow.test.tsx --reporter=verbose`
+  - Red result before fix: `1 failed`, expected portal root not to contain `bg-black`, received `bg-black bg-opacity-50`.
+  - Green result after `ModalPortal showOverlay={false}`: `1 passed` test file, `5 passed` tests.
+- Full AI 搜书 regression after portal fix passed:
+  - `pnpm --dir apps/readest-app test -- ai-book-search-dialog`
+  - Result: `196 passed`, `2 skipped` test files; `3610 passed`, `7 skipped` tests.
+- Latest Readio-aligned UI redesign followed red/green TDD:
+  - Red command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/library-header.test.tsx src/__tests__/app/library/bookshelf-ai-search-cta.test.tsx src/__tests__/app/library/ai-book-search-dialog.test.tsx --reporter=verbose`
+  - Red result before implementation: `3 failed`, covering removal of the header `全网搜书` pill, unframed bookshelf footer CTA, and input-first search surface.
+  - Green command: same targeted vitest command.
+  - Green result: `3 passed`, `11 tests passed`.
+- Lint/type check passed after the latest Readio-aligned UI redesign:
+  - `pnpm --dir apps/readest-app lint`
+  - Result: `tsgo --noEmit && biome check .`, `831 files checked`, no fixes applied.
+- Full suite initially caught a stale portal regression test mock after the header `全网搜书` removal:
+  - Failing command: `pnpm --dir apps/readest-app test`
+  - Failing result: `1 failed`, `196 passed`, `2 skipped` test files; `1 failed`, `3610 passed`, `7 skipped` tests. Failure was `src/__tests__/app/library/epub-scan-import-flow.test.tsx` still clicking the old header `AI 搜书` mock.
+  - Fix: updated the test mock to expose `全网搜书` through the Bookshelf footer path and keep header search pure.
+  - Targeted green command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/epub-scan-import-flow.test.tsx --reporter=verbose`
+  - Targeted green result: `1 passed` test file, `5 passed` tests.
+- Full app test suite passed after the stale portal test update:
+  - `pnpm --dir apps/readest-app test`
+  - Result: `197 passed`, `2 skipped` test files; `3611 passed`, `7 skipped` tests.
+- Latest `寻书` copy/layout/scoring refinement followed red/green TDD:
+  - Red command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/bookshelf-ai-search-cta.test.tsx src/__tests__/app/library/continue-reading-card.test.tsx src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts --reporter=verbose`
+  - Red result before implementation: failed on old `找书` copy, old placeholder/empty copy, old result score/reason display, bottom-aligned copyright warning, right-aligned deep-search CTA, and missing low-score filtering.
+  - Green command: same targeted vitest command.
+  - Green result: `4 passed`, `51 tests passed`.
+- Latest target-language scoring optimization followed red/green TDD:
+  - Demo behavior traced: AI relevance scoring must honor target language; if intent is `zh`, non-Chinese results are capped/filtered; if intent is `en`, Chinese results are capped/filtered. This is target-language priority, not unconditional Chinese priority.
+  - Red command: `pnpm --dir apps/readest-app test src/__tests__/app/library/ai-book-search-service.test.ts -- --watch=false`
+  - Red result before fix: `2 failed`, `42 passed`; `红楼梦 英文版` was inferred as `zh`, and an `en` intent still returned the Chinese result before the English result.
+  - Fix: explicit English markers (`英文`, `英语`, `english`, `en`) now win over CJK fallback in fallback intent; stabilization uses `intent.language` first, falling back to original-query script only when language is `both`/unknown.
+  - Green targeted result: `1 passed` test file, `44 passed` tests.
+  - AI 搜书 targeted regression: `2 passed` test files, `55 passed` tests.
+  - Lint/type check: `pnpm --dir apps/readest-app lint`; result `831 files checked`, no fixes applied.
+  - Full suite: `pnpm --dir apps/readest-app test -- --watch=false`; result `197 passed`, `2 skipped` test files; `3628 passed`, `7 skipped` tests.
+- Latest lint/type check after `寻书` refinements:
+  - `pnpm --dir apps/readest-app lint`
+  - Result: `tsgo --noEmit && biome check .`, `831 files checked`, no fixes applied.
+- Latest full suite after `寻书` refinements:
+  - `pnpm --dir apps/readest-app test`
+  - Result: `197 passed`, `2 skipped` test files; `3619 passed`, `7 skipped` tests.
+- Emulator smoke caught an Android Back regression after the visible close button was removed:
+  - Repro: first Android Back hid the keyboard, second Android Back exited the app instead of returning to Library.
+  - TDD red command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx --reporter=verbose`
+  - Red result: new `closes from Android browser back instead of exiting the app` test failed because no history entry was pushed.
+  - Fix: `AIBookSearchDialog` now calls `window.history.pushState({ readioAIBookSearch: true }, '')` on mount and closes on `popstate`.
+  - Green focused result: `1 passed` test file, `9 passed` tests.
+  - Focused regression command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/library-header.test.tsx src/__tests__/app/library/bookshelf-ai-search-cta.test.tsx src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/epub-scan-import-flow.test.tsx --reporter=verbose`
+  - Focused regression result: `4 passed` test files, `17 passed` tests.
+  - Latest lint/type check after back fix: `pnpm --dir apps/readest-app lint`; result `831 files checked`, no fixes applied.
+  - Latest full suite after back fix: `pnpm --dir apps/readest-app test -- --watch=false`; result `197 passed`, `2 skipped` test files; `3612 passed`, `7 skipped` tests.
+
+## Latest local post-release fix: AI 搜书 detail sheet and current-card `寻书` hit area
+
+- Latest user feedback addressed in local source after the published alpha15 release:
+  - AI 搜书 detail sheet now follows the HTML prototype structure more closely: centered cover, centered title/metadata, quiet badges, `可用格式`, `来源`, `简介`, and `AI 推荐理由` sections.
+  - Source rows preserve `访问`; deterministic direct-open sources show `下载` beside `访问`, so `可带回` has a visible action path in the detail sheet.
+  - Current-reading card top-right `寻书` is no longer physically covered by the continue-reading button. The visual card stays in layout flow, while the reader hit area is a transparent left-side button ending before the `寻书` CTA.
+- Red/green verification:
+  - Detail-sheet tests were updated first to require a dialog-style bottom sheet, centered book identity, source rows, and direct-download `访问 + 下载` behavior; tests failed before implementation and passed after the redesign.
+  - Current-card hit-area regression was verified red before the structural fix: the continue-reading button still occupied the full card and did not expose the expected `right-28` boundary.
+  - Focused green command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/continue-reading-card.test.tsx --reporter=verbose`; result `1 passed` test file, `4 passed` tests.
+  - Related UI regression command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/continue-reading-card.test.tsx --reporter=verbose`; result `2 passed` test files, `19 passed` tests.
+- APK/emulator smoke after the fix:
+  - Rebuilt artifact: `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`.
+  - Installed on `emulator-5554` with `adb install -r`, result `Success`.
+  - Tapping the real top-right current-card `寻书` coordinate opened the fullscreen search page instead of the reader.
+  - Searching `alice` produced direct-download results with `可带回 29`; opening the first direct result showed the redesigned detail sheet with centered cover/title and source row `访问 + 下载`.
+  - Smoke screenshots captured at `/tmp/readio-ai-search-final-home.png`, `/tmp/readio-ai-search-final-top-entry.png`, `/tmp/readio-ai-search-final-alice-results-3.png`, and `/tmp/readio-ai-search-final-detail-cover.png`.
+- Fresh final verification after the hit-area structural fix:
+  - Full suite: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test`; result `201 passed`, `2 skipped` test files; `3644 passed`, `7 skipped` tests.
+  - Lint/type check: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `835 files checked`, no fixes applied.
+
+## Latest local post-release fix: reader/global CJK font switched to Luo
+
+- Latest user-requested Chinese-font change is implemented in local source after the published alpha15 release:
+  - `tw93/Luo` was inspected via GitHub metadata/repo contents and ships `dist/Luo-Regular.woff2` plus `OFL.txt`; repo uses SIL Open Font License 1.1, suitable for app bundling with the license notice included.
+  - Bundled assets added: `./apps/readest-app/public/fonts/Luo-Regular.woff2` and `./apps/readest-app/public/fonts/Luo-OFL.txt`.
+  - `DEFAULT_BOOK_FONT.defaultCJKFont` is now `Luo`, and `Luo` is included in `CJK_SERIF_FONTS` / CJK font matching so it appears in the CJK font selector.
+  - `mountAdditionalFonts(..., isCJK=true)` now injects a local `@font-face` for `Luo`, so ebook iframe documents can use `/fonts/Luo-Regular.woff2`.
+  - Existing settings that still hold the previous bundled default `LXGW WenKai GB Screen` migrate to `Luo` once via `SYSTEM_SETTINGS_VERSION = 2`; explicit user-selected fonts such as `Source Han Serif CN` are preserved, and users can intentionally choose `LXGW WenKai GB Screen` again after migration without it being rewritten on the next load.
+  - Per-book view settings are preserved as explicit book-level choices; only global settings migration is applied.
+  - Non-reader UI now uses `Inter` first and `Luo` as the Chinese fallback via Tailwind `fontFamily.sans`, with a global `@font-face` for `/fonts/Luo-Regular.woff2` in `globals.css`; Latin UI text keeps Inter while Chinese UI text falls back to Luo.
+- Red/green and regression verification:
+  - Red focused tests before implementation: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/styles/fonts.test.ts src/__tests__/services/constants.test.ts --reporter=dot` failed on missing `font-family: "Luo"` injection and old `DEFAULT_BOOK_FONT.defaultCJKFont`.
+  - Red migration test before implementation: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/services/settings-font-migration.test.ts --reporter=dot` failed because old persisted `LXGW WenKai GB Screen` was preserved.
+  - Red one-shot regression before review fix: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/services/settings-font-migration.test.ts --reporter=dot` failed because version-2 settings with an intentional `LXGW WenKai GB Screen` choice were rewritten to `Luo`.
+  - Focused green command: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/styles/fonts.test.ts src/__tests__/services/constants.test.ts src/__tests__/services/settings-font-migration.test.ts --reporter=dot`; result `3 passed` test files, `200 passed` tests.
+  - Lint/type check: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `834 files checked`, no fixes applied.
+  - Full suite: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test`; result `200 passed`, `2 skipped` test files; `3639 passed`, `7 skipped` tests.
+  - Global UI font red/green: `src/__tests__/styles/global-ui-fonts.test.ts` first failed because Tailwind lacked `Luo` and `globals.css` did not register it; after the fix, `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test src/__tests__/styles/global-ui-fonts.test.ts src/__tests__/styles/fonts.test.ts` passed with `2 passed` files and `63 passed` tests.
+  - Latest lint/type check after global UI fallback: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `835 files checked`, no fixes applied.
+  - Latest APK rebuild/install for Luo global UI fallback: `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build-readio-apk` exited 0; signed artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk` rebuilt May 19 23:52 local, v2/v3 signature verified, signer count 1.
+  - Emulator install command `adb install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"` returned `Success`; cold start succeeded. A first screenshot caught a transient blank WebView before content render, then `readio://library` opened Library correctly.
+  - Emulator visual verification: Library screenshot `/tmp/readio-luo-library-ui-2.png` shows Chinese UI text such as `在 4 本书籍中搜索...`, `寻书`, `诡秘之主`, `雪中悍刀行` rendered with Luo-style Chinese fallback while Latin text such as `CONTINUE READING`/`Alice's Adventures...` remains Inter-like; reader screenshots `/tmp/readio-luo-search-page-2.png` and `/tmp/readio-reader-controls.png` show reading text still renders correctly with no missing glyph boxes.
+
+## Latest local post-release fix: AI search realtime progress clarity
+
+- Latest user-requested AI 搜书 realtime status/log refinement is implemented in local source after the published alpha15 release:
+  - The fixed three-stage explanation remains omitted per user direction.
+  - Search now presents the flow as AI understanding first, then source search, then AI organization/scoring/deduping, then completion summary.
+  - The progress event stream keeps the richer readable process, but the visible log list is capped to the latest three lines to keep the status card compact.
+  - Source logs are user-facing Chinese messages for Open Library, GitHub, Gutendex, Internet Archive, and aggregation search, including start/result/error states and rate-limit/timeout copy.
+  - Deep search now logs AI keyword refinement and final merged/no-new-result summaries.
+  - Active status badges (`理解中`, `寻书中`, `整理中`, `深搜中`) use a subtle brightness sweep animation and respect `prefers-reduced-motion`.
+- Files changed for this fix:
+  - `./apps/readest-app/src/app/library/components/AIBookSearchDialog.tsx`
+  - `./apps/readest-app/src/services/aiBookSearch/searchService.ts`
+  - `./apps/readest-app/src/styles/globals.css`
+  - `./apps/readest-app/src/__tests__/app/library/ai-book-search-dialog.test.tsx`
+- Red/green and regression verification:
+  - New dialog test was verified red before implementation: it expected readable key logs, `正在整理结果...`, and the active badge animation class, none of which existed yet.
+  - Fresh command after initial realtime-progress fixes: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test -- src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts && pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`
+  - Result: full test suite ran through project config: `199 passed`, `2 skipped` test files; `3635 passed`, `7 skipped` tests.
+  - After emulator review, visible logs were capped back to the latest three lines per user request.
+  - Red test before the three-line cap: updated dialog expectations failed because old visible logs were still present.
+  - Fresh targeted command after the cap: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts --reporter=verbose`
+  - Targeted result: `2 passed` test files; `58 passed` tests.
+  - Fresh lint/type check after the cap: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `833 files checked`, no fixes applied.
+- Current APK rebuild and emulator smoke after this realtime-progress fix:
+  - Build command: `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build-readio-apk`
+  - Build result: exit 0; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`; rebuilt May 19 20:27 local; APK signature verified with v2/v3 schemes and signer count 1.
+  - Install command: `adb install -r "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+  - Launch command: `adb shell am force-stop com.ppg.readio && adb shell am start -W -n com.ppg.readio/.MainActivity`; result `Status: ok`, `LaunchState: COLD`, `Activity: com.ppg.readio/.MainActivity`.
+  - Emulator smoke opened `寻书` from the current-reading-card entry, verified the fullscreen search page with top safe-area spacing and placeholder `想读什么？书名、作者，或一个念头`.
+  - Query `a` showed the new realtime flow: initial `正在理解你的想法...` / `理解中`, then `正在为你寻书...` / `寻书中`; logs included `AI 正在理解书名、作者和语言偏好`, `已理解你的寻书意图`, `正在查找 Open Library、GitHub、Gutendex`, source result/timeout lines, `AI 正在合并重复结果`, and final no-result summary.
+  - Android Back returned from the search workspace to Library successfully.
+  - Smoke screenshots captured at `/tmp/readio-ai-search-open.png`, `/tmp/readio-ai-search-progress1.png`, `/tmp/readio-ai-search-progress2.png`, `/tmp/readio-ai-search-final.png`, and `/tmp/readio-after-ai-search-back.png`.
+
+## Latest local post-release fix: Android Back save path and delete-local-file option
+
+- Latest user-reported issues addressed in local source after the published alpha15 release:
+  - Android Back from the reader now dispatches `close-reader-to-library` instead of directly navigating to Library, so it reuses `ReaderContent`'s save-before-navigation path and avoids the Continue Reading card/bookshelf order jumping after the Library has already rendered.
+  - Book detail `Remove from Library` now shows an unchecked `Also delete the local file` checkbox; default removal preserves the local file, and checked removal deletes the local book file.
+  - Bookshelf multi-select delete uses the same unchecked-by-default option and resets it when opening, canceling, finishing, and receiving the external `delete-books` intent.
+  - Existing local-only deletion remains intact through the `local` delete action.
+- Red/green and regression verification:
+  - Reader Android Back regression test was verified red before the fix: it expected `close-reader-to-library` but the old Android Back path did not dispatch it.
+  - Delete-option regression test was verified red before the fix: `Remove from Library` and the `Also delete the local file` checkbox did not exist yet.
+  - Fresh test command after final fixes: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test -- src/__tests__/components/BookDetailModalDelete.test.tsx src/__tests__/app/library/epub-scan-import-flow.test.tsx src/__tests__/app/reader/reader-android-back.test.tsx src/__tests__/app/reader/reader-content-close-to-library.test.tsx`
+  - Result: `199 passed`, `2 skipped` test files; `3634 passed`, `7 skipped` tests.
+  - Fresh lint command: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`
+  - Result: `tsgo --noEmit && biome check .`, `833 files checked`, no fixes applied.
+- Current APK rebuild and emulator smoke:
+  - Build command: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build-readio-apk`
+  - Build result: exit 0 by output log; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`; rebuilt May 19 19:16 local; APK signature verified with v2/v3 schemes and signer count 1.
+  - Install command: `adb install -r "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+  - Launch command: `adb shell am force-stop com.ppg.readio && adb shell am start -W -n com.ppg.readio/.MainActivity`; result `Status: ok`, `LaunchState: COLD`, `Activity: com.ppg.readio/.MainActivity`.
+  - Reader Back smoke: opened `Alice's Adventures in Wonderland` from the bookshelf, pressed Android Back, and the UI returned to `书库`/`Continue Reading`/`书架` instead of exiting or bypassing the Library return path.
+  - Bookshelf multi-select delete smoke: long-pressed a book, tapped `删除`, and the confirmation showed `Also delete the local file` with `checked=false`.
+  - Book detail delete smoke: opened `书籍详情` → `删除书籍选项` → `Remove from Library`; the confirmation showed `Also delete the local file` with `checked=false`.
+- Focused code review found no blocking issues. Non-blocking follow-ups if desired: add deeper tests for `LibraryPage.handleBookDelete('both')` side effects, batch checkbox reset cases, and whether checked library removal should also clear cached cover files.
+
+## Latest local post-release fix: safe area and 红楼梦 scoring stability
+
+- Latest user-reported issues addressed in local source after the published alpha15 release:
+  - AI 搜书 fullscreen page reserves mobile safe-area space at the top/bottom via `env(safe-area-inset-*)` padding on the scrollable main surface.
+  - AI 搜书 progress/thinking card is quieter: smaller heading/badge/log text and tighter spacing; visible log live-region duplication was removed while keeping the sr-only polite status.
+  - Detail bottom sheet includes bottom safe-area padding for gesture/navigation bars.
+  - Chinese CJK queries preserve the original user query through Open Library and stabilize AI-scored results before dedupe/filtering, so searches like `红楼梦` do not lose the exact Chinese title to an AI-overrated English translation.
+  - Language stabilization no longer boosts same-language but irrelevant deterministic-score-0 results above the visible threshold. Example fixed: `redis设计与实现(第二版).pdf` / `剑指 Offer 题解...` no longer appear for `红楼梦` merely because they are Chinese.
+  - Result sorting now tie-breaks equal `aiScore` with deterministic `score`, so pure exact native-title matches rank before mixed translated/native titles such as `Dream of Red Mansions 红楼梦`.
+- Red/green evidence for the earlier language-stability fix:
+  - Red command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-service.test.ts -t "keeps Chinese exact-title results ahead"`
+  - Red result before fix: failed because final results kept `open-library:/works/english` and dropped `open-library:/works/chinese`.
+  - Green targeted command: `pnpm --dir apps/readest-app exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts`
+  - Green targeted result: `2 passed` test files, `49 passed` tests.
+- Red/green evidence for the latest scoring-precision fix:
+  - Red command: `pnpm --dir "apps/readest-app" exec vitest run src/__tests__/app/library/ai-book-search-service.test.ts --reporter=verbose`
+  - Red result before fix: new tests failed because an unrelated same-language GitHub result was still visible and a mixed translated/native title sorted before the pure native title.
+  - Green command: same focused service test command.
+  - Green result: `1 passed` test file, `42 passed` tests.
+- Fresh full source verification after the latest scoring-precision fix:
+  - `pnpm --dir "apps/readest-app" test -- --run`: `197 passed`, `2 skipped` test files; `3626 passed`, `7 skipped` tests.
+  - `pnpm --dir "apps/readest-app" lint`: `tsgo --noEmit && biome check .`, `831 files checked`, no fixes applied.
+
+## Latest local post-release fix: AI 搜书 recent-search snapshots
+
+- Latest user-requested `最近寻书` feature is implemented in local source after the published alpha15 release:
+  - Search completion saves a compact local result snapshot keyed by normalized query.
+  - History keeps up to 30 records, each with up to 30 result snapshots and the latest 3 progress events.
+  - Snapshots intentionally exclude UI-only import statuses, raw provider responses, prompts, and large/sensitive transient fields.
+  - The `最近寻书` button appears below the search input and opens a half-height standardized `Dialog` bottom sheet with drag handle/backdrop/Android Back behavior.
+  - Each row shows only query and `找到 N 本线索`; no timestamp/import state is shown.
+  - Tapping a row restores cached results without rerunning source/AI search.
+  - Row delete removes a single history entry; long-press/context-menu selection enables batch deletion.
+  - Review fix: history snapshot persistence is best-effort, so storage/quota failure no longer turns successful search results into an error state.
+  - Review fix: snapshot saving now uses a per-search/per-deep-search progress buffer, so restored history keeps the actual current-run source/AI progress events instead of stale React state.
+- Fresh focused verification after recent-search snapshots and review fixes:
+  - RED focused command before fix: `pnpm --dir "apps/readest-app" test src/__tests__/app/library/ai-book-search-dialog.test.tsx -- --runInBand`; result failed on the new history-save-failure and progress-buffer tests.
+  - Green focused command: `pnpm --dir "apps/readest-app" test src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-history-service.test.ts -- --runInBand`
+  - Result: `2 passed` test files; `38 passed` tests.
+  - `pnpm --dir "apps/readest-app" lint`
+  - Result: `tsgo --noEmit && biome check .`, `837 files checked`, no fixes applied.
+- Fresh full suite after recent-search review fixes:
+  - `pnpm --dir "apps/readest-app" test`
+  - Result: `202 passed`, `2 skipped` test files; `3678 passed`, `7 skipped` tests.
+- Current APK rebuild and emulator smoke after recent-search snapshots:
+  - Build command: `pnpm --dir "apps/readest-app" build-readio-apk`
+  - Build result: exit 0; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`; APK signature verified with v2/v3 schemes and signer count 1.
+  - Install command: `adb install -r "apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success` on `emulator-5554`.
+  - Launch command used after package-name confirmation: `adb shell am start -n com.ppg.readio/.MainActivity`.
+  - Smoke verified Library renders, current-reading-card `寻书` opens the fullscreen search page, `最近寻书` appears below the search box, and the empty history sheet uses the standardized bottom-sheet visual style with drag handle and backdrop.
+  - Live `Frankenstein` search completed to `7` results, `0` directly importable, and `2` source routes; visible progress logs stayed capped to the latest 3 lines.
+  - Opening `最近寻书` after the search showed one `Frankenstein` row with `找到 7 本线索` and a right-side delete button.
+  - Tapping the row restored the saved 7-result state without showing the active search flow again.
+  - Single-record deletion returned the history sheet to the empty state.
+  - Recent logcat for `com.ppg.readio` showed no fatal exception/crash; only emulator/input-method jank warnings were observed.
+  - Manual caveat: long-press batch deletion was covered by the fresh unit/UI test path; emulator smoke did not complete a clean two-record long-press batch scenario because the automated text-clear attempt concatenated a second query.
+
+- Local APK rebuild and emulator smoke after the latest scoring-precision fix:
+  - Build command: `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "apps/readest-app" build-readio-apk`
+  - Build result: exit 0; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`; signature verified with v2/v3 schemes and signer count 1.
+  - Install command: `adb install -r "apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+  - Launch command: `adb shell am force-stop com.ppg.readio && adb shell am start -W -n com.ppg.readio/.MainActivity`; result `Status: ok`, `LaunchState: COLD`, `Activity: com.ppg.readio/.MainActivity`.
+  - Fullscreen `寻书` page smoke: opened through the current-reading-card `寻书`; input bounds `[57,47][887,165]`, search button bounds `[905,47][1023,165]`, empty state present.
+  - Live `红楼梦` search smoke: final hierarchy `/tmp/readio-ai-search-results3-after-scoring-fix.xml` showed `6` results, `Open Library 6`, `GitHub 0`; top result was pure `红楼梦` (`相关度 99`), second was `Dream of Red Mansions 红楼梦` (`相关度 99`); irrelevant GitHub technical-book files were absent.
+- Distribution caveat: minor fixes stay on the current alpha unless the user decides a major feature iteration warrants a version bump. Before giving the user a refreshed APK or replacing a GitHub Release asset, rebuild from current source, regenerate checksum, install on emulator, and smoke-test the exact artifact.
+
+## Release validation for alpha15 APK
+
+- Published alpha15 APK validation was fresh at release time after the Readio-aligned UI, Android Back navigation, UI copy/scoring refinements, and runtime timeout fixes. Later post-release local scoring fixes are documented above and are not part of the already-published GitHub asset unless a new version is built and uploaded.
+- Runtime search hang fixes added after emulator smoke:
+  - AI scoring calls now pass an `AbortSignal` and timeout after 12s so an unavailable BYOK provider cannot block source results forever.
+  - Tier 1/Tier 2 source adapter calls are wrapped in an 8s timeout so a hung Open Library/Gutendex/GitHub/Internet Archive request cannot keep the search page in `搜索中` forever.
+  - Regression tests cover both cases in `src/__tests__/app/library/ai-book-search-service.test.ts`.
+- Fresh full source test after timeout fixes passed:
+  - `pnpm --dir apps/readest-app test`
+  - Result: `197 passed`, `2 skipped` test files; `3621 passed`, `7 skipped` tests.
+- Latest final APK build passed:
+  - `pnpm --dir apps/readest-app build-readio-apk`
+  - Artifact: `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`
+  - Rebuild time: May 19 03:40 local.
+  - Result: APK signature verified with v2/v3 schemes; artifact size `55,663,497` bytes.
+- Final emulator smoke after installing the final APK passed:
+  - `adb shell am force-stop com.ppg.readio && adb shell am start -n com.ppg.readio/.MainActivity` launched Library.
+  - Library home showed current-reading card with top-right `寻书` and bottom centered three-line CTA.
+  - Tapping actual `寻书` button center opened the fullscreen search workspace.
+  - Search page showed placeholder `想读什么？书名、作者，或一个念头` and idle empty state `从一个念头开始，去遇见一本书。`.
+  - Submitted query `alice`; search no longer hung. It completed to an analyzed no-results/external aggregation state after source timeout handling, showing `gutendex 搜索超时，先展示其他来源` when that source timed out.
+  - Android Back returned from the search workspace to Library.
+  - Smoke screenshots captured under `/tmp/readio-alpha15-*.png` during validation.
+- Rust/Tauri checks passed after adding the Rust toolchain bin path to `PATH` because the default shell could not find `cargo`:
+  - `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir apps/readest-app fmt:check`
+  - `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir apps/readest-app clippy:check`
+  - Result: both exited 0. `clippy` printed upstream dependency warnings, but the local package check passed with `-D warnings`.
+- Signed APK build passed:
+  - `pnpm --filter @readest/readest-app build-readio-apk`
+  - Artifact: `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`
+  - Latest rebuild time: May 18 15:29 local.
+  - Result: APK signature verified with v2/v3 schemes; artifact size about `53M`.
+- Emulator install/launch smoke passed:
+  - Installed exact rebuilt APK with `adb install -r ./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`.
+  - `adb shell am start -W -n com.ppg.readio/.MainActivity` launched `com.ppg.readio/.MainActivity`.
+  - Library home rendered with pure local search in the header and the unframed bookshelf footer CTA `找不到想看的书？` / `全网搜书`.
+  - `全网搜书` entry opened the full-screen/page-like workspace.
+- AI 搜书 emulator smoke evidence:
+  - Idle state had no example chips/prompts and no Beta badge.
+  - Search page top visible UI is only the input field; no visible title/header/close button.
+  - Input auto-focuses on open and shows the Android keyboard.
+  - First Android Back hides the keyboard while staying on the search workspace.
+  - Second Android Back returns to Library instead of exiting the app.
+  - Rebuilt back-fix screenshots were saved under `./temp/readio-emulator-ai-search-backfix-open.png`, `./temp/readio-emulator-backfix-after-first-back.png`, and `./temp/readio-emulator-backfix-after-second-back.png`.
+  - Focus check after the second Back still showed `com.ppg.readio/.MainActivity` foreground/focused.
+  - Final Android checks showed no Readio `FATAL EXCEPTION`, ANR, or crash evidence in the filtered recent logcat.
+  - Earlier same-alpha smoke tested query `Frankenstein epub`: Tier 1 search ran and returned source/network-dependent results; source-level tests still cover direct import, aggregation warning, deep search, and detail bottom sheet.
+- Smoke caveats:
+  - The final `Frankenstein epub` run produced no importable result, so the live direct-import path was not exercised in this emulator smoke. Source-level tests still cover the direct import call path.
+  - External browser handoff was not repeated in the final post-bottom-sheet-fix smoke; the copyright warning path itself was revalidated.
+  - Deep search was exercised in the same APK validation session before the bottom-sheet fix and completed to `搜索完成`; the final post-fix short smoke did not rerun it to save time because the fix only moved detail rendering and did not touch search services.
+
+## Published release
+
+- GitHub prerelease: `v0.1.0-alpha.15`
+- URL: `https://github.com/MrPPFruit/Readio/releases/tag/v0.1.0-alpha.15`
+- Uploaded assets:
+  - `readio-v0.1.0-alpha.15-android-arm64-release.apk`
+  - `readio-v0.1.0-alpha.15-android-arm64-release.apk.sha256`
+- Final APK path: `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`
+- SHA-256: `e0535d281d5e4dbd29aa34b0370adfefc1b16e905223c7690cb29106c8856a16`
+- GitHub asset digest reported by `gh release view -R MrPPFruit/Readio`: `sha256:e0535d281d5e4dbd29aa34b0370adfefc1b16e905223c7690cb29106c8856a16`
+- Checksum asset was downloaded back to `/tmp/readio-alpha15-release-verify/` and matched the local checksum content.
 
 ## Rules and gotchas
 
-- Project-level agent rules now live in `./CLAUDE.md`; read it before code, build, or release work.
-- Release distribution rule:
-  - GitHub Release asset is the public APK source of truth.
-  - Alpha releases must be GitHub prereleases with title format `Readio v0.1.0-alpha.N`, tag format `v0.1.0-alpha.N`, and APK asset format `readio-v0.1.0-alpha.N-android-arm64-release.apk` plus `.sha256`.
-  - Do not upload unrelated assets, especially KOReader plugin zips, to Readio APK releases.
-  - Avoid duplicate releases/drafts for the same alpha tag. If duplicates exist, clean them before publishing.
-  - Proven upload path is local/manual `gh release upload`; GitHub Actions release workflow is not currently the source of truth for alpha APK publishing.
-  - If a large APK upload stalls, do not repeatedly recreate a clean release. Check current assets, keep the correct prerelease/tag, and retry only missing assets after network/proxy changes.
-  - After uploading an APK, download it back from GitHub Release and verify SHA-256 against the pre-upload local artifact.
-  - Do not infer a published APK hash from a later local rebuild; Android builds may not be byte-for-byte reproducible and local `apks/` outputs can be overwritten.
-  - If regression testing the package users receive, install the GitHub-downloaded APK rather than whatever local APK happens to be newest.
-- Version bump rule:
-  - Every APK given to the user or promoted for real-device testing must bump `apps/readest-app/package.json` prerelease and Android `versionCode` in `apps/readest-app/src-tauri/tauri.conf.json`.
-  - `versionCode = major*1000000 + minor*10000 + patch*1000 + alphaN`; example alpha.13 is `1001013`.
-- Build rule:
-  - Prefer `pnpm --filter @readest/readest-app build-readio-apk` for signed release APKs into `./apks/`.
-  - Clean host Next private env vars if running raw builds: unset `__NEXT_PRIVATE_STANDALONE_CONFIG`, `__NEXT_PRIVATE_ORIGIN`, `NEXT_PRIVATE_STANDALONE`, `TURBOPACK`.
-  - Android/Tauri builds may need the stable Rust toolchain first in `PATH`.
-  - Use generated Android Gradle wrapper / Tauri flow, not an arbitrary system Gradle installation.
-- Android validation rule:
-  - Before giving the user an APK, install it on emulator and perform basic functional verification.
-  - Check `adb devices` first and keep adb/emulator commands short or backgrounded.
-- Product/UI rule:
-  - Readio UI must use theme tokens; avoid fixed colors.
-  - Reader AI should remain an in-reader bottom sheet / full panel interaction, not a generic chat page or system dialog.
-  - Reader AI retrieval/answer-quality roadmap is documented in `./READIO_AI_RETRIEVAL_ROADMAP.md`; future RAG work should start there before implementation.
-  - Readio mainline is this repo/branch; do not use old `feature/m0-spikes` as PR or release base unless explicitly inspecting archive history.
-
-## Current blockers and risks
-
-- Reader AI/RAG Phase A source changes are committed.
-- Phase B classifier + prompt/context metadata work is committed.
-- Android/Tauri empty-answer fix is committed as `f7a045a0 fix(ai): handle empty Reader AI provider streams`.
-- Current active work is the Readio + MiMo + NotebookLM quality-test setup. Page-boundary/MiMo formatting fixes are committed; spoiler boundary hardening has passed RED/GREEN focused tests, lint, and full app tests.
-- NotebookLM CLI comparison is usable via temporary venv command: `/tmp/notebooklm-py-041/bin/notebooklm`. `Readio` notebook ID is `1f45c537-1155-4b4f-9ae8-436c5151ef61`; it contains source 《诡秘之主》精校版全文 EPUB with status `ready`.
-- MiMo provider in emulator was updated with the user-provided valid token and a direct probe returned normal non-streaming text. Never print or persist the raw token in docs/logs.
-- Readio simulator quality test exposed a key coordinate mismatch: displayed reader page around `3104` does not match AI chunk page boundary around `1988–1990`. This was fixed by `getReflowableAIPageBoundary()` / `currentAIPage` and committed in `ceef48e5`.
-- Readio simulator Q2 then exposed a spoiler-source leak: with spoiler protection on, stale/estimated low page metadata allowed a later book-order chunk (`第一百三十四章 超过一分钟了`) into the final model prompt. The hardening filters by `sortIndex` absolute book offset when available.
-- Phase B design decision: spoiler protection is not a question intent. Treat it as a source scope (`read_so_far` vs `whole_book_allowed`) that applies to every question intent.
-- Next RAG work should use `intent + scope` to vary retrieval strategy, starting with entity lookup, selected-text explanation, and current recap.
-- `.codepilot-uploads/` and `temp/` are untracked and likely unrelated; avoid accidental commit.
-- Android generated files can be overwritten by `tauri android init` or icon generation. Recheck package paths, app label, and launcher resources after regeneration.
-- Reader missing-source recovery still relies on a timed toast callback that returns to library after 5 seconds; if user reports confusion, replace with an explicit action in a focused batch.
-- Footnote popup still uses an internal scrolled renderer as a non-reading-mode exception. Treat separately if product later requires absolutely no scrolling renderers.
-
-## Next actions
-
-1. Rebuild/install only if continuing emulator quality validation or producing a new APK. The source-level fix already passed focused tests, lint, and full tests.
-2. Resume Readio vs NotebookLM quality test after installing the hardening fix in the emulator. Retest Q2 `克莱恩是谁？请按当前阅读进度简短回答并给出依据。` first; expected result: no `夏洛克·莫里亚蒂`, no `贝克兰德`, no future-chapter citations under spoiler protection.
-3. Use 《诡秘之主》 in NotebookLM `Readio` notebook for the baseline. For NotebookLM CLI, use `/tmp/notebooklm-py-041/bin/notebooklm ask -n 1f45c537-1155-4b4f-9ae8-436c5151ef61 "<question>" --json`.
-4. Continue the standard question set only after Q2 passes in Readio emulator: `白银城是什么地方？`, `这章目前讲了什么？`, `前面发生了什么？`, `这句话是什么意思？`, `最后谁是凶手？` with spoiler on/off, and same-conversation spoiler toggle.
-5. If extending Reader AI retrieval/RAG beyond this fix, read `./READIO_AI_RETRIEVAL_ROADMAP.md` first; discuss before introducing heavier embedding, long preprocessing, or deep-analysis defaults.
-6. If preparing alpha.14 or later, bump version and `versionCode` first, then build with `build-readio-apk`, install on emulator, smoke test, create a prerelease, upload APK plus `.sha256` with local `gh release upload`, download it back, and verify SHA-256.
-7. If needing historical context, read `./HANDOFF_PRE_ALPHA10_ARCHIVE.md` instead of expanding this handoff.
+- Readio mainline is this repo/branch; do not use old `feature/m0-spikes` as PR/release base unless explicitly inspecting history.
+- Readio UI must use theme tokens; avoid fixed colors.
+- AI 搜书 must reuse the existing BYOK provider path (`getAIProvider(settings)`), not a MiMo-specific route.
+- AI intent/scoring must never decide URL/download safety.
+- Direct downloads are only allowed through deterministic allowlist and direct-open link/result risk.
+- Aggregation sites are external search only; never direct download from aggregation.
+- `z-lib.is` is blocked because fake/risky domains exist; domain verification must be actual page/content validation, not just HTTP 200.
+- Release distribution rule: GitHub Release asset is the public APK source of truth.
+- Versioning preference: only major feature upgrade iterations should bump alpha versions, and the user decides when to bump. Minor fixes stay on the current alpha. For refreshed distribution, rebuild, regenerate checksum, emulator-smoke-test the exact artifact, then replace/upload only with user approval.
+- Android validation rule: before giving the user an APK, install it on emulator and perform basic functional verification.
 
 ## Key files
 
 - `./HANDOFF.md`
-- `./HANDOFF_PRE_ALPHA10_ARCHIVE.md`
 - `./apps/readest-app/package.json`
 - `./apps/readest-app/src-tauri/tauri.conf.json`
-- `./apps/readest-app/src/config/features.ts`
-- `./READIO_UI_DESIGN.md`
-- `./READIO_AI_RETRIEVAL_ROADMAP.md`
-- `./apps/readest-app/src/services/ai/utils/chunker.ts`
-- `./apps/readest-app/src/services/ai/search/bm25.ts`
-- `./apps/readest-app/src/services/ai/search/contextPack.ts`
-- `./apps/readest-app/src/services/ai/questionRouting.ts`
-- `./apps/readest-app/src/services/ai/prompts.ts`
-- `./apps/readest-app/src/services/ai/readerChatService.ts`
-- `./apps/readest-app/src/services/ai/adapters/TauriChatAdapter.ts`
-- `./apps/readest-app/src/app/api/ai/chat/route.ts`
-- `./apps/readest-app/src/app/reader/utils/pageInfo.ts`
-- `./apps/readest-app/src/app/reader/components/ai/ReaderAIAssistant.tsx`
-- `./apps/readest-app/src/app/reader/components/ai/ReaderAIAnswerPanel.tsx`
-- `./apps/readest-app/src/__tests__/ai/question-routing.test.ts`
-- `./apps/readest-app/src/__tests__/ai/openai-compatible-model.test.ts`
-- `./apps/readest-app/src/__tests__/ai/reader-chat-service.test.ts`
-- `./apps/readest-app/src/__tests__/ai/reader-ai-assistant.test.tsx`
-- `./apps/readest-app/src/__tests__/ai/reader-ai-panels.test.tsx`
-- `./apps/readest-app/src/__tests__/app/reader/page-info.test.ts`
-- `./apps/readest-app/src/__tests__/ai/context-pack.test.ts`
-- `./CLAUDE.md`
-- `./apks/readio-v0.1.0-alpha.13-android-arm64-release.apk`
+- `./apps/readest-app/src/app/library/components/LibraryHeader.tsx`
+- `./apps/readest-app/src/app/library/components/Bookshelf.tsx`
+- `./apps/readest-app/src/app/library/components/ContinueReadingCard.tsx`
+- `./apps/readest-app/src/app/library/components/AIBookSearchDialog.tsx`
+- `./apps/readest-app/src/app/reader/components/Reader.tsx`
+- `./apps/readest-app/src/app/reader/components/ReaderContent.tsx`
+- `./apps/readest-app/src/components/Providers.tsx`
+- `./apps/readest-app/src/services/diagnostics/types.ts`
+- `./apps/readest-app/src/services/diagnostics/redact.ts`
+- `./apps/readest-app/src/services/diagnostics/logger.ts`
+- `./apps/readest-app/src/__tests__/services/diagnostics/redact.test.ts`
+- `./apps/readest-app/src/__tests__/services/diagnostics/logger.test.ts`
+- `./apps/readest-app/src/__tests__/services/settings-diagnostics.test.ts`
+- `./apps/readest-app/src/__tests__/app/library/settings-menu-diagnostics.test.tsx`
+- `./apps/readest-app/src/components/metadata/BookDetailModal.tsx`
+- `./apps/readest-app/src/components/metadata/BookDetailView.tsx`
+- `./apps/readest-app/src/components/Alert.tsx`
+- `./apps/readest-app/src/types/book.ts`
+- `./apps/readest-app/src/app/library/page.tsx`
+- `./apps/readest-app/src/services/aiBookSearch/searchService.ts`
+- `./apps/readest-app/src/services/aiBookSearch/download.ts`
+- `./apps/readest-app/src/services/aiBookSearch/domainRegistry.ts`
+- `./apps/readest-app/src/services/aiBookSearch/dedupe.ts`
+- `./apps/readest-app/src/services/aiBookSearch/scoring.ts`
+- `./apps/readest-app/src/services/aiBookSearch/noiseFilter.ts`
+- `./apps/readest-app/src/services/aiBookSearch/sources/gutendex.ts`
+- `./apps/readest-app/src/services/aiBookSearch/sources/openLibrary.ts`
+- `./apps/readest-app/src/services/aiBookSearch/sources/github.ts`
+- `./apps/readest-app/src/services/aiBookSearch/sources/internetArchive.ts`
+- `./apps/readest-app/src/__tests__/app/library/ai-book-search-dialog.test.tsx`
+- `./apps/readest-app/src/__tests__/app/library/ai-book-search-service.test.ts`
+- `./apps/readest-app/src/__tests__/app/library/library-header.test.tsx`
+- `./apps/readest-app/src/__tests__/components/BookDetailModalDelete.test.tsx`
+- `./apps/readest-app/src/__tests__/app/reader/reader-android-back.test.tsx`
+- `./apps/readest-app/src/__tests__/app/reader/reader-content-close-to-library.test.tsx`
+- `./apps/readest-app/src/__tests__/config/readio-android-package.test.ts`

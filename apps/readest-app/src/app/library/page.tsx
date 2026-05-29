@@ -6,7 +6,7 @@ import { MdChevronRight } from 'react-icons/md';
 import { useState, useRef, useEffect, Suspense, useCallback } from 'react';
 import { ReadonlyURLSearchParams, useSearchParams } from 'next/navigation';
 
-import { Book } from '@/types/book';
+import { Book, DeleteBookOptions } from '@/types/book';
 import { AppService, DeleteAction } from '@/types/system';
 import { buildBookLookupIndex } from '@/services/bookService';
 import { navigateToLibrary, navigateToReader } from '@/utils/nav';
@@ -87,7 +87,9 @@ import ModalPortal from '@/components/ModalPortal';
 import TransferQueuePanel from './components/TransferQueuePanel';
 import ContinueReadingCard from './components/ContinueReadingCard';
 import LibraryEmptyState from './components/LibraryEmptyState';
+import AIBookSearchDialog from './components/AIBookSearchDialog';
 import EpubScanImportDialog, { type EpubScanImportResult } from './components/EpubScanImportDialog';
+import { logDiagnosticError, logDiagnosticEvent } from '@/services/diagnostics/logger';
 
 const LibraryPageWithSearchParams = () => {
   const searchParams = useSearchParams();
@@ -137,6 +139,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     [key: string]: number | null;
   }>({});
   const [epubScanDialogOpen, setEpubScanDialogOpen] = useState(false);
+  const [isAIBookSearchOpen, setIsAIBookSearchOpen] = useState(false);
   const [isScanningEpubs, setIsScanningEpubs] = useState(false);
   const [epubScanScannedCount, setEpubScanScannedCount] = useState(0);
   const [epubScanFiles, setEpubScanFiles] = useState<SelectedFile[]>([]);
@@ -620,8 +623,15 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       } catch (error) {
         const filename = typeof file === 'string' ? file : file.name;
         const baseFilename = getFilename(filename);
+        const extension = baseFilename.includes('.')
+          ? baseFilename.split('.').pop()?.toLowerCase() || ''
+          : '';
         const errorMessage = error instanceof Error ? _(getImportErrorMessage(error.message)) : '';
         failedImports.push({ filename: baseFilename, errorMessage });
+        void logDiagnosticError('library.import_failed', error, {
+          filenameLength: baseFilename.length,
+          extension,
+        });
         console.error('Failed to import book:', filename, error);
         return null;
       }
@@ -646,6 +656,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     }
 
     pushLibrary();
+
+    void logDiagnosticEvent('library.import_completed', 'info', {
+      attemptedCount: files.length,
+      successCount: successfulImports.length,
+      failedCount: failedImports.length,
+    });
 
     if (showToast && failedImports.length > 0) {
       const filenames = failedImports.map((f) => f.filename);
@@ -719,7 +735,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
             }),
           });
           return true;
-        } catch {
+        } catch (error) {
+          void logDiagnosticError('library.download_failed', error, {
+            bookHashPresent: Boolean(book.hash),
+            redownload,
+            queued,
+          });
           eventDispatcher.dispatch('toast', {
             message: _('Failed to download book: {{title}}', {
               title: book.title,
@@ -749,7 +770,13 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   );
 
   const handleBookDelete = (deleteAction: DeleteAction) => {
-    return async (book: Book, syncBooks = true) => {
+    return async (
+      book: Book,
+      syncBooksOrOptions: boolean | DeleteBookOptions = true,
+      options?: DeleteBookOptions,
+    ) => {
+      const syncBooks = typeof syncBooksOrOptions === 'boolean' ? syncBooksOrOptions : true;
+      const deleteOptions = typeof syncBooksOrOptions === 'boolean' ? options : syncBooksOrOptions;
       const deletionMessages = {
         both: _('Book deleted: {{title}}', { title: book.title }),
         cloud: _('Deleted cloud backup of the book: {{title}}', { title: book.title }),
@@ -762,14 +789,20 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       };
 
       try {
-        // Handle local deletion immediately
-        if (deleteAction === 'local' || deleteAction === 'both') {
+        if (deleteAction === 'local') {
           await appService?.deleteBook(book, 'local');
-          if (deleteAction === 'both') {
-            book.deletedAt = Date.now();
+          await updateBook(envConfig, book);
+          clearBookData(book.hash);
+          if (syncBooks) pushLibrary();
+        }
+
+        if (deleteAction === 'both') {
+          if (deleteOptions?.deleteLocalFile) {
+            await appService?.deleteBook(book, 'local');
             book.downloadedAt = null;
             book.coverDownloadedAt = null;
           }
+          book.deletedAt = Date.now();
           await updateBook(envConfig, book);
           clearBookData(book.hash);
           if (syncBooks) pushLibrary();
@@ -829,6 +862,13 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     metadata.coverImageFile = undefined;
     await updateBook(envConfig, book);
   };
+
+  const handleImportRemoteBook = async (file: File) =>
+    importBooks([{ file }], undefined, {
+      showLoading: false,
+      groupByBasePath: false,
+      clearGroup: true,
+    });
 
   const handleImportBooksFromFiles = async () => {
     setIsSelectMode(false);
@@ -1067,6 +1107,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 <ContinueReadingCard
                   book={continueReadingBook}
                   onOpen={handleOpenContinueReadingBook}
+                  onOpenAIBookSearch={() => setIsAIBookSearchOpen(true)}
                 />
               )}
               <Bookshelf
@@ -1084,6 +1125,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 handleLibraryNavigation={handleLibraryNavigation}
                 booksTransferProgress={booksTransferProgress}
                 handlePushLibrary={pushLibrary}
+                onOpenAIBookSearch={() => setIsAIBookSearchOpen(true)}
               />
             </div>
           </div>
@@ -1109,6 +1151,15 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       {isTransferQueueOpen && (
         <ModalPortal>
           <TransferQueuePanel />
+        </ModalPortal>
+      )}
+      {isAIBookSearchOpen && (
+        <ModalPortal showOverlay={false}>
+          <AIBookSearchDialog
+            settings={settings.aiSettings}
+            onClose={() => setIsAIBookSearchOpen(false)}
+            onImportRemoteBook={handleImportRemoteBook}
+          />
         </ModalPortal>
       )}
       {epubScanDialogOpen && (

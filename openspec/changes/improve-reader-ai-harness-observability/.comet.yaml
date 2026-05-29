@@ -1,0 +1,14 @@
+workflow: full
+phase: build
+build_mode: executing-plans
+isolation: branch
+verify_mode: full
+design_doc: docs/superpowers/specs/2026-05-29-reader-ai-harness-observability-design.md
+plan: docs/superpowers/plans/2026-05-29-reader-ai-harness-observability-plan.md
+verify_result: fail
+verification_report: null
+branch_status: pending
+verified_at: null
+archived: false
+handoff_context: openspec/changes/improve-reader-ai-harness-observability/.comet/handoff/design-context.json
+handoff_hash: 52061919ed18c3105b09125ae87c083cd084caf4b242acd5eba599f764a434cf

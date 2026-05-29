@@ -1,8 +1,6 @@
-import clsx from 'clsx';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MdClose } from 'react-icons/md';
+import React, { useEffect, useMemo, useState } from 'react';
 
-import type { Insets } from '@/types/misc';
+import Dialog from '@/components/Dialog';
 import type { ReaderAIEntrySource } from '@/types/readerAI';
 import {
   ReaderAIComposer,
@@ -12,10 +10,9 @@ import {
 
 interface ReaderAIAskBoxProps {
   source: ReaderAIEntrySource;
-  gridInsets?: Insets;
   initialQuestion?: string;
-  sectionLabel?: string;
   suggestions?: string[];
+  suggestionsLoading?: boolean;
   spoilerProtection?: boolean;
   onSpoilerProtectionChange?: (enabled: boolean) => void;
   onSubmit: (question: string) => void;
@@ -27,18 +24,15 @@ const controlSuggestions = ['前面发生了什么？', '这个人物是谁？',
 
 const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
   source,
-  gridInsets,
   initialQuestion = '',
-  sectionLabel,
   suggestions: generatedSuggestions,
+  suggestionsLoading = false,
   spoilerProtection = true,
   onSpoilerProtectionChange,
   onSubmit,
   onClose,
 }) => {
   const [question, setQuestion] = useState(initialQuestion);
-  const dialogRef = useRef<HTMLElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const suggestions = useMemo(
     () =>
       generatedSuggestions?.length
@@ -53,80 +47,32 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
     setQuestion(initialQuestion);
   }, [initialQuestion]);
 
-  useEffect(() => {
-    const previousFocus =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    closeButtonRef.current?.focus({ preventScroll: true });
-
-    return () => previousFocus?.focus({ preventScroll: true });
-  }, []);
-
   const handleSubmit = (value = question) => {
     const trimmed = value.trim();
     if (!trimmed) return;
     onSubmit(trimmed);
   };
 
-  const handleBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.target === event.currentTarget) onClose();
-  };
-
-  const handleDialogKeyDown = (event: React.KeyboardEvent) => {
-    event.stopPropagation();
-    if (event.key === 'Escape') {
-      onClose();
-      return;
-    }
-    if (event.key !== 'Tab' || !dialogRef.current) return;
-
-    const focusableElements = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
-      ),
-    );
-    const firstElement = focusableElements[0];
-    const lastElement = focusableElements[focusableElements.length - 1];
-    if (!firstElement || !lastElement) return;
-
-    if (!dialogRef.current.contains(document.activeElement)) {
-      event.preventDefault();
-      (event.shiftKey ? lastElement : firstElement).focus();
-    } else if (event.shiftKey && document.activeElement === firstElement) {
-      event.preventDefault();
-      lastElement.focus();
-    } else if (!event.shiftKey && document.activeElement === lastElement) {
-      event.preventDefault();
-      firstElement.focus();
-    }
-  };
-
   return (
-    <div
-      className='bg-base-content/20 absolute inset-0 z-50 flex items-end backdrop-blur-[1px]'
-      style={{
-        paddingRight: 12 + (gridInsets?.right ?? 0),
-        paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + ${8 + (gridInsets?.bottom ?? 0) * 0.33}px)`,
-        paddingLeft: 12 + (gridInsets?.left ?? 0),
-      }}
-      onClick={handleBackdropClick}
+    <Dialog
+      isOpen={true}
+      title='问问这本书'
+      snapHeight={0.52}
+      ariaDescribedBy='reader-ai-ask-description'
+      dragHandleLabel='下拉关闭 AI 提问框'
+      header={<div className='sr-only'>问问这本书</div>}
+      className='modal-open absolute inset-0 z-50'
+      bgClassName='bg-base-content/20 backdrop-blur-[1px]'
+      boxClassName='border-base-content/10 bg-base-100/95 shadow-2xl backdrop-blur-md eink:border-base-content eink:bg-base-100 eink:shadow-none eink:backdrop-blur-0 sm:max-w-md'
+      contentClassName='!my-0 !px-2 !pb-2 !pt-0'
+      onClose={onClose}
     >
       <section
-        ref={dialogRef}
-        className={clsx(
-          'border-base-content/10 bg-base-100/95 text-base-content w-full rounded-[1.5rem] border p-4 shadow-2xl backdrop-blur-md',
-          'eink:border-base-content eink:bg-base-100 eink:shadow-none eink:backdrop-blur-0',
-        )}
-        role='dialog'
-        aria-modal='true'
+        className='text-base-content flex min-h-full flex-col p-2'
         aria-labelledby='reader-ai-ask-title'
         aria-describedby='reader-ai-ask-description'
-        tabIndex={-1}
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={handleDialogKeyDown}
       >
-        <div className='bg-base-content/20 mx-auto mb-3 h-1 w-10 rounded-full' aria-hidden='true' />
-        <div className='mb-4 flex items-start justify-between gap-2'>
+        <div className='mb-1.5 flex items-start justify-between gap-2'>
           <div className='min-w-0 flex-1'>
             <p className='text-primary/80 mb-1 font-sans text-[11px] font-semibold uppercase tracking-wide'>
               Reader AI
@@ -134,17 +80,6 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
             <h2 id='reader-ai-ask-title' className='font-sans text-lg font-semibold leading-tight'>
               问问这本书
             </h2>
-            <p
-              id='reader-ai-ask-description'
-              className='text-base-content/60 mt-1 font-sans text-xs leading-5'
-            >
-              默认只根据你读到的位置回答。
-            </p>
-            {sectionLabel && (
-              <p className='text-base-content/60 mt-1 line-clamp-1 font-sans text-xs leading-5'>
-                当前位置：{sectionLabel}
-              </p>
-            )}
           </div>
           <div className='flex shrink-0 items-center gap-1'>
             <ReaderAISpoilerGuard
@@ -152,25 +87,41 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
               onChange={(enabled) => onSpoilerProtectionChange?.(enabled)}
               variant='badge'
             />
-            <button
-              ref={closeButtonRef}
-              type='button'
-              onClick={onClose}
-              className='btn btn-ghost btn-circle text-base-content/70 h-11 min-h-11 w-11 shrink-0'
-              aria-label='关闭 AI 提问框'
-            >
-              <MdClose size={20} aria-hidden='true' />
-            </button>
           </div>
         </div>
+        <p
+          id='reader-ai-ask-description'
+          className='text-base-content/60 mb-2 w-full font-sans text-xs leading-5'
+        >
+          防剧透开启时，只根据你已读到的位置回答；关闭后可能包含未读内容。
+        </p>
 
-        <div className='mb-3'>
+        <div className='mb-2'>
+          {suggestionsLoading && (
+            <div
+              className='text-base-content/55 mb-2 flex items-center gap-2 px-1 text-xs leading-5'
+              role='status'
+              aria-live='polite'
+            >
+              <span>正在猜你想问什么</span>
+              <span className='flex gap-1' aria-hidden='true'>
+                {[0, 1, 2].map((index) => (
+                  <span
+                    key={index}
+                    data-testid='reader-ai-suggestion-loading-dot'
+                    className='bg-primary/60 h-1.5 w-1.5 animate-pulse rounded-full motion-reduce:animate-none'
+                    style={{ animationDelay: `${index * 120}ms` }}
+                  />
+                ))}
+              </span>
+            </div>
+          )}
           <ReaderAISuggestionRail
             suggestions={suggestions}
             selectedValue={question}
             ariaLabel='建议问题'
             layout='stack'
-            onSelect={handleSubmit}
+            onSelect={setQuestion}
           />
         </div>
 
@@ -181,9 +132,10 @@ const ReaderAIAskBox: React.FC<ReaderAIAskBoxProps> = ({
           placeholder='问一个关于当前内容的问题'
           inputLabel='输入你的问题'
           submitLabel='提问'
+          className='mt-auto'
         />
       </section>
-    </div>
+    </Dialog>
   );
 };
 

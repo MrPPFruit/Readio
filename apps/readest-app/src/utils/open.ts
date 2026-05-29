@@ -1,6 +1,14 @@
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { isTauriAppPlatform } from '@/services/environment';
 
+export const openExternalUrl = async (url: string) => {
+  if (isTauriAppPlatform()) {
+    await openUrl(url);
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+};
+
 export const interceptWindowOpen = () => {
   const windowOpen = window.open;
   globalThis.open = function (

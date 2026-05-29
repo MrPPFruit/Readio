@@ -1,4 +1,12 @@
-import { TextChunk, ScoredChunk, BookIndexMeta, AIConversation, AIMessage } from '../types';
+import type { AIBookSearchHistoryRecord } from '@/services/aiBookSearch/types';
+import {
+  TextChunk,
+  ScoredChunk,
+  BookIndexMeta,
+  AIConversation,
+  AIMessage,
+  EntitySidecarIndex,
+} from '../types';
 import { aiLogger } from '../logger';
 import { createBM25Index, isChunkWithinPageBoundary, searchBM25Index } from '../search/bm25';
 
@@ -6,12 +14,14 @@ import { createBM25Index, isChunkWithinPageBoundary, searchBM25Index } from '../
 const lunr = require('lunr') as typeof import('lunr');
 
 const DB_NAME = 'readest-ai';
-const DB_VERSION = 3;
+const DB_VERSION = 5;
 const CHUNKS_STORE = 'chunks';
 const META_STORE = 'bookMeta';
 const BM25_STORE = 'bm25Indices';
+const ENTITY_SIDECARS_STORE = 'entitySidecars';
 const CONVERSATIONS_STORE = 'conversations';
 const MESSAGES_STORE = 'messages';
+const BOOK_SEARCH_HISTORY_STORE = 'bookSearchHistory';
 
 interface GetConversationsOptions {
   includeArchived?: boolean;
@@ -44,6 +54,7 @@ class AIStore {
   private chunkCache = new Map<string, TextChunk[]>();
   private indexCache = new Map<string, lunr.Index>();
   private metaCache = new Map<string, BookIndexMeta>();
+  private entitySidecarCache = new Map<string, EntitySidecarIndex>();
   private conversationCache = new Map<string, AIConversation[]>();
   private archivedConversationCache = new Map<string, AIConversation[]>();
 
@@ -59,6 +70,7 @@ class AIStore {
     this.chunkCache.clear();
     this.indexCache.clear();
     this.metaCache.clear();
+    this.entitySidecarCache.clear();
     this.conversationCache.clear();
     this.archivedConversationCache.clear();
     await this.openDB();
@@ -96,6 +108,8 @@ class AIStore {
           db.createObjectStore(META_STORE, { keyPath: 'bookHash' });
         if (!db.objectStoreNames.contains(BM25_STORE))
           db.createObjectStore(BM25_STORE, { keyPath: 'bookHash' });
+        if (!db.objectStoreNames.contains(ENTITY_SIDECARS_STORE))
+          db.createObjectStore(ENTITY_SIDECARS_STORE, { keyPath: 'bookHash' });
 
         // v3: conversation history stores
         if (!db.objectStoreNames.contains(CONVERSATIONS_STORE)) {
@@ -105,6 +119,11 @@ class AIStore {
         if (!db.objectStoreNames.contains(MESSAGES_STORE)) {
           const msgStore = db.createObjectStore(MESSAGES_STORE, { keyPath: 'id' });
           msgStore.createIndex('conversationId', 'conversationId', { unique: false });
+        }
+        if (!db.objectStoreNames.contains(BOOK_SEARCH_HISTORY_STORE)) {
+          const historyStore = db.createObjectStore(BOOK_SEARCH_HISTORY_STORE, { keyPath: 'id' });
+          historyStore.createIndex('updatedAt', 'updatedAt', { unique: false });
+          historyStore.createIndex('normalizedQuery', 'normalizedQuery', { unique: false });
         }
       };
     });
@@ -304,7 +323,10 @@ class AIStore {
   async clearBook(bookHash: string): Promise<void> {
     const db = await this.openDB();
     return new Promise((resolve, reject) => {
-      const tx = db.transaction([CHUNKS_STORE, META_STORE, BM25_STORE], 'readwrite');
+      const tx = db.transaction(
+        [CHUNKS_STORE, META_STORE, BM25_STORE, ENTITY_SIDECARS_STORE],
+        'readwrite',
+      );
       const cursor = tx.objectStore(CHUNKS_STORE).index('bookHash').openCursor(bookHash);
       cursor.onsuccess = (e) => {
         const c = (e.target as IDBRequest<IDBCursorWithValue>).result;
@@ -315,10 +337,58 @@ class AIStore {
       };
       tx.objectStore(META_STORE).delete(bookHash);
       tx.objectStore(BM25_STORE).delete(bookHash);
+      tx.objectStore(ENTITY_SIDECARS_STORE).delete(bookHash);
       tx.oncomplete = () => {
         this.chunkCache.delete(bookHash);
         this.indexCache.delete(bookHash);
         this.metaCache.delete(bookHash);
+        this.entitySidecarCache.delete(bookHash);
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async saveEntitySidecar(bookHash: string, sidecar: EntitySidecarIndex): Promise<void> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(ENTITY_SIDECARS_STORE, 'readwrite');
+      tx.objectStore(ENTITY_SIDECARS_STORE).put({ ...sidecar, bookHash });
+      tx.oncomplete = () => {
+        this.entitySidecarCache.set(bookHash, { ...sidecar, bookHash });
+        resolve();
+      };
+      tx.onerror = () => {
+        aiLogger.store.error('saveEntitySidecar', tx.error?.message || 'TX error');
+        reject(tx.error);
+      };
+    });
+  }
+
+  async getEntitySidecar(bookHash: string): Promise<EntitySidecarIndex | null> {
+    if (this.entitySidecarCache.has(bookHash)) return this.entitySidecarCache.get(bookHash)!;
+    const db = await this.openDB();
+    return new Promise((resolve) => {
+      const req = db
+        .transaction(ENTITY_SIDECARS_STORE, 'readonly')
+        .objectStore(ENTITY_SIDECARS_STORE)
+        .get(bookHash);
+      req.onsuccess = () => {
+        const sidecar = req.result as EntitySidecarIndex | undefined;
+        if (sidecar) this.entitySidecarCache.set(bookHash, sidecar);
+        resolve(sidecar ?? null);
+      };
+      req.onerror = () => resolve(null);
+    });
+  }
+
+  async clearEntitySidecar(bookHash: string): Promise<void> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(ENTITY_SIDECARS_STORE, 'readwrite');
+      tx.objectStore(ENTITY_SIDECARS_STORE).delete(bookHash);
+      tx.oncomplete = () => {
+        this.entitySidecarCache.delete(bookHash);
         resolve();
       };
       tx.onerror = () => reject(tx.error);
@@ -474,6 +544,64 @@ class AIStore {
       };
       tx.onerror = () => {
         aiLogger.store.error('updateConversationArchived', tx.error?.message || 'TX error');
+        reject(tx.error);
+      };
+    });
+  }
+
+  async saveBookSearchHistoryRecord(record: AIBookSearchHistoryRecord): Promise<void> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(BOOK_SEARCH_HISTORY_STORE, 'readwrite');
+      tx.objectStore(BOOK_SEARCH_HISTORY_STORE).put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => {
+        aiLogger.store.error('saveBookSearchHistoryRecord', tx.error?.message || 'TX error');
+        reject(tx.error);
+      };
+    });
+  }
+
+  async getBookSearchHistoryRecords(): Promise<AIBookSearchHistoryRecord[]> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const req = db
+        .transaction(BOOK_SEARCH_HISTORY_STORE, 'readonly')
+        .objectStore(BOOK_SEARCH_HISTORY_STORE)
+        .getAll();
+      req.onsuccess = () => {
+        const records = (req.result as AIBookSearchHistoryRecord[]).sort(
+          (a, b) => b.updatedAt - a.updatedAt,
+        );
+        resolve(records);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async deleteBookSearchHistoryRecord(id: string): Promise<void> {
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(BOOK_SEARCH_HISTORY_STORE, 'readwrite');
+      tx.objectStore(BOOK_SEARCH_HISTORY_STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => {
+        aiLogger.store.error('deleteBookSearchHistoryRecord', tx.error?.message || 'TX error');
+        reject(tx.error);
+      };
+    });
+  }
+
+  async deleteBookSearchHistoryRecords(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const db = await this.openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(BOOK_SEARCH_HISTORY_STORE, 'readwrite');
+      const store = tx.objectStore(BOOK_SEARCH_HISTORY_STORE);
+      for (const id of ids) store.delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => {
+        aiLogger.store.error('deleteBookSearchHistoryRecords', tx.error?.message || 'TX error');
         reject(tx.error);
       };
     });

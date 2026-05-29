@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   saveChunks: vi.fn(),
   saveBM25Index: vi.fn(),
   saveMeta: vi.fn(),
+  saveEntitySidecar: vi.fn(),
   clearBook: vi.fn(),
   getEmbeddingModel: vi.fn(),
 }));
@@ -25,6 +26,7 @@ vi.mock('@/services/ai/storage/aiStore', () => ({
     saveChunks: mocks.saveChunks,
     saveBM25Index: mocks.saveBM25Index,
     saveMeta: mocks.saveMeta,
+    saveEntitySidecar: mocks.saveEntitySidecar,
     clearBook: mocks.clearBook,
   },
 }));
@@ -44,6 +46,11 @@ vi.mock('@/services/ai/utils/retry', async () => {
     withRetryAndTimeout: (fn: () => Promise<unknown>) => fn(),
   };
 });
+
+vi.mock('@/services/diagnostics/logger', () => ({
+  logDiagnosticEvent: vi.fn(),
+  logDiagnosticError: vi.fn(),
+}));
 
 vi.mock('@/services/ai/logger', () => ({
   aiLogger: {
@@ -78,6 +85,7 @@ vi.mock('@/services/ai/logger', () => ({
 }));
 
 import { BM25_ONLY_EMBEDDING_MODEL, indexBook, isBookIndexed } from '@/services/ai/ragService';
+import { logDiagnosticError, logDiagnosticEvent } from '@/services/diagnostics/logger';
 
 const settings: AISettings = {
   enabled: true,
@@ -136,6 +144,7 @@ describe('indexBook metadata freshness', () => {
     mocks.saveChunks.mockResolvedValue(undefined);
     mocks.saveBM25Index.mockResolvedValue(undefined);
     mocks.saveMeta.mockResolvedValue(undefined);
+    mocks.saveEntitySidecar.mockResolvedValue(undefined);
     mocks.clearBook.mockResolvedValue(undefined);
   });
 
@@ -199,6 +208,64 @@ describe('indexBook metadata freshness', () => {
       }),
     );
     expect(mocks.saveMeta.mock.calls[0]![0].estimatedBytes).toBeGreaterThan(0);
+  });
+
+  it('builds and saves an entity sidecar after chunks and BM25 are stored', async () => {
+    const entityBookDoc = {
+      metadata: { title: 'Book', author: 'Author' },
+      toc: [{ id: 0, label: 'Chapter 1', href: 'chapter-1.xhtml' }],
+      sections: [
+        {
+          id: 'section-1',
+          href: 'chapter-1.xhtml',
+          cfi: 'epubcfi(/6/2)',
+          size: 1200,
+          linear: 'yes',
+          createDocument: async () =>
+            createDocument(
+              `<p>${'林澈先生是主角的灰塔导师，曾经教他辨认古老符号。'.repeat(20)}</p>`,
+            ),
+        },
+      ],
+    };
+
+    await indexBook(entityBookDoc, 'book-hash', { ...settings, providerEmbeddingModels: {} });
+
+    expect(mocks.saveEntitySidecar).toHaveBeenCalledWith(
+      'book-hash',
+      expect.objectContaining({
+        bookHash: 'book-hash',
+        meta: expect.objectContaining({
+          aliasCount: expect.any(Number),
+          factCount: expect.any(Number),
+          chunkCount: expect.any(Number),
+        }),
+      }),
+    );
+    expect(logDiagnosticEvent).toHaveBeenCalledWith(
+      'reader_ai.entity_sidecar_built',
+      'debug',
+      expect.objectContaining({
+        aliasCount: expect.any(Number),
+        factCount: expect.any(Number),
+        chunkCount: expect.any(Number),
+        durationMs: expect.any(Number),
+      }),
+    );
+  });
+
+  it('does not fail indexing when sidecar persistence fails', async () => {
+    mocks.saveEntitySidecar.mockRejectedValue(new Error('sidecar store unavailable'));
+
+    await expect(
+      indexBook(bookDoc, 'book-hash', { ...settings, providerEmbeddingModels: {} }),
+    ).resolves.toBeUndefined();
+    expect(mocks.saveMeta).toHaveBeenCalled();
+    expect(logDiagnosticError).toHaveBeenCalledWith(
+      'reader_ai.entity_sidecar_failed',
+      expect.any(Error),
+      { operation: 'build' },
+    );
   });
 
   it('stores section jump targets and specific nested chapter labels on chunks', async () => {
@@ -343,6 +410,7 @@ describe('indexBook cancellation', () => {
     mocks.saveChunks.mockResolvedValue(undefined);
     mocks.saveBM25Index.mockResolvedValue(undefined);
     mocks.saveMeta.mockResolvedValue(undefined);
+    mocks.saveEntitySidecar.mockResolvedValue(undefined);
     mocks.clearBook.mockResolvedValue(undefined);
   });
 

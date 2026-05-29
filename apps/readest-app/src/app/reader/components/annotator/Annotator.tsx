@@ -23,7 +23,12 @@ import { useReadwiseSync } from '../../hooks/useReadwiseSync';
 import { useHardcoverSync } from '../../hooks/useHardcoverSync';
 import { isReaderContentTouchTarget, useTextSelector } from '../../hooks/useTextSelector';
 import { Point, Position, TextSelection } from '@/utils/sel';
-import { getPopupPosition, getPosition, getTextFromRange } from '@/utils/sel';
+import {
+  getCurrentDocumentSelectionRange,
+  getPopupPosition,
+  getPosition,
+  getTextFromRange,
+} from '@/utils/sel';
 import { eventDispatcher } from '@/utils/event';
 import { findTocItemBS } from '@/services/nav';
 import { throttle } from '@/utils/throttle';
@@ -123,20 +128,20 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
   const transPopupHeight = Math.min(265, maxHeight);
   const proofreadPopupWidth = Math.min(440, maxWidth);
   const proofreadPopupHeight = Math.min(200, maxHeight);
-  const annotPopupButtonSize = useResponsiveSize(44);
-  const annotPopupPadding = useResponsiveSize(16);
-  const annotPopupGap = useResponsiveSize(12);
+  const annotPopupButtonSize = useResponsiveSize(36);
+  const annotPopupPadding = useResponsiveSize(2);
+  const annotPopupGap = useResponsiveSize(2);
   const activeAnnotationToolButtons = settings.aiSettings?.showReaderAIEntrypoints
     ? annotationToolButtons
     : annotationToolButtons.filter((button) => button.type !== 'ai');
   const annotPopupButtonCount = activeAnnotationToolButtons.length;
   const annotPopupWidth = Math.min(
     annotPopupButtonCount * annotPopupButtonSize +
-      annotPopupPadding +
+      annotPopupPadding * 2 +
       Math.max(0, annotPopupButtonCount - 1) * annotPopupGap,
     maxWidth,
   );
-  const annotPopupHeight = useResponsiveSize(52);
+  const annotPopupHeight = useResponsiveSize(40);
   const androidSelectionHandlerHeight = 0;
 
   // Reposition popups on scroll without dismissing them
@@ -216,18 +221,19 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     [primaryLang, transformCtx],
   );
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const handleDismissPopup = useCallback(
-    throttle(() => {
-      setSelection(null);
-      setShowAnnotPopup(false);
-      setShowWiktionaryPopup(false);
-      setShowWikipediaPopup(false);
-      setShowDeepLPopup(false);
-      setShowProofreadPopup(false);
-      setEditingAnnotation(null);
-    }, 500),
-    [],
+  const handleDismissPopupImmediately = useCallback(() => {
+    setSelection(null);
+    setShowAnnotPopup(false);
+    setShowWiktionaryPopup(false);
+    setShowWikipediaPopup(false);
+    setShowDeepLPopup(false);
+    setShowProofreadPopup(false);
+    setEditingAnnotation(null);
+  }, []);
+
+  const handleDismissPopup = useMemo(
+    () => throttle(handleDismissPopupImmediately, 500),
+    [handleDismissPopupImmediately],
   );
 
   const {
@@ -245,7 +251,6 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     handleShowPopup,
     handleUpToPopup,
     clearPendingSelectionProcessing,
-    resetSelectionInputTracking,
     handleContextmenu,
   } = useTextSelector(
     bookKey,
@@ -253,11 +258,11 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     setEditingAnnotation,
     setExternalDragPoint,
     getAnnotationText,
-    handleDismissPopup,
+    handleDismissPopupImmediately,
   );
 
   const handleDismissPopupAndSelection = () => {
-    handleDismissPopup();
+    handleDismissPopupImmediately();
     view?.deselect();
     isTextSelected.current = false;
   };
@@ -286,6 +291,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     const handleDocPointerCancel = (ev: PointerEvent) => handlePointerCancel(doc, index, ev);
     const handleDocPointerUp = (ev: PointerEvent) => handlePointerUp(doc, index, ev);
     const handleDocSelectionChange = () => handleSelectionchange(doc, index);
+    const handleDocContextmenu = (event: Event) => handleContextmenu(doc, index, event);
     const handleRendererRepositionScroll = () => repositionPopups();
     const handleRootTouchStart = (event: TouchEvent) => {
       const frame = loadedDoc?.defaultView?.frameElement;
@@ -301,6 +307,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
         now: Date.now(),
         lastNonReaderTouchAt: lastNonReaderTouchAtRef.current,
         isReaderOverlayVisible: getIsSideBarVisible(),
+        pointerCount: ev.pointerCount,
       });
 
     const handleNativeTouch = (event: CustomEvent) => {
@@ -309,7 +316,7 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
         androidTouchEndRef.current = false;
         const isReaderContentTouch = isInsideReaderContent(ev);
         if (!isReaderContentTouch) {
-          resetSelectionInputTracking();
+          handleTouchStart(false);
           return;
         }
         handleTouchStart(true);
@@ -402,10 +409,10 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     }
 
     // Disable the default context menu on mobile devices (selection handles suffice)
-    loadedDoc?.addEventListener('contextmenu', handleContextmenu);
+    loadedDoc?.addEventListener('contextmenu', handleDocContextmenu);
     if (loadedDoc) {
       loadCleanupRef.current.push(() =>
-        loadedDoc.removeEventListener('contextmenu', handleContextmenu),
+        loadedDoc.removeEventListener('contextmenu', handleDocContextmenu),
       );
     }
   };
@@ -854,15 +861,25 @@ const Annotator: React.FC<{ bookKey: string }> = ({ bookKey }) => {
     setShowDeepLPopup(true);
   };
 
-  const handleAskAI = () => {
+  const handleAskAI = async () => {
     if (!selection || !selection.text) return;
     setShowAnnotPopup(false);
+    const startContainer = selection.range.startContainer;
+    const selectionDocument =
+      startContainer.nodeType === Node.DOCUMENT_NODE
+        ? (startContainer as Document)
+        : startContainer.ownerDocument;
+    const currentRange = selectionDocument
+      ? getCurrentDocumentSelectionRange(selectionDocument)
+      : null;
+    const range = currentRange ?? selection.range;
+    const text = currentRange ? await getAnnotationText(currentRange) : selection.text;
     const payload: ReaderAIOpenEventPayload = {
       bookKey,
       source: 'selection',
       selection: {
-        text: selection.text,
-        cfi: selection.cfi,
+        text,
+        cfi: view?.getCFI(selection.index, range) ?? selection.cfi,
         page: selection.page,
         index: selection.index,
       },

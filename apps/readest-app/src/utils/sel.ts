@@ -268,6 +268,13 @@ export const snapRangeToWords = (range: Range): void => {
   snapEndToWordBoundary();
 };
 
+export const getCurrentDocumentSelectionRange = (doc: Document): Range | null => {
+  const selection = doc.getSelection?.();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  if (!selection.toString().trim()) return null;
+  return selection.getRangeAt(0).cloneRange();
+};
+
 export const getTextFromRange = (range: Range, rejectTags: string[] = []): string => {
   const clonedRange = range.cloneRange();
   const fragment = clonedRange.cloneContents();

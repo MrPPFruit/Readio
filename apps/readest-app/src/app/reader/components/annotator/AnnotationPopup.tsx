@@ -62,10 +62,10 @@ const AnnotationPopup: React.FC<AnnotationPopupProps> = ({
         triangleClassName='text-gray-600'
         onDismiss={onDismiss}
       >
-        <div className={clsx('flex h-full gap-4', isVertical ? 'flex-row' : 'flex-col')}>
+        <div className={clsx('flex h-full gap-1', isVertical ? 'flex-row' : 'flex-col')}>
           <div
             className={clsx(
-              'selection-buttons flex h-full w-full items-center justify-center gap-4 p-2',
+              'selection-buttons flex h-full w-full items-center justify-center gap-0.5 p-0',
               isVertical ? 'flex-col overflow-y-auto' : 'flex-row overflow-x-auto',
               notes.length > 0 && 'hidden',
             )}

@@ -13,7 +13,7 @@ import {
   type GridListProps,
   type ListProps,
 } from 'react-virtuoso';
-import { Book, BooksGroup, ReadingStatus } from '@/types/book';
+import { Book, BooksGroup, DeleteBookOptions, ReadingStatus } from '@/types/book';
 import {
   LibraryCoverFitType,
   LibraryGroupByType,
@@ -43,7 +43,7 @@ import {
 import { eventDispatcher } from '@/utils/event';
 
 import { useSpatialNavigation } from '../hooks/useSpatialNavigation';
-import Alert from '@/components/Alert';
+import Dialog from '@/components/Dialog';
 import Spinner from '@/components/Spinner';
 import ModalPortal from '@/components/ModalPortal';
 import BookshelfItem, { generateBookshelfItems } from './BookshelfItem';
@@ -63,12 +63,17 @@ interface BookshelfProps {
     options?: { redownload?: boolean; queued?: boolean },
   ) => Promise<boolean>;
   handleBookUpload: (book: Book, syncBooks?: boolean) => Promise<boolean>;
-  handleBookDelete: (book: Book, syncBooks?: boolean) => Promise<boolean>;
+  handleBookDelete: (
+    book: Book,
+    syncBooks?: boolean,
+    options?: DeleteBookOptions,
+  ) => Promise<boolean>;
   handleSetSelectMode: (selectMode: boolean) => void;
   handleShowDetailsBook: (book: Book) => void;
   handleLibraryNavigation: (targetGroup: string) => void;
   handlePushLibrary: () => Promise<void>;
   booksTransferProgress: { [key: string]: number | null };
+  onOpenAIBookSearch: () => void;
 }
 
 /**
@@ -79,6 +84,7 @@ interface BookshelfProps {
 type BookshelfListContext = {
   autoColumns: boolean;
   fixedColumns: number;
+  onOpenAIBookSearch: () => void;
 };
 
 const BOOKSHELF_GRID_CLASSES =
@@ -86,6 +92,30 @@ const BOOKSHELF_GRID_CLASSES =
   'grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-12';
 
 const BOOKSHELF_LIST_CLASSES = 'bookshelf-items transform-wrapper flex flex-col';
+
+const BookshelfSearchFooter = ({ onOpenAIBookSearch }: { onOpenAIBookSearch: () => void }) => {
+  const _ = useTranslation();
+
+  return (
+    <div
+      data-testid='bookshelf-global-search-footer'
+      className='text-base-content/70 px-4 pb-8 pt-6 text-center sm:px-6'
+    >
+      <p className='text-sm font-medium leading-6'>{_('书不在架上，也许在远处？')}</p>
+      <p className='text-base-content/55 mt-1 text-sm leading-6'>
+        {_('想读的那本，或许正在等你。')}
+      </p>
+      <button
+        type='button'
+        className='border-base-content/20 text-base-content/75 hover:bg-base-200/50 active:bg-base-200/70 mt-3 inline-flex min-h-11 items-center justify-center rounded-full border px-5 text-sm font-medium transition'
+        onClick={onOpenAIBookSearch}
+        aria-label={_('寻书')}
+      >
+        {_('寻书')}
+      </button>
+    </div>
+  );
+};
 
 const BookshelfGridList: GridComponents<BookshelfListContext>['List'] = React.forwardRef<
   HTMLDivElement,
@@ -119,11 +149,17 @@ BookshelfLinearList.displayName = 'BookshelfLinearList';
 
 const GRID_VIRTUOSO_COMPONENTS: GridComponents<BookshelfListContext> = {
   List: BookshelfGridList,
-  Footer: () => <div style={{ height: 34 }} />,
+  Footer: ({ context }) =>
+    context?.onOpenAIBookSearch ? (
+      <BookshelfSearchFooter onOpenAIBookSearch={context.onOpenAIBookSearch} />
+    ) : null,
 };
-const LIST_VIRTUOSO_COMPONENTS: Components = {
+const LIST_VIRTUOSO_COMPONENTS: Components<unknown, BookshelfListContext> = {
   List: BookshelfLinearList,
-  Footer: () => <div style={{ height: 34 }} />,
+  Footer: ({ context }) =>
+    context?.onOpenAIBookSearch ? (
+      <BookshelfSearchFooter onOpenAIBookSearch={context.onOpenAIBookSearch} />
+    ) : null,
 };
 
 const Bookshelf: React.FC<BookshelfProps> = ({
@@ -141,6 +177,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   handleLibraryNavigation,
   handlePushLibrary,
   booksTransferProgress,
+  onOpenAIBookSearch,
 }) => {
   const _ = useTranslation();
   const router = useRouter();
@@ -160,6 +197,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const [loading, setLoading] = useState(false);
   const [showSelectModeActions, setShowSelectModeActions] = useState(false);
   const [bookIdsToDelete, setBookIdsToDelete] = useState<string[]>([]);
+  const [deleteLocalFiles, setDeleteLocalFiles] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showStatusAlert, setShowStatusAlert] = useState(false);
   const [showGroupingModal, setShowGroupingModal] = useState(false);
@@ -379,16 +417,20 @@ const Bookshelf: React.FC<BookshelfProps> = ({
         break;
       }
       const batch = books.slice(i, i + concurrency);
-      await Promise.all(batch.map((book) => handleBookDelete(book, false)));
+      await Promise.all(
+        batch.map((book) => handleBookDelete(book, false, { deleteLocalFile: deleteLocalFiles })),
+      );
     }
     handlePushLibrary();
     setSelectedBooks([]);
+    setDeleteLocalFiles(false);
     setShowDeleteAlert(false);
     setShowSelectModeActions(true);
   };
 
   const deleteSelectedBooks = () => {
     setBookIdsToDelete(getSelectedBooks());
+    setDeleteLocalFiles(false);
     setShowSelectModeActions(false);
     setShowDeleteAlert(true);
   };
@@ -434,6 +476,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const handleDeleteBooksIntent = (event: CustomEvent) => {
     const { ids } = event.detail;
     setBookIdsToDelete(ids);
+    setDeleteLocalFiles(false);
     setShowSelectModeActions(false);
     setShowDeleteAlert(true);
   };
@@ -508,8 +551,9 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     () => ({
       autoColumns: settings.libraryAutoColumns,
       fixedColumns: settings.libraryColumns,
+      onOpenAIBookSearch,
     }),
-    [settings.libraryAutoColumns, settings.libraryColumns],
+    [settings.libraryAutoColumns, settings.libraryColumns, onOpenAIBookSearch],
   );
 
   const renderBookshelfItem = useCallback(
@@ -626,6 +670,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
             overscan={200}
             totalCount={sortedBookshelfItems.length}
             components={LIST_VIRTUOSO_COMPONENTS}
+            context={listContext}
             computeItemKey={computeItemKey}
             itemContent={renderBookshelfItem}
             scrollerRef={handleScrollerRef}
@@ -667,25 +712,62 @@ const Bookshelf: React.FC<BookshelfProps> = ({
         </ModalPortal>
       )}
       {showDeleteAlert && (
-        <div
-          className={clsx('delete-alert fixed bottom-0 left-0 right-0 z-50 flex justify-center')}
-          style={{
-            paddingBottom: `${(safeAreaInsets?.bottom || 0) + 16}px`,
+        <Dialog
+          isOpen={showDeleteAlert}
+          title={_('删除选中的书？')}
+          header={<div className='sr-only'>{_('删除选中的书？')}</div>}
+          boxClassName='sm:max-w-md'
+          contentClassName='p-0'
+          snapHeight={0.42}
+          dragHandleLabel={_('下拉关闭删除确认')}
+          onClose={() => {
+            abortDeletionRef.current = true;
+            setDeleteLocalFiles(false);
+            setShowDeleteAlert(false);
+            setShowSelectModeActions(true);
           }}
         >
-          <Alert
-            title={_('Confirm Deletion')}
-            message={_('Are you sure to delete {{count}} selected book(s)?', {
-              count: getBooksToDelete().length,
-            })}
-            onCancel={() => {
-              abortDeletionRef.current = true;
-              setShowDeleteAlert(false);
-              setShowSelectModeActions(true);
-            }}
-            onConfirm={confirmDelete}
-          />
-        </div>
+          <div className='space-y-5 px-5 pb-5 pt-2'>
+            <div>
+              <h3 className='text-base font-semibold'>{_('删除选中的书？')}</h3>
+              <p className='text-base-content/70 mt-2 text-sm leading-6'>
+                {_('将从书架中移除 {{count}} 本书，阅读进度和相关记录可能也会被删除。', {
+                  count: getBooksToDelete().length,
+                })}
+              </p>
+            </div>
+            <label className='text-base-content/75 border-base-content/10 bg-base-200/30 flex min-h-11 items-center gap-3 rounded-2xl border px-3 text-sm leading-5'>
+              <input
+                type='checkbox'
+                className='checkbox checkbox-sm'
+                checked={deleteLocalFiles}
+                onChange={(event) => setDeleteLocalFiles(event.target.checked)}
+              />
+              <span>{_('同时删除本地文件')}</span>
+            </label>
+            <div className='flex justify-end gap-2'>
+              <button
+                type='button'
+                className='btn btn-ghost btn-sm rounded-full px-4'
+                onClick={() => {
+                  abortDeletionRef.current = true;
+                  setDeleteLocalFiles(false);
+                  setShowDeleteAlert(false);
+                  setShowSelectModeActions(true);
+                }}
+              >
+                {_('取消')}
+              </button>
+              <button
+                type='button'
+                className='btn btn-error btn-sm rounded-full px-4'
+                onClick={confirmDelete}
+              >
+                {_('删除')}
+              </button>
+            </div>
+          </div>
+        </Dialog>
       )}
       {showStatusAlert && (
         <SetStatusAlert

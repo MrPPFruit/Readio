@@ -115,11 +115,13 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     window.addEventListener('beforeunload', handleCloseBooks);
     eventDispatcher.on('beforereload', handleCloseBooks);
     eventDispatcher.on('close-reader', handleCloseBooks);
+    eventDispatcher.on('close-reader-to-library', handleCloseBooksToLibrary);
     eventDispatcher.on('quit-app', handleCloseBooks);
     return () => {
       window.removeEventListener('beforeunload', handleCloseBooks);
       eventDispatcher.off('beforereload', handleCloseBooks);
       eventDispatcher.off('close-reader', handleCloseBooks);
+      eventDispatcher.off('close-reader-to-library', handleCloseBooksToLibrary);
       eventDispatcher.off('quit-app', handleCloseBooks);
       unlistenOnCloseWindow?.then((fn) => fn());
     };
@@ -161,19 +163,21 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
     navigateToLibrary(router, '', undefined, true);
   };
 
-  const saveSettingsAndGoToLibrary = () => {
-    saveSettings(envConfig, settings);
+  const saveSettingsAndGoToLibrary = async () => {
+    await saveSettings(envConfig, settings);
     navigateBackToLibrary();
   };
 
-  const handleCloseBooks = throttle(async () => {
+  const closeBooks = async () => {
     const settings = useSettingsStore.getState().settings;
     await Promise.all(bookKeys.map(async (key) => await saveConfigAndCloseBook(key)));
     await saveSettings(envConfig, settings);
-  }, 200);
+  };
 
-  const handleCloseBooksToLibrary = () => {
-    handleCloseBooks();
+  const handleCloseBooks = throttle(closeBooks, 200);
+
+  const handleCloseBooksToLibrary = async () => {
+    await closeBooks();
     if (isTauriAppPlatform()) {
       const currentWindow = getCurrentWindow();
       if (currentWindow.label === 'main') {
@@ -187,7 +191,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
   };
 
   const handleCloseBook = async (bookKey: string) => {
-    saveConfigAndCloseBook(bookKey);
+    await saveConfigAndCloseBook(bookKey);
     if (sideBarBookKey === bookKey) {
       setSideBarBookKey(getNextBookKey(sideBarBookKey));
     }
@@ -204,7 +208,7 @@ const ReaderContent: React.FC<{ ids?: string; settings: SystemSettings }> = ({ i
           return await currentWindow.close();
         }
       }
-      saveSettingsAndGoToLibrary();
+      await saveSettingsAndGoToLibrary();
     }
   };
 

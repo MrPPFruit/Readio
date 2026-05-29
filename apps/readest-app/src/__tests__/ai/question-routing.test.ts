@@ -43,6 +43,10 @@ describe('classifyReaderQuestion', () => {
       classifyReaderQuestion({ question: '白银城是什么地方？', spoilerProtection: true }).intent,
     ).toBe('entity_lookup');
     expect(
+      classifyReaderQuestion({ question: '前文有没有关于阿兹克的内容？', spoilerProtection: true })
+        .intent,
+    ).toBe('entity_lookup');
+    expect(
       classifyReaderQuestion({
         question: '克莱恩是谁？请按当前阅读进度简短回答并给出依据。',
         spoilerProtection: true,
@@ -56,7 +60,31 @@ describe('classifyReaderQuestion', () => {
     ).toBe('entity_lookup');
     expect(
       classifyReaderQuestion({
+        question: '我忘了0-08是什么东西，它之前做过什么？',
+        spoilerProtection: false,
+      }).intent,
+    ).toBe('entity_lookup');
+    expect(
+      classifyReaderQuestion({
+        question: '我忘了克莱恩之前为什么会和因斯·赞格威尔有仇，发生过哪些关键事情？',
+        spoilerProtection: false,
+      }).intent,
+    ).toBe('entity_lookup');
+    expect(
+      classifyReaderQuestion({
         question: '这是不是伏笔？为什么他会这样做？',
+        spoilerProtection: true,
+      }).intent,
+    ).toBe('analysis');
+    expect(
+      classifyReaderQuestion({
+        question: 'Why does this expedition matter to Walton?',
+        spoilerProtection: true,
+      }).intent,
+    ).toBe('analysis');
+    expect(
+      classifyReaderQuestion({
+        question: 'How will this choice affect him?',
         spoilerProtection: true,
       }).intent,
     ).toBe('analysis');

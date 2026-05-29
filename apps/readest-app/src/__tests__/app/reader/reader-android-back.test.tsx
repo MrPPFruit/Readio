@@ -133,7 +133,7 @@ beforeEach(() => {
 });
 
 describe('Reader Android back handling', () => {
-  it('navigates to the library instead of browser history from the reader root', async () => {
+  it('requests a saved close before returning to the library from the reader root', async () => {
     render(<Reader ids='book-1' />);
 
     await waitFor(() => expect(backHandlerRef.current).toBeTruthy());
@@ -142,7 +142,8 @@ describe('Reader Android back handling', () => {
     );
 
     expect(consumed).toBe(true);
-    expect(replaceMock).toHaveBeenCalledWith('/library', undefined);
+    expect(dispatchMock).toHaveBeenCalledWith('close-reader-to-library');
+    expect(replaceMock).not.toHaveBeenCalled();
     expect(dispatchMock).not.toHaveBeenCalledWith('close-reader');
   });
 });

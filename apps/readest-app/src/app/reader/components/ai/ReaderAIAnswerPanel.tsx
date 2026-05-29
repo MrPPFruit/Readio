@@ -3,12 +3,16 @@ import { marked } from 'marked';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MdClose } from 'react-icons/md';
 
+import Dialog from '@/components/Dialog';
+import { useEnv } from '@/context/EnvContext';
 import type { EmbeddingProgress } from '@/services/ai/types';
+import { useThemeStore } from '@/store/themeStore';
 import type { Insets } from '@/types/misc';
 import type {
   ReaderAIGenerationStatus as ReaderAIGenerationStatusValue,
   ReaderAIMessage,
   ReaderAISource,
+  ReaderAISourceHighlightSpan,
 } from '@/types/readerAI';
 import {
   ReaderAIComposer,
@@ -31,7 +35,6 @@ interface ReaderAIAnswerPanelProps {
   suggestionsLoading?: boolean;
   generationStatus?: ReaderAIGenerationStatusValue;
   indexingProgress?: EmbeddingProgress;
-  onSourceClick?: (source: ReaderAISource) => void;
   onSpoilerProtectionChange?: (enabled: boolean) => void;
   onSubmit: (question: string) => void;
   onClose: () => void;
@@ -41,46 +44,331 @@ interface ReaderAIMessageContentProps {
   content: string;
   role: ReaderAIMessage['role'];
   sources?: ReaderAISource[];
-  onCitationClick?: (index: number) => void;
+  citationMap?: Map<number, number>;
+  onCitationClick?: (index: number, trigger?: HTMLElement) => void;
 }
 
 const getOrderedSources = (sources: ReaderAISource[] = []) => sources;
 
-const formatSourceLabel = (source: ReaderAISource) => {
-  const locationLabel =
-    source.confidence === 'exact' && source.pageNumber ? `第 ${source.pageNumber} 页` : '约略位置';
-  return `${source.chapterTitle} · ${locationLabel}`;
+const getCitedSourceIndexes = (content: string, sourceCount: number): number[] => {
+  const indexes: number[] = [];
+  const seen = new Set<number>();
+  for (const match of content.matchAll(/\[(\d+)\]/g)) {
+    const citationIndex = Number(match[1]);
+    const sourceIndex = citationIndex - 1;
+    if (sourceIndex < 0 || sourceIndex >= sourceCount || seen.has(sourceIndex)) continue;
+    seen.add(sourceIndex);
+    indexes.push(sourceIndex);
+  }
+  return indexes;
 };
 
+const getSourcePreviewText = (source: ReaderAISource) =>
+  (source.previewText || source.contextText || source.snippet || '').trim();
+
+const getSourcePreviewRange = (
+  source: ReaderAISource,
+): { start: number; end: number } | undefined => {
+  const previewText = getSourcePreviewText(source);
+  if (!previewText || source.previewStartOffset === undefined) return undefined;
+  return { start: source.previewStartOffset, end: source.previewStartOffset + previewText.length };
+};
+
+const areSameSectionSources = (left: ReaderAISource, right: ReaderAISource) =>
+  left.sectionIndex === right.sectionIndex && left.chapterTitle === right.chapterTitle;
+
+const doSourcePreviewRangesOverlapWithMatchingText = (
+  leftText: string,
+  leftRange: { start: number; end: number },
+  rightText: string,
+  rightRange: { start: number; end: number },
+) => {
+  const overlapStart = Math.max(leftRange.start, rightRange.start);
+  const overlapEnd = Math.min(leftRange.end, rightRange.end);
+  if (overlapStart >= overlapEnd) return false;
+
+  const leftOverlap = leftText.slice(overlapStart - leftRange.start, overlapEnd - leftRange.start);
+  const rightOverlap = rightText.slice(
+    overlapStart - rightRange.start,
+    overlapEnd - rightRange.start,
+  );
+  return leftOverlap === rightOverlap;
+};
+
+const areContinuousSourcePreviews = (left: ReaderAISource, right: ReaderAISource) => {
+  if (!areSameSectionSources(left, right)) return false;
+  const leftText = getSourcePreviewText(left);
+  const rightText = getSourcePreviewText(right);
+  if (leftText === rightText) return true;
+  const leftRange = getSourcePreviewRange(left);
+  const rightRange = getSourcePreviewRange(right);
+  if (!leftRange || !rightRange) return false;
+  return doSourcePreviewRangesOverlapWithMatchingText(leftText, leftRange, rightText, rightRange);
+};
+
+const buildCitationDisplayMap = (
+  content: string,
+  sources: ReaderAISource[] = [],
+): Map<number, number> => {
+  const citationMap = new Map<number, number>();
+  let displayCount = 0;
+  let previousSourceIndex: number | undefined;
+  let previousCitationEnd = 0;
+
+  for (const match of content.matchAll(/\[(\d+)\]/g)) {
+    if (match.index === undefined) continue;
+    const sourceIndex = Number(match[1]) - 1;
+    const source = sources[sourceIndex];
+    if (sourceIndex < 0 || sourceIndex >= sources.length || !source) continue;
+
+    if (citationMap.has(sourceIndex)) {
+      previousSourceIndex = sourceIndex;
+      previousCitationEnd = match.index + match[0].length;
+      continue;
+    }
+
+    const previousSource =
+      previousSourceIndex === undefined ? undefined : sources[previousSourceIndex];
+    const adjacentToPreviousCitation = !/\S/.test(content.slice(previousCitationEnd, match.index));
+    const previousDisplayIndex =
+      previousSourceIndex === undefined ? undefined : citationMap.get(previousSourceIndex);
+
+    if (
+      previousSource &&
+      adjacentToPreviousCitation &&
+      previousDisplayIndex !== undefined &&
+      areContinuousSourcePreviews(previousSource, source)
+    ) {
+      citationMap.set(sourceIndex, previousDisplayIndex);
+    } else {
+      citationMap.set(sourceIndex, displayCount);
+      displayCount += 1;
+    }
+
+    previousSourceIndex = sourceIndex;
+    previousCitationEnd = match.index + match[0].length;
+  }
+  return citationMap;
+};
+
+const mergeHighlightSpans = (sources: ReaderAISource[], mergedStartOffset?: number) =>
+  sources
+    .flatMap((source) => {
+      const sourcePreviewStartOffset = source.previewStartOffset;
+      const offset =
+        mergedStartOffset !== undefined && sourcePreviewStartOffset !== undefined
+          ? sourcePreviewStartOffset - mergedStartOffset
+          : 0;
+      return (source.highlightSpans ?? []).map((span) => ({
+        ...span,
+        start: span.start + offset,
+        end: span.end + offset,
+      }));
+    })
+    .filter(
+      (span, index, spans) =>
+        spans.findIndex(
+          (candidate) =>
+            candidate.start === span.start &&
+            candidate.end === span.end &&
+            candidate.quote === span.quote &&
+            candidate.source === span.source,
+        ) === index,
+    )
+    .sort((left, right) => left.start - right.start || left.end - right.end);
+
+const mergeOffsetAwareSourcePreviews = (sources: ReaderAISource[]) => {
+  const previewParts = sources
+    .map((source) => {
+      const text = getSourcePreviewText(source);
+      const range = getSourcePreviewRange(source);
+      return text && range ? { source, text, range } : undefined;
+    })
+    .filter(
+      (
+        part,
+      ): part is { source: ReaderAISource; text: string; range: { start: number; end: number } } =>
+        Boolean(part),
+    )
+    .sort(
+      (left, right) => left.range.start - right.range.start || left.range.end - right.range.end,
+    );
+
+  const [firstPart] = previewParts;
+  if (!firstPart || previewParts.length !== sources.length) return undefined;
+
+  let mergedText = firstPart.text;
+  let mergedStart = firstPart.range.start;
+  let mergedEnd = firstPart.range.end;
+
+  for (const part of previewParts.slice(1)) {
+    if (part.range.start > mergedEnd) return undefined;
+    const overlapLength = Math.max(0, mergedEnd - part.range.start);
+    if (overlapLength < part.text.length) mergedText += part.text.slice(overlapLength);
+    mergedStart = Math.min(mergedStart, part.range.start);
+    mergedEnd = Math.max(mergedEnd, part.range.end);
+  }
+
+  const highlightSpans = mergeHighlightSpans(sources, mergedStart).filter(
+    (span) =>
+      span.start >= 0 &&
+      span.end > span.start &&
+      span.end <= mergedText.length &&
+      mergedText.slice(span.start, span.end) === span.quote,
+  );
+
+  return {
+    text: mergedText,
+    previewStartOffset: mergedStart,
+    highlightSpans,
+  };
+};
+
+const mergeSourceGroup = (sources: ReaderAISource[]): ReaderAISource => {
+  const [firstSource] = sources;
+  if (!firstSource || sources.length === 1) return firstSource!;
+
+  const mergedPreview = mergeOffsetAwareSourcePreviews(sources);
+  const highlightSpans = mergedPreview?.highlightSpans ?? mergeHighlightSpans(sources);
+
+  return {
+    ...firstSource,
+    id: sources.map((source) => source.id).join('|'),
+    ...(mergedPreview
+      ? {
+          contextText: mergedPreview.text,
+          previewText: mergedPreview.text,
+          previewStartOffset: mergedPreview.previewStartOffset,
+        }
+      : {}),
+    ...(highlightSpans.length ? { highlightSpans } : {}),
+    ...(sources.some((source) => source.atSpoilerBoundary) ? { atSpoilerBoundary: true } : {}),
+  };
+};
+
+const getDisplaySources = (
+  content: string,
+  sources: ReaderAISource[] = [],
+  citationMap = buildCitationDisplayMap(content, sources),
+) => {
+  const groups: Array<{
+    source: ReaderAISource;
+    sourceIndexes: number[];
+    displayIndex: number;
+  }> = [];
+
+  getCitedSourceIndexes(content, sources.length).forEach((sourceIndex) => {
+    const displayIndex = citationMap.get(sourceIndex);
+    const source = sources[sourceIndex];
+    if (displayIndex === undefined || !source) return;
+    const existingGroup = groups.find((group) => group.displayIndex === displayIndex);
+    if (existingGroup) {
+      existingGroup.sourceIndexes.push(sourceIndex);
+      existingGroup.source = mergeSourceGroup(
+        existingGroup.sourceIndexes.map((index) => sources[index]!),
+      );
+      return;
+    }
+    groups.push({ source, sourceIndexes: [sourceIndex], displayIndex });
+  });
+
+  return groups;
+};
+
+const splitPreviewParagraphs = (text: string) =>
+  text
+    .split(/\n{1,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+const normalizePreviewText = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+const getSourceHighlightTerms = (source: ReaderAISource) =>
+  splitPreviewParagraphs(source.snippet || '')
+    .map(normalizePreviewText)
+    .filter(Boolean);
+
+const isSourcePreviewParagraphHighlighted = (paragraph: string, source: ReaderAISource) => {
+  const normalizedParagraph = normalizePreviewText(paragraph);
+  if (!normalizedParagraph) return false;
+  return getSourceHighlightTerms(source).some(
+    (term) => normalizedParagraph.includes(term) || term.includes(normalizedParagraph),
+  );
+};
+
+const getValidHighlightSpans = (
+  text: string,
+  spans: ReaderAISourceHighlightSpan[] | undefined,
+): ReaderAISourceHighlightSpan[] =>
+  (spans ?? [])
+    .filter(
+      (span) =>
+        Number.isInteger(span.start) &&
+        Number.isInteger(span.end) &&
+        span.start >= 0 &&
+        span.end > span.start &&
+        span.end <= text.length &&
+        text.slice(span.start, span.end) === span.quote,
+    )
+    .sort((a, b) => a.start - b.start);
+
 const citationButtonClassName =
-  'border-primary/25 bg-primary/10 text-primary mx-0.5 inline-flex min-h-7 min-w-7 items-center justify-center rounded-full border px-1.5 align-baseline text-[11px] font-semibold leading-none';
+  'border-primary/25 bg-primary/10 text-primary mx-0.5 inline-flex min-h-8 min-w-8 items-center justify-center rounded-full border px-2 align-baseline text-xs font-semibold leading-none';
+
+const voidHtmlTags = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr',
+]);
 
 function renderTextWithCitations(
   text: string,
   keyPrefix: string,
   sourceCount: number,
-  onCitationClick?: (index: number) => void,
+  citationMap?: Map<number, number>,
+  onCitationClick?: (index: number, trigger?: HTMLElement) => void,
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   let lastIndex = 0;
+  let lastRenderedDisplayIndex: number | undefined;
   for (const match of text.matchAll(/\[(\d+)\]/g)) {
     if (match.index === undefined) continue;
-    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    const textBeforeCitation = text.slice(lastIndex, match.index);
+    if (/\S/.test(textBeforeCitation)) lastRenderedDisplayIndex = undefined;
     const citationIndex = Number(match[1]);
-    if (citationIndex >= 1 && citationIndex <= sourceCount) {
-      nodes.push(
-        <button
-          key={`${keyPrefix}-citation-${match.index}`}
-          type='button'
-          className={citationButtonClassName}
-          onClick={() => onCitationClick?.(citationIndex - 1)}
-          aria-label={`查看引用 ${citationIndex}`}
-        >
-          [{citationIndex}]
-        </button>,
-      );
+    const sourceIndex = citationIndex - 1;
+    const displayIndex = citationMap?.get(sourceIndex);
+    if (citationIndex >= 1 && citationIndex <= sourceCount && displayIndex !== undefined) {
+      if (displayIndex !== lastRenderedDisplayIndex) {
+        if (textBeforeCitation) nodes.push(textBeforeCitation);
+        nodes.push(
+          <button
+            key={`${keyPrefix}-citation-${match.index}`}
+            type='button'
+            className={citationButtonClassName}
+            onClick={(event) => onCitationClick?.(sourceIndex, event.currentTarget)}
+            aria-label={`查看引用 ${displayIndex + 1}`}
+          >
+            [{displayIndex + 1}]
+          </button>,
+        );
+        lastRenderedDisplayIndex = displayIndex;
+      }
     } else {
+      if (textBeforeCitation) nodes.push(textBeforeCitation);
       nodes.push(match[0]);
+      lastRenderedDisplayIndex = undefined;
     }
     lastIndex = match.index + match[0].length;
   }
@@ -93,13 +381,14 @@ function renderHtmlNode(
   key: string,
   sourceCount: number,
   citationsDisabled: boolean,
-  onCitationClick?: (index: number) => void,
+  citationMap?: Map<number, number>,
+  onCitationClick?: (index: number, trigger?: HTMLElement) => void,
 ): React.ReactNode {
   if (node.nodeType === Node.TEXT_NODE) {
     const text = node.textContent ?? '';
     return citationsDisabled
       ? text
-      : renderTextWithCitations(text, key, sourceCount, onCitationClick);
+      : renderTextWithCitations(text, key, sourceCount, citationMap, onCitationClick);
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return null;
 
@@ -112,10 +401,17 @@ function renderHtmlNode(
     if (attribute.name.startsWith('on') || attribute.name === 'style') continue;
     props[attribute.name === 'class' ? 'className' : attribute.name] = attribute.value;
   }
-  if (tagName === 'br') return React.createElement(tagName, props);
+  if (voidHtmlTags.has(tagName)) return React.createElement(tagName, props);
 
   const children = Array.from(element.childNodes).map((child, index) =>
-    renderHtmlNode(child, `${key}-${index}`, sourceCount, nextCitationsDisabled, onCitationClick),
+    renderHtmlNode(
+      child,
+      `${key}-${index}`,
+      sourceCount,
+      nextCitationsDisabled,
+      citationMap,
+      onCitationClick,
+    ),
   );
   return React.createElement(tagName, props, children);
 }
@@ -123,12 +419,13 @@ function renderHtmlNode(
 function renderHtmlWithCitations(
   html: string,
   sourceCount: number,
-  onCitationClick?: (index: number) => void,
+  citationMap?: Map<number, number>,
+  onCitationClick?: (index: number, trigger?: HTMLElement) => void,
 ): React.ReactNode[] {
   const template = document.createElement('template');
   template.innerHTML = html;
   return Array.from(template.content.childNodes).map((node, index) =>
-    renderHtmlNode(node, `html-${index}`, sourceCount, false, onCitationClick),
+    renderHtmlNode(node, `html-${index}`, sourceCount, false, citationMap, onCitationClick),
   );
 }
 
@@ -136,6 +433,7 @@ const ReaderAIMessageContent: React.FC<ReaderAIMessageContentProps> = ({
   content,
   role,
   sources = [],
+  citationMap,
   onCitationClick,
 }) => {
   const html = useMemo(() => {
@@ -146,8 +444,8 @@ const ReaderAIMessageContent: React.FC<ReaderAIMessageContentProps> = ({
   const sourceCount = sources.length;
   const contentNodes = useMemo(() => {
     if (role !== 'assistant' || sourceCount === 0) return null;
-    return renderHtmlWithCitations(html, sourceCount, onCitationClick);
-  }, [html, role, sourceCount, onCitationClick]);
+    return renderHtmlWithCitations(html, sourceCount, citationMap, onCitationClick);
+  }, [html, role, sourceCount, citationMap, onCitationClick]);
   const className =
     role === 'assistant'
       ? 'prose prose-sm prose-headings:text-base-content prose-p:text-base-content prose-strong:text-base-content prose-li:text-base-content prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-p:my-2 max-w-none text-sm leading-7 [&_*:first-child]:mt-0 [&_*:last-child]:mb-0'
@@ -171,15 +469,21 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
   suggestionsLoading = false,
   generationStatus = 'idle',
   indexingProgress,
-  onSourceClick,
   onSpoilerProtectionChange,
   onSubmit,
   onClose,
 }) => {
+  const { appService } = useEnv();
+  const { systemUIVisible, statusBarHeight } = useThemeStore();
   const [question, setQuestion] = useState('');
-  const [activeSource, setActiveSource] = useState<{ source: ReaderAISource; index: number }>();
+  const [activeSource, setActiveSource] = useState<{
+    source: ReaderAISource;
+    displayIndex: number;
+  }>();
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const sourceTriggerRef = useRef<HTMLElement | null>(null);
+  const firstHighlightRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const previousFocus =
@@ -196,24 +500,51 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
     setQuestion('');
   };
 
+  useEffect(() => {
+    if (!activeSource || typeof firstHighlightRef.current?.scrollIntoView !== 'function') return;
+    firstHighlightRef.current.scrollIntoView({ block: 'center', inline: 'nearest' });
+  }, [activeSource]);
+
+  const closeSourcePreview = () => {
+    setActiveSource(undefined);
+    sourceTriggerRef.current?.focus({ preventScroll: true });
+    sourceTriggerRef.current = null;
+  };
+
   const handleDialogKeyDown = (event: React.KeyboardEvent) => {
     event.stopPropagation();
     if (event.key === 'Escape') {
-      onClose();
+      if (activeSource) {
+        closeSourcePreview();
+      } else {
+        onClose();
+      }
       return;
     }
-    if (event.key !== 'Tab' || !dialogRef.current) return;
+    const focusRoot = dialogRef.current;
+    if (event.key !== 'Tab' || !focusRoot) return;
 
+    const sourcePreviewSelector = '#reader-ai-source-preview';
     const focusableElements = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>(
+      focusRoot.querySelectorAll<HTMLElement>(
         'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
       ),
+    ).filter((element) =>
+      activeSource
+        ? !!element.closest(sourcePreviewSelector)
+        : !element.closest(sourcePreviewSelector),
     );
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
     if (!firstElement || !lastElement) return;
 
-    if (!dialogRef.current.contains(document.activeElement)) {
+    const activeElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const isActiveInsideFocusScope = activeSource
+      ? !!activeElement?.closest(sourcePreviewSelector)
+      : !!activeElement && focusRoot.contains(activeElement);
+
+    if (!isActiveInsideFocusScope) {
       event.preventDefault();
       (event.shiftKey ? lastElement : firstElement).focus();
     } else if (event.shiftKey && document.activeElement === firstElement) {
@@ -225,16 +556,23 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
     }
   };
 
-  const openSource = (source: ReaderAISource, index: number) => {
-    setActiveSource({ source, index });
+  const openSource = (source: ReaderAISource, displayIndex: number, trigger?: HTMLElement) => {
+    sourceTriggerRef.current = trigger ?? null;
+    setActiveSource({ source, displayIndex });
   };
 
   const initialQuestion = messages.find((message) => message.role === 'user');
   const conversationMessages = initialQuestion
     ? messages.filter((message) => message.id !== initialQuestion.id)
     : messages;
+  const topSystemInset = appService?.hasSafeAreaInset
+    ? Math.max(gridInsets?.top ?? 0, systemUIVisible ? statusBarHeight : 0)
+    : 0;
   const indexingPercent = indexingProgress?.total
     ? Math.min(100, Math.round((indexingProgress.current / indexingProgress.total) * 100))
+    : undefined;
+  const pendingAssistantMessageId = loading
+    ? [...conversationMessages].reverse().find((message) => message.role === 'assistant')?.id
     : undefined;
 
   return (
@@ -252,13 +590,14 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
     >
       <header
         className='border-base-content/10 bg-base-100/95 eink:bg-base-100 eink:backdrop-blur-0 border-b p-4 pb-3 backdrop-blur-md'
+        role='banner'
+        aria-label='AI 阅读助手顶部栏'
         style={{
-          paddingTop: 16 + (gridInsets?.top ?? 0),
+          paddingTop: 16 + topSystemInset,
           paddingRight: 16 + (gridInsets?.right ?? 0),
           paddingLeft: 16 + (gridInsets?.left ?? 0),
         }}
       >
-        <div className='bg-base-content/20 mx-auto mb-3 h-1 w-10 rounded-full' aria-hidden='true' />
         <div className='flex items-start justify-between gap-2'>
           <div className='min-w-0 flex-1'>
             <p className='text-primary/80 mb-1 text-[11px] font-semibold uppercase tracking-wide'>
@@ -274,7 +613,10 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
               围绕当前位置解释、总结和追问。
             </p>
           </div>
-          <div className='flex shrink-0 items-center gap-1'>
+          <div
+            className='flex shrink-0 items-center gap-1'
+            data-testid='reader-ai-answer-header-actions'
+          >
             <ReaderAISpoilerGuard
               enabled={spoilerProtection}
               onChange={(enabled) => onSpoilerProtectionChange?.(enabled)}
@@ -283,8 +625,8 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
             <button
               ref={closeButtonRef}
               type='button'
+              className='btn btn-ghost btn-circle text-base-content/70 hover:bg-base-200 h-11 min-h-11 w-11'
               onClick={onClose}
-              className='btn btn-ghost btn-circle text-base-content/70 h-11 min-h-11 w-11 shrink-0'
               aria-label='关闭 AI 阅读助手'
             >
               <MdClose size={20} aria-hidden='true' />
@@ -352,7 +694,12 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
 
         <section className='space-y-3' aria-label='AI 对话历史'>
           {conversationMessages.map((message) => {
-            const orderedSources = getOrderedSources(message.sources);
+            const isPendingAssistantMessage = message.id === pendingAssistantMessageId;
+            const orderedSources = isPendingAssistantMessage
+              ? []
+              : getOrderedSources(message.sources);
+            const citationMap = buildCitationDisplayMap(message.content, orderedSources);
+            const displaySources = getDisplaySources(message.content, orderedSources, citationMap);
             return (
               <article
                 key={message.id}
@@ -373,13 +720,19 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
                     content={message.content}
                     role={message.role}
                     sources={orderedSources}
-                    onCitationClick={(index) => {
-                      const source = orderedSources[index];
-                      if (source) openSource(source, index);
+                    citationMap={citationMap}
+                    onCitationClick={(index, trigger) => {
+                      const displayIndex = citationMap.get(index);
+                      const source = displaySources.find((displaySource) =>
+                        displaySource.sourceIndexes.includes(index),
+                      )?.source;
+                      if (source && displayIndex !== undefined) {
+                        openSource(source, displayIndex, trigger);
+                      }
                     }}
                   />
                 )}
-                {message.role === 'assistant' && orderedSources.length ? (
+                {message.role === 'assistant' && displaySources.length ? (
                   <section
                     className='border-base-content/10 mt-3 border-t pt-3'
                     aria-label='引用来源'
@@ -388,30 +741,20 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
                       引用
                     </div>
                     <div className='space-y-1.5'>
-                      {orderedSources.map((source, index) => {
-                        const label = formatSourceLabel(source);
-                        return (
-                          <button
-                            key={source.id}
-                            type='button'
-                            className='hover:border-primary/30 hover:bg-primary/5 focus-visible:ring-primary/30 border-base-content/10 bg-base-200/45 text-base-content/75 flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs leading-5 transition-colors focus:outline-none focus-visible:ring-2'
-                            onClick={() => openSource(source, index)}
-                            aria-label={`查看引用 ${index + 1}：${label}`}
-                          >
-                            <span className='bg-primary/10 text-primary border-primary/20 inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold'>
-                              [{index + 1}]
-                            </span>
-                            <span className='min-w-0 flex-1'>
-                              <span className='block font-medium'>{source.chapterTitle}</span>
-                              <span className='text-base-content/50 block'>
-                                {source.confidence === 'exact' && source.pageNumber
-                                  ? `第 ${source.pageNumber} 页`
-                                  : '约略位置'}
-                              </span>
-                            </span>
-                          </button>
-                        );
-                      })}
+                      {displaySources.map(({ source, displayIndex }) => (
+                        <button
+                          key={source.id}
+                          type='button'
+                          className='hover:border-primary/30 hover:bg-primary/5 focus-visible:ring-primary/30 border-base-content/10 bg-base-200/45 text-base-content/75 flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs leading-5 transition-colors focus:outline-none focus-visible:ring-2'
+                          onClick={(event) => openSource(source, displayIndex, event.currentTarget)}
+                          aria-label={`查看引用 ${displayIndex + 1}：${source.chapterTitle}`}
+                        >
+                          <span className='bg-primary/10 text-primary border-primary/20 inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold'>
+                            [{displayIndex + 1}]
+                          </span>
+                          <span className='min-w-0 flex-1 font-medium'>{source.chapterTitle}</span>
+                        </button>
+                      ))}
                     </div>
                   </section>
                 ) : null}
@@ -463,53 +806,155 @@ const ReaderAIAnswerPanel: React.FC<ReaderAIAnswerPanelProps> = ({
       </div>
 
       {activeSource && (
-        <div className='absolute inset-x-0 bottom-0 z-[60] px-3 pb-3' role='presentation'>
-          <section
-            className='border-base-content/10 bg-base-100 text-base-content rounded-[1.5rem] border p-4 shadow-2xl'
-            role='dialog'
-            aria-modal='false'
-            aria-label={`引用 ${activeSource.index + 1}`}
-          >
-            <div className='mb-3 flex items-start justify-between gap-3'>
-              <div className='min-w-0'>
-                <div className='text-primary/80 mb-1 text-[11px] font-semibold tracking-wide'>
-                  引用 [{activeSource.index + 1}]
-                </div>
-                <h3 className='text-sm font-semibold leading-5'>
-                  {activeSource.source.chapterTitle}
-                </h3>
-                <p className='text-base-content/55 mt-1 text-xs'>
-                  {activeSource.source.confidence === 'exact' && activeSource.source.pageNumber
-                    ? `第 ${activeSource.source.pageNumber} 页`
-                    : '约略位置'}
-                </p>
+        <Dialog
+          isOpen={true}
+          title='原文上下文预览'
+          id='reader-ai-source-preview'
+          snapHeight={0.72}
+          dragHandleLabel='下拉关闭原文上下文预览'
+          header={<div className='sr-only'>原文上下文预览</div>}
+          className='modal-open absolute inset-0 z-[60]'
+          bgClassName='bg-base-content/20 backdrop-blur-[1px]'
+          boxClassName='border-base-content/10 bg-base-100/95 text-base-content shadow-2xl backdrop-blur-md sm:max-w-md'
+          contentClassName='!my-0 !px-4 !pb-4 !pt-0'
+          onClose={closeSourcePreview}
+        >
+          <div className='mb-3 flex items-start justify-between gap-3'>
+            <div className='min-w-0'>
+              <div className='text-primary/80 mb-1 text-[11px] font-semibold tracking-wide'>
+                引用 [{activeSource.displayIndex + 1}]
               </div>
-              <button
-                type='button'
-                className='btn btn-ghost btn-sm text-base-content/60 h-9 min-h-9 rounded-full px-3'
-                onClick={() => setActiveSource(undefined)}
-              >
-                关闭
-              </button>
+              <h3 className='text-sm font-semibold leading-5'>
+                {activeSource.source.chapterTitle}
+              </h3>
+              <p className='text-base-content/55 mt-1 text-xs'>不会改变当前阅读位置</p>
             </div>
-            {activeSource.source.snippet && (
-              <blockquote className='border-primary/25 bg-primary/5 text-base-content/70 mb-3 rounded-2xl border-l-2 px-3 py-2 text-xs leading-5'>
-                「{activeSource.source.snippet}」
-              </blockquote>
+          </div>
+          <div
+            className='focus-visible:ring-primary/30 max-h-[58vh] overflow-y-auto pr-1 font-serif text-[17px] leading-8 focus-visible:outline-none focus-visible:ring-2'
+            role='region'
+            aria-label='原文上下文内容'
+            tabIndex={0}
+          >
+            {getSourcePreviewText(activeSource.source) ? (
+              (() => {
+                const previewText = getSourcePreviewText(activeSource.source);
+                const highlightSpans = getValidHighlightSpans(
+                  previewText,
+                  activeSource.source.highlightSpans,
+                );
+                if (highlightSpans.length > 0) {
+                  const nodes: React.ReactNode[] = [];
+                  let cursor = 0;
+                  let highlightKey = 0;
+                  let firstHighlightAssigned = false;
+                  const pushHighlightedSegment = (text: string) => {
+                    const parts = text.split(/(\s+)/);
+                    parts.forEach((part) => {
+                      if (!part) return;
+                      if (/^\s+$/.test(part)) {
+                        nodes.push(
+                          <React.Fragment
+                            key={`${activeSource.source.id}-highlight-space-${highlightKey}`}
+                          >
+                            {part}
+                          </React.Fragment>,
+                        );
+                        highlightKey += 1;
+                        return;
+                      }
+                      const shouldAssignHighlightRef = !firstHighlightAssigned;
+                      firstHighlightAssigned = true;
+                      if (shouldAssignHighlightRef) {
+                        nodes.push(
+                          <span
+                            key={`${activeSource.source.id}-highlight-start-${highlightKey}`}
+                            ref={(element) => {
+                              firstHighlightRef.current = element;
+                            }}
+                            data-testid='reader-ai-source-highlight-start'
+                            aria-hidden='true'
+                            className='inline-block h-0 w-0 align-baseline'
+                          />,
+                        );
+                      }
+                      nodes.push(
+                        <span
+                          key={`${activeSource.source.id}-highlight-${highlightKey}`}
+                          data-testid='reader-ai-source-highlight'
+                          className='bg-warning/25 text-base-content box-decoration-clone px-1 [-webkit-box-decoration-break:clone]'
+                        >
+                          {part}
+                        </span>,
+                      );
+                      highlightKey += 1;
+                    });
+                  };
+
+                  highlightSpans.forEach((span, spanIndex) => {
+                    if (span.start > cursor) {
+                      nodes.push(
+                        <React.Fragment key={`${activeSource.source.id}-text-${spanIndex}`}>
+                          {previewText.slice(cursor, span.start)}
+                        </React.Fragment>,
+                      );
+                    }
+                    pushHighlightedSegment(previewText.slice(span.start, span.end));
+                    cursor = span.end;
+                  });
+                  if (cursor < previewText.length) {
+                    nodes.push(
+                      <React.Fragment key={`${activeSource.source.id}-text-end`}>
+                        {previewText.slice(cursor)}
+                      </React.Fragment>,
+                    );
+                  }
+                  return (
+                    <p className='text-base-content/85 whitespace-pre-wrap px-1 py-1'>{nodes}</p>
+                  );
+                }
+                let firstQuotedParagraphAssigned = false;
+                return splitPreviewParagraphs(previewText).map((paragraph, paragraphIndex) => {
+                  const isQuoted = isSourcePreviewParagraphHighlighted(
+                    paragraph,
+                    activeSource.source,
+                  );
+                  const shouldAssignHighlightRef = isQuoted && !firstQuotedParagraphAssigned;
+                  if (isQuoted) firstQuotedParagraphAssigned = true;
+                  return (
+                    <p
+                      key={`${activeSource.source.id}-${paragraphIndex}`}
+                      ref={
+                        shouldAssignHighlightRef
+                          ? (element) => {
+                              firstHighlightRef.current = element;
+                            }
+                          : undefined
+                      }
+                      className={
+                        isQuoted
+                          ? 'bg-warning/25 text-base-content box-decoration-clone px-1 py-1 [-webkit-box-decoration-break:clone]'
+                          : 'text-base-content/85 px-1 py-1'
+                      }
+                    >
+                      {paragraph}
+                    </p>
+                  );
+                });
+              })()
+            ) : (
+              <p className='text-base-content/60 px-1 py-1 font-sans text-sm leading-6'>
+                暂无可预览的原文片段。
+              </p>
             )}
-            <button
-              type='button'
-              className='btn btn-primary h-10 min-h-10 w-full rounded-2xl text-sm'
-              disabled={!activeSource.source.cfi && !activeSource.source.href}
-              onClick={() => {
-                onSourceClick?.(activeSource.source);
-                setActiveSource(undefined);
-              }}
-            >
-              跳转查看原文
-            </button>
-          </section>
-        </div>
+            {activeSource.source.atSpoilerBoundary && (
+              <div className='border-base-content/10 text-base-content/60 mt-3 rounded-2xl border px-3 py-2 text-center font-sans text-xs leading-5'>
+                <div className='font-semibold'>已到达你的当前阅读进度</div>
+                <div>预览已限制在当前阅读进度内。</div>
+              </div>
+            )}
+          </div>
+        </Dialog>
       )}
 
       <footer

@@ -1,11 +1,13 @@
 import { embed, embedMany } from 'ai';
 import { aiStore } from './storage/aiStore';
 import { estimateAIIndexBytes } from './storage/estimate';
+import { buildEntitySidecarForChunks } from './entitySidecar';
 import { CHUNKER_VERSION, chunkText, extractTextFromDocument } from './utils/chunker';
 import { withRetryAndTimeout, AI_TIMEOUTS, AI_RETRY_CONFIGS } from './utils/retry';
 import { AI_PROVIDER_CATALOG } from './constants';
 import { getAIProvider } from './providers';
 import { aiLogger } from './logger';
+import { logDiagnosticError, logDiagnosticEvent } from '@/services/diagnostics/logger';
 import {
   BM25_VERSION,
   getCurrentPageContextChunks,
@@ -34,6 +36,7 @@ interface SectionItem {
   cfi?: string;
   href?: string;
   createDocument: () => Promise<Document>;
+  loadText?: () => Promise<string | null>;
 }
 
 interface TOCItem {
@@ -348,6 +351,9 @@ async function runIndexBook(
     await aiStore.saveBM25Index(bookHash, allChunks);
 
     throwIfAborted(signal);
+    await buildAndSaveEntitySidecar(bookHash, allChunks);
+
+    throwIfAborted(signal);
     const meta: BookIndexMeta = {
       bookHash,
       bookTitle: title,
@@ -380,6 +386,22 @@ async function runIndexBook(
     state.error = (error as Error).message;
     aiLogger.rag.indexError(bookHash, (error as Error).message);
     throw error;
+  }
+}
+
+async function buildAndSaveEntitySidecar(bookHash: string, chunks: TextChunk[]): Promise<void> {
+  const startedAt = Date.now();
+  try {
+    const sidecar = buildEntitySidecarForChunks(chunks);
+    await aiStore.saveEntitySidecar(bookHash, sidecar);
+    await logDiagnosticEvent('reader_ai.entity_sidecar_built', 'debug', {
+      aliasCount: sidecar.meta.aliasCount,
+      factCount: sidecar.meta.factCount,
+      chunkCount: sidecar.meta.chunkCount,
+      durationMs: Date.now() - startedAt,
+    });
+  } catch (error) {
+    await logDiagnosticError('reader_ai.entity_sidecar_failed', error, { operation: 'build' });
   }
 }
 

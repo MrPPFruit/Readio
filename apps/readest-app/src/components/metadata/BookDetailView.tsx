@@ -2,7 +2,6 @@ import clsx from 'clsx';
 import React from 'react';
 import {
   MdOutlineCloudDownload,
-  MdOutlineCloudUpload,
   MdOutlineDelete,
   MdOutlineEdit,
   MdSaveAlt,
@@ -50,7 +49,7 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
   onDeleteCloudBackup,
   onDeleteLocalCopy,
   onDownload,
-  onUpload,
+  onUpload: _onUpload,
   onExport,
 }) => {
   const _ = useTranslation();
@@ -111,12 +110,7 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
                     'border-base-300 !bg-base-200 z-20 mt-1 max-w-[90vw] shadow-2xl',
                   )}
                 >
-                  <MenuItem
-                    noIcon
-                    transient
-                    label={_('Remove from Cloud & Device')}
-                    onClick={onDelete}
-                  />
+                  <MenuItem noIcon transient label={_('Remove from Library')} onClick={onDelete} />
                   <MenuItem
                     noIcon
                     transient
@@ -137,11 +131,6 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
             {book.uploadedAt && onDownload && (
               <button onClick={onDownload} title={_('Download from Cloud')}>
                 <MdOutlineCloudDownload className='fill-base-content' />
-              </button>
-            )}
-            {book.downloadedAt && onUpload && (
-              <button onClick={onUpload} title={_('Upload to Cloud')}>
-                <MdOutlineCloudUpload className='fill-base-content' />
               </button>
             )}
             {book.downloadedAt && onExport && (

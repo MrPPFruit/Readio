@@ -80,6 +80,62 @@ export interface ScoredChunk extends TextChunk {
   searchMethod: 'bm25' | 'vector' | 'hybrid';
 }
 
+export type EntitySidecarConfidence = 'high' | 'medium';
+
+export type EntitySidecarHitType = 'alias' | 'fact';
+
+export interface EntityAliasRecord {
+  text: string;
+  normalizedText: string;
+  chunkId: string;
+  sectionIndex: number;
+  pageNumber: number;
+  confidence: EntitySidecarConfidence;
+}
+
+export interface EntityFactRecord {
+  id: string;
+  chunkId: string;
+  sectionIndex: number;
+  pageNumber: number;
+  endPageNumber?: number;
+  sortIndex?: number;
+  text: string;
+}
+
+export interface EntitySidecarEntity {
+  id: string;
+  canonicalName: string;
+  aliases: EntityAliasRecord[];
+  facts: EntityFactRecord[];
+}
+
+export interface EntitySidecarMeta {
+  version: number;
+  aliasCount: number;
+  factCount: number;
+  chunkCount: number;
+  createdAt: number;
+}
+
+export interface EntitySidecarIndex {
+  bookHash: string;
+  entities: EntitySidecarEntity[];
+  meta: EntitySidecarMeta;
+}
+
+export interface EntitySidecarHit {
+  chunkId: string;
+  entityId: string;
+  hitType: EntitySidecarHitType;
+  score: number;
+  sectionIndex: number;
+  pageNumber: number;
+  endPageNumber?: number;
+  sortIndex?: number;
+  aliases: string[];
+}
+
 export interface BookIndexMeta {
   bookHash: string;
   bookTitle: string;

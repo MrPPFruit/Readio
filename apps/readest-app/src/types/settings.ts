@@ -4,6 +4,8 @@ import { CustomTexture } from '@/styles/textures';
 import { HighlightColor, HighlightStyle, UserHighlightColor, ViewSettings } from './book';
 import { OPDSCatalog } from './opds';
 import type { AISettings } from '@/services/ai/types';
+import type { DiagnosticsSettings } from '@/services/diagnostics/types';
+export type { DiagnosticsSettings } from '@/services/diagnostics/types';
 import type { NotebookTab } from '@/store/notebookStore';
 
 export type ThemeType = 'light' | 'dark' | 'auto';
@@ -125,6 +127,7 @@ export interface SystemSettings {
   migrationVersion: number;
 
   aiSettings: AISettings;
+  diagnostics: DiagnosticsSettings;
   // Global read settings that apply to the reader page
   globalReadSettings: ReadSettings;
   // Global view settings that apply to all books, and can be overridden by book-specific view settings

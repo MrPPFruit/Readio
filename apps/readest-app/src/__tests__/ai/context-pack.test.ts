@@ -89,6 +89,65 @@ describe('packReaderContext', () => {
     expect(packed.map((chunk) => chunk.id)).toEqual(['evidence']);
   });
 
+  it('keeps entity evidence diverse across sections instead of filling the budget from one section', () => {
+    const packed = packReaderContext({
+      question: '阿兹克是谁？',
+      chunks: [
+        makeChunk({
+          id: 'same-section-1',
+          sectionIndex: 88,
+          chapterTitle: '第八十八章 当前线索',
+          text: '克莱恩又想到了阿兹克先生。',
+          pageNumber: 700,
+          sortIndex: 700_000,
+          score: 10,
+        }),
+        makeChunk({
+          id: 'same-section-2',
+          sectionIndex: 88,
+          chapterTitle: '第八十八章 当前线索',
+          text: '阿兹克先生这个名字再次浮现。',
+          pageNumber: 700,
+          sortIndex: 700_010,
+          score: 9,
+        }),
+        makeChunk({
+          id: 'same-section-3',
+          sectionIndex: 88,
+          chapterTitle: '第八十八章 当前线索',
+          text: '这让克莱恩联想到阿兹克先生。',
+          pageNumber: 700,
+          sortIndex: 700_020,
+          score: 8,
+        }),
+        makeChunk({
+          id: 'teacher',
+          sectionIndex: 12,
+          chapterTitle: '第十二章 老师',
+          text: '阿兹克先生是克莱恩认识的历史老师。',
+          pageNumber: 100,
+          sortIndex: 100_000,
+          score: 4,
+        }),
+        makeChunk({
+          id: 'amnesia',
+          sectionIndex: 24,
+          chapterTitle: '第二十四章 记忆',
+          text: '阿兹克先生失去了一些记忆。',
+          pageNumber: 210,
+          sortIndex: 210_000,
+          score: 3,
+        }),
+      ],
+      currentPage: 700,
+      maxContextChunks: 3,
+      spoilerProtection: true,
+      preferSectionDiversity: true,
+    });
+
+    expect(packed.map((chunk) => chunk.id)).toEqual(['same-section-1', 'teacher', 'amnesia']);
+  });
+
   it('limits output to maxContextChunks', () => {
     const packed = packReaderContext({
       question: '线索是什么？',

@@ -29,11 +29,12 @@ const testMocks = vi.hoisted(() => {
     loadLibraryBooks: vi.fn(async () => []),
     saveLibraryBooks: vi.fn(async () => undefined),
     importBook: vi.fn(),
+    downloadBook: vi.fn(),
     deleteBook: vi.fn(async () => undefined),
   };
 
   const libraryStoreState = {
-    library: [],
+    library: [{ hash: 'existing-book', title: 'Existing Book', deletedAt: null }],
     isSyncing: false,
     syncProgress: 0,
     updateBook: vi.fn(),
@@ -59,8 +60,17 @@ const testMocks = vi.hoisted(() => {
     queueDelete: vi.fn(),
   };
   const deleteResults: boolean[] = [];
+  const logDiagnosticError = vi.fn().mockResolvedValue(undefined);
+  const logDiagnosticEvent = vi.fn().mockResolvedValue(undefined);
 
-  return { appServiceMock, libraryStoreMock, transferManagerMock, deleteResults };
+  return {
+    appServiceMock,
+    libraryStoreMock,
+    transferManagerMock,
+    deleteResults,
+    logDiagnosticError,
+    logDiagnosticEvent,
+  };
 });
 
 vi.mock('next/navigation', () => ({
@@ -147,6 +157,11 @@ vi.mock('@/services/transferManager', () => ({
   transferManager: testMocks.transferManagerMock,
 }));
 
+vi.mock('@/services/diagnostics/logger', () => ({
+  logDiagnosticError: testMocks.logDiagnosticError,
+  logDiagnosticEvent: testMocks.logDiagnosticEvent,
+}));
+
 vi.mock('@/utils/window', () => ({
   tauriHandleClose: vi.fn(),
   tauriHandleSetAlwaysOnTop: vi.fn(),
@@ -179,9 +194,11 @@ vi.mock('@/app/library/hooks/useDragDropImport', () => ({
 
 vi.mock('@/app/library/components/LibraryHeader', () => ({
   default: ({ onImportEpubsFromDirectory }: { onImportEpubsFromDirectory?: () => void }) => (
-    <button type='button' onClick={onImportEpubsFromDirectory}>
-      一键导入本地 EPUB
-    </button>
+    <div>
+      <button type='button' onClick={onImportEpubsFromDirectory}>
+        一键导入本地 EPUB
+      </button>
+    </div>
   ),
 }));
 
@@ -198,7 +215,7 @@ vi.mock('@/components/metadata', () => ({
     handleBookDelete,
   }: {
     book: unknown;
-    handleBookDelete?: (book: unknown) => Promise<boolean>;
+    handleBookDelete?: (book: unknown, options?: { deleteLocalFile?: boolean }) => Promise<boolean>;
   }) => (
     <button type='button' onClick={() => handleBookDelete?.(book)}>
       删除书籍
@@ -209,28 +226,45 @@ vi.mock('@/app/library/components/MigrateDataWindow', () => ({ MigrateDataWindow
 vi.mock('@/app/library/components/BackupWindow', () => ({ BackupWindow: () => null }));
 vi.mock('@/app/library/components/OPDSDialog', () => ({ CatalogDialog: () => null }));
 vi.mock('@/app/library/components/TransferQueuePanel', () => ({ default: () => null }));
+vi.mock('@/app/library/components/AIBookSearchDialog', () => ({
+  default: () => <section>AI 搜书全屏</section>,
+}));
 vi.mock('@/app/library/components/ContinueReadingCard', () => ({ default: () => null }));
 vi.mock('@/app/library/components/LibraryEmptyState', () => ({ default: () => null }));
 vi.mock('@/app/library/components/Bookshelf', () => ({
   default: ({
     libraryBooks,
     handleBookDelete,
+    handleBookDownload,
+    onOpenAIBookSearch,
   }: {
     libraryBooks: Array<{ title: string }>;
-    handleBookDelete: (book: unknown) => Promise<boolean>;
+    handleBookDelete: (book: unknown, options?: { deleteLocalFile?: boolean }) => Promise<boolean>;
+    handleBookDownload: (
+      book: unknown,
+      options?: { redownload?: boolean; queued?: boolean },
+    ) => Promise<boolean>;
+    onOpenAIBookSearch: () => void;
   }) => (
     <div>
       {libraryBooks.map((book) => (
-        <button
-          key={book.title}
-          type='button'
-          onClick={async () => {
-            testMocks.deleteResults.push(await handleBookDelete(book));
-          }}
-        >
-          删除 {book.title}
-        </button>
+        <div key={book.title}>
+          <button
+            type='button'
+            onClick={async () => {
+              testMocks.deleteResults.push(await handleBookDelete(book, { deleteLocalFile: true }));
+            }}
+          >
+            删除 {book.title}
+          </button>
+          <button type='button' onClick={() => handleBookDownload(book, { redownload: true })}>
+            下载 {book.title}
+          </button>
+        </div>
       ))}
+      <button type='button' onClick={onOpenAIBookSearch}>
+        全网搜书
+      </button>
     </div>
   ),
 }));
@@ -242,13 +276,27 @@ let progressHandler: ((progress: { scannedCount: number; file?: string }) => voi
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  testMocks.libraryStoreMock.getState().library = [];
+  testMocks.libraryStoreMock.getState().library = [
+    { hash: 'existing-book', title: 'Existing Book', deletedAt: null },
+  ];
   testMocks.deleteResults.length = 0;
   resolveScan = undefined;
   progressHandler = undefined;
 });
 
 describe('Library EPUB scan import flow', () => {
+  it('opens AI book search from the bookshelf footer as a full-screen portal without modal overlay', () => {
+    render(<LibraryPage />);
+
+    expect(screen.queryByRole('button', { name: 'AI 搜书' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '全网搜书' }));
+
+    const aiSurface = screen.getByText('AI 搜书全屏');
+    const portalRoot = aiSurface.parentElement;
+    expect(portalRoot?.className).not.toContain('bg-black');
+    expect(portalRoot?.className).not.toContain('bg-opacity-50');
+  });
+
   it('opens the scan dialog and streams found EPUB rows before import', async () => {
     vi.mocked(findLocalEpubFiles).mockImplementation((handler) => {
       progressHandler = handler;
@@ -332,6 +380,79 @@ describe('Library EPUB scan import flow', () => {
     expect(existingVisibleBook.groupName).toBe('Download');
   });
 
+  it('logs import failures and completion counts without leaking file paths', async () => {
+    testMocks.appServiceMock.importBook.mockImplementation(async (file: string) => {
+      if (file.endsWith('private-failure.epub')) throw new Error('cannot parse epub');
+      return {
+        hash: file,
+        title: 'safe imported title',
+        format: 'EPUB',
+        author: '',
+        createdAt: 0,
+        updatedAt: 0,
+        deletedAt: null,
+        downloadedAt: 0,
+      };
+    });
+    vi.mocked(findLocalEpubFiles).mockResolvedValue({
+      files: [
+        {
+          path: '/storage/emulated/0/Download/private-success.epub',
+          basePath: '/storage/emulated/0',
+        },
+        {
+          path: '/storage/emulated/0/Download/private-failure.epub',
+          basePath: '/storage/emulated/0',
+        },
+      ],
+    });
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    render(<LibraryPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '一键导入本地 EPUB' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '导入 2 个文件' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: '导入 2 个文件' }));
+
+    await waitFor(() => expect(testMocks.appServiceMock.importBook).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(testMocks.logDiagnosticError).toHaveBeenCalledWith(
+        'library.import_failed',
+        expect.any(Error),
+        expect.objectContaining({
+          filenameLength: 'private-failure.epub'.length,
+          extension: 'epub',
+        }),
+      ),
+    );
+    expect(testMocks.logDiagnosticEvent).toHaveBeenCalledWith(
+      'library.import_completed',
+      'info',
+      expect.objectContaining({
+        attemptedCount: 1,
+        successCount: 1,
+        failedCount: 0,
+      }),
+    );
+    expect(testMocks.logDiagnosticEvent).toHaveBeenCalledWith(
+      'library.import_completed',
+      'info',
+      expect.objectContaining({
+        attemptedCount: 1,
+        successCount: 0,
+        failedCount: 1,
+      }),
+    );
+    const calls = JSON.stringify([
+      testMocks.logDiagnosticError.mock.calls,
+      testMocks.logDiagnosticEvent.mock.calls,
+    ]);
+    expect(calls).not.toContain('/storage/emulated/0/Download');
+    expect(calls).not.toContain('private-failure.epub');
+    expect(calls).not.toContain('private-success.epub');
+    errorSpy.mockRestore();
+  });
+
   it('reports how many scanned EPUB files were newly added versus already existing', async () => {
     const existingBooks = Array.from({ length: 4 }, (_, index) => ({
       hash: `existing-${index}`,
@@ -402,6 +523,41 @@ describe('Library EPUB scan import flow', () => {
       'toast',
       expect.objectContaining({ message: 'Successfully imported 1 book(s)' }),
     );
+  });
+
+  it('logs download failures without leaking book title', async () => {
+    testMocks.libraryStoreMock.getState().library = [
+      {
+        hash: 'private-book-hash',
+        title: 'Private Download Title',
+        format: 'EPUB',
+        author: '',
+        createdAt: 0,
+        updatedAt: 0,
+        deletedAt: null,
+        downloadedAt: null,
+      },
+    ] as never[];
+    testMocks.appServiceMock.downloadBook.mockRejectedValueOnce(new Error('download failed'));
+
+    render(<LibraryPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: '下载 Private Download Title' }));
+
+    await waitFor(() =>
+      expect(testMocks.logDiagnosticError).toHaveBeenCalledWith(
+        'library.download_failed',
+        expect.any(Error),
+        expect.objectContaining({
+          bookHashPresent: true,
+          redownload: true,
+          queued: false,
+        }),
+      ),
+    );
+    const calls = JSON.stringify(testMocks.logDiagnosticError.mock.calls);
+    expect(calls).not.toContain('Private Download Title');
+    expect(calls).not.toContain('private-book-hash');
   });
 
   it('deduplicates scan results, imports every selected EPUB, keeps them ungrouped, and can delete them', async () => {

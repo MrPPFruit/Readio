@@ -12,6 +12,7 @@ interface ReaderAIComposerProps {
   submitLabel?: string;
   disabled?: boolean;
   loading?: boolean;
+  className?: string;
 }
 
 export const ReaderAIComposer: React.FC<ReaderAIComposerProps> = ({
@@ -23,6 +24,7 @@ export const ReaderAIComposer: React.FC<ReaderAIComposerProps> = ({
   submitLabel = '发送问题',
   disabled = false,
   loading = false,
+  className,
 }) => {
   const inputId = useId();
   const trimmedValue = value.trim();
@@ -39,6 +41,7 @@ export const ReaderAIComposer: React.FC<ReaderAIComposerProps> = ({
         'border-base-content/10 bg-base-200/70 flex items-end gap-2 rounded-[1.25rem] border p-1.5 shadow-sm transition-colors',
         'focus-within:border-primary/40 focus-within:bg-base-100 focus-within:ring-primary/20 focus-within:ring-2',
         'eink:bg-base-100 eink:shadow-none',
+        className,
       )}
       onSubmit={(event) => {
         event.preventDefault();
@@ -168,7 +171,7 @@ export const ReaderAISuggestionRail: React.FC<ReaderAISuggestionRailProps> = ({
                 className={clsx(
                   'min-h-11 rounded-2xl border font-sans text-sm leading-5 transition-colors',
                   'focus-visible:ring-primary focus-visible:ring-offset-base-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
-                  stacked ? 'w-full px-3 py-2.5' : 'max-w-[78vw] rounded-full px-3.5 py-2',
+                  stacked ? 'w-full px-3 py-2' : 'max-w-[78vw] rounded-full px-3.5 py-2',
                   selected
                     ? 'border-primary/40 bg-primary/10 text-primary font-medium'
                     : 'border-base-content/10 bg-base-100 text-base-content/75 not-eink:hover:bg-base-200',

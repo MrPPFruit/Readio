@@ -19,6 +19,12 @@ import { getDirFromUILanguage } from '@/utils/rtl';
 import { DropdownProvider } from '@/context/DropdownContext';
 import { CommandPaletteProvider, CommandPalette } from '@/components/command-palette';
 import AtmosphereOverlay from '@/components/AtmosphereOverlay';
+import { DEFAULT_DIAGNOSTICS_SETTINGS } from '@/services/constants';
+import {
+  configureDiagnosticsLogger,
+  installGlobalDiagnosticsHandlers,
+  logDiagnosticError,
+} from '@/services/diagnostics/logger';
 
 const Providers = ({ children }: { children: React.ReactNode }) => {
   const { envConfig, appService } = useEnv();
@@ -52,14 +58,24 @@ const Providers = ({ children }: { children: React.ReactNode }) => {
     loadDataTheme();
     if (appService) {
       initSystemThemeListener(appService);
-      appService.loadSettings().then((settings) => {
-        const globalViewSettings = settings.globalViewSettings;
-        applyUILanguage(globalViewSettings.uiLanguage);
-        applyBackgroundTexture(envConfig, globalViewSettings);
-        if (globalViewSettings.isEink) {
-          applyEinkMode(true);
-        }
-      });
+      appService
+        .loadSettings()
+        .then((settings) => {
+          configureDiagnosticsLogger(appService, settings.diagnostics);
+          installGlobalDiagnosticsHandlers();
+
+          const globalViewSettings = settings.globalViewSettings;
+          applyUILanguage(globalViewSettings.uiLanguage);
+          applyBackgroundTexture(envConfig, globalViewSettings);
+          if (globalViewSettings.isEink) {
+            applyEinkMode(true);
+          }
+        })
+        .catch((error) => {
+          configureDiagnosticsLogger(appService, DEFAULT_DIAGNOSTICS_SETTINGS);
+          installGlobalDiagnosticsHandlers();
+          void logDiagnosticError('settings.load_failed', error);
+        });
     }
   }, [envConfig, appService, applyUILanguage, applyBackgroundTexture, applyEinkMode]);
 

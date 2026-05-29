@@ -29,15 +29,30 @@ export interface ReaderAIContext {
   selection?: ReaderAISelectionContext;
 }
 
+export interface ReaderAISourceHighlightSpan {
+  start: number;
+  end: number;
+  quote: string;
+  source: 'chunk' | 'reviewer';
+}
+
 export interface ReaderAISource {
   id: string;
   chapterTitle: string;
   pageNumber?: number;
   sectionIndex?: number;
   sortIndex?: number;
+  chunkIndex?: number;
+  startOffset?: number;
+  endOffset?: number;
   cfi?: string;
   href?: string;
   snippet?: string;
+  contextText?: string;
+  previewText?: string;
+  previewStartOffset?: number;
+  highlightSpans?: ReaderAISourceHighlightSpan[];
+  atSpoilerBoundary?: boolean;
   confidence: 'exact' | 'section' | 'approximate';
 }
 

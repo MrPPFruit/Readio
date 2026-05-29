@@ -14,6 +14,21 @@ import { Overlay } from './Overlay';
 
 const VELOCITY_THRESHOLD = 0.5;
 const SNAP_THRESHOLD = 0.2;
+const openDialogStack: symbol[] = [];
+
+const registerOpenDialog = (dialogId: symbol) => {
+  const existingIndex = openDialogStack.indexOf(dialogId);
+  if (existingIndex !== -1) openDialogStack.splice(existingIndex, 1);
+  openDialogStack.push(dialogId);
+};
+
+const unregisterOpenDialog = (dialogId: symbol) => {
+  const existingIndex = openDialogStack.indexOf(dialogId);
+  if (existingIndex !== -1) openDialogStack.splice(existingIndex, 1);
+};
+
+const isTopOpenDialog = (dialogId: symbol) =>
+  openDialogStack[openDialogStack.length - 1] === dialogId;
 
 interface DialogProps {
   id?: string;
@@ -23,6 +38,8 @@ interface DialogProps {
   dismissible?: boolean;
   header?: ReactNode;
   title?: string;
+  ariaDescribedBy?: string;
+  dragHandleLabel?: string;
   className?: string;
   bgClassName?: string;
   boxClassName?: string;
@@ -38,6 +55,8 @@ const Dialog: React.FC<DialogProps> = ({
   dismissible = true,
   header,
   title,
+  ariaDescribedBy,
+  dragHandleLabel,
   className,
   bgClassName,
   boxClassName,
@@ -51,19 +70,71 @@ const Dialog: React.FC<DialogProps> = ({
   const [isFullHeightInMobile, setIsFullHeightInMobile] = useState(!snapHeight);
   const [isRtl] = useState(() => getDirFromUILanguage() === 'rtl');
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const dialogIdRef = useRef(Symbol('Dialog'));
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const dismissibleRef = useRef(dismissible);
   const iconSize22 = useResponsiveSize(22);
   const isMobile = window.innerWidth < 640 || window.innerHeight < 640;
 
+  useEffect(() => {
+    onCloseRef.current = onClose;
+    dismissibleRef.current = dismissible;
+  }, [dismissible, onClose]);
+
+  const restorePreviousFocus = (dialogElement: HTMLDialogElement | null) => {
+    const previousActiveElement = previousActiveElementRef.current;
+    if (!previousActiveElement) return;
+
+    const activeElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (
+      !activeElement ||
+      activeElement === document.body ||
+      dialogElement?.contains(activeElement)
+    ) {
+      previousActiveElement.focus({ preventScroll: true });
+      previousActiveElementRef.current = null;
+    }
+  };
+
+  const trapFocus = (event: KeyboardEvent) => {
+    if (event.key !== 'Tab' || !dialogRef.current) return;
+
+    const focusableElements = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((element) => element.getAttribute('aria-hidden') !== 'true');
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    if (!firstElement || !lastElement) return;
+
+    if (!dialogRef.current.contains(document.activeElement)) {
+      event.preventDefault();
+      (event.shiftKey ? lastElement : firstElement).focus();
+    } else if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+    } else if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  };
+
   const handleKeyDown = (event: KeyboardEvent | CustomEvent) => {
+    if (!isTopOpenDialog(dialogIdRef.current)) return false;
+
     if (event instanceof CustomEvent) {
       if (event.detail.keyName === 'Back') {
-        onClose();
+        if (dismissibleRef.current) onCloseRef.current();
         return true;
       }
     } else {
       if (event.key === 'Escape') {
-        onClose();
+        if (dismissibleRef.current) onCloseRef.current();
+      } else {
+        trapFocus(event);
       }
       event.stopPropagation();
     }
@@ -72,15 +143,13 @@ const Dialog: React.FC<DialogProps> = ({
 
   useEffect(() => {
     if (!isOpen) {
-      if (previousActiveElementRef.current) {
-        previousActiveElementRef.current.focus();
-        previousActiveElementRef.current = null;
-      }
+      restorePreviousFocus(dialogRef.current);
       return;
     }
 
     previousActiveElementRef.current = document.activeElement as HTMLElement;
 
+    registerOpenDialog(dialogIdRef.current);
     setIsFullHeightInMobile(!snapHeight && isMobile);
     window.addEventListener('keydown', handleKeyDown);
     if (dialogRef.current) {
@@ -91,24 +160,27 @@ const Dialog: React.FC<DialogProps> = ({
       eventDispatcher.onSync('native-key-down', handleKeyDown);
     }
 
-    const timer = setTimeout(() => {
-      if (dialogRef.current) {
-        dialogRef.current.focus();
-      }
-    }, 100);
+    const dialogElement = dialogRef.current;
+    const initialFocusTarget = dragHandleLabel
+      ? dialogElement?.querySelector<HTMLElement>('.drag-handle')
+      : dialogElement;
+    initialFocusTarget?.focus({ preventScroll: true });
+
     return () => {
-      clearTimeout(timer);
+      unregisterOpenDialog(dialogIdRef.current);
       window.removeEventListener('keydown', handleKeyDown);
+      dialogElement?.removeEventListener('keydown', handleKeyDown);
       if (appService?.isAndroidApp) {
         releaseBackKeyInterception();
         eventDispatcher.offSync('native-key-down', handleKeyDown);
       }
+      restorePreviousFocus(dialogElement);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const handleDragMove = (data: { clientY: number; deltaY: number }) => {
-    if (!dismissible || !isMobile || !dialogRef.current) return;
+    if (!dismissible || (!isMobile && !snapHeight) || !dialogRef.current) return;
 
     const modal = dialogRef.current.querySelector('.modal-box') as HTMLElement;
     const overlay = dialogRef.current.querySelector('.overlay') as HTMLElement;
@@ -127,7 +199,7 @@ const Dialog: React.FC<DialogProps> = ({
   };
 
   const handleDragEnd = (data: { velocity: number; clientY: number }) => {
-    if (!dismissible || !isMobile || !dialogRef.current) return;
+    if (!dismissible || (!isMobile && !snapHeight) || !dialogRef.current) return;
     const modal = dialogRef.current.querySelector('.modal-box') as HTMLElement;
     const overlay = dialogRef.current.querySelector('.overlay') as HTMLElement;
     if (!modal || !overlay) return;
@@ -145,7 +217,7 @@ const Dialog: React.FC<DialogProps> = ({
       modal.style.transform = 'translateY(100%)';
       overlay.style.transition = `opacity ${transitionDuration}s ease-out`;
       overlay.style.opacity = '0';
-      onClose();
+      onCloseRef.current();
       setTimeout(() => {
         modal.style.transform = 'translateY(0%)';
       }, 300);
@@ -177,6 +249,9 @@ const Dialog: React.FC<DialogProps> = ({
   const handleDragKeyDown = () => {};
 
   const { handleDragStart } = useDrag(handleDragMove, handleDragKeyDown, handleDragEnd);
+  const closeIfDismissible = () => {
+    if (dismissibleRef.current) onCloseRef.current();
+  };
 
   return (
     <dialog
@@ -185,6 +260,8 @@ const Dialog: React.FC<DialogProps> = ({
       tabIndex={-1}
       open={isOpen}
       aria-label={title}
+      aria-describedby={ariaDescribedBy}
+      aria-modal='true'
       aria-hidden={!isOpen}
       className={clsx(
         'modal sm:min-w-90 z-50 h-full w-full !items-start !bg-transparent sm:w-full sm:!items-center',
@@ -198,7 +275,7 @@ const Dialog: React.FC<DialogProps> = ({
           appService?.hasRoundedWindow && 'rounded-window',
           bgClassName,
         )}
-        onDismiss={onClose}
+        onDismiss={dismissible ? closeIfDismissible : () => undefined}
       />
       <div
         className={clsx(
@@ -222,16 +299,33 @@ const Dialog: React.FC<DialogProps> = ({
         }}
       >
         {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
-        <div
-          className={clsx(
-            'drag-handle mb-2 h-6 max-h-6 min-h-6 w-full cursor-row-resize items-center justify-center',
-            'transition-padding-top flex duration-300 ease-out sm:hidden',
-          )}
-          onMouseDown={handleDragStart}
-          onTouchStart={handleDragStart}
-        >
-          <div className='bg-base-content/50 h-1 w-10 rounded-full'></div>
-        </div>
+        {dragHandleLabel ? (
+          <button
+            type='button'
+            className={clsx(
+              'drag-handle group mb-2 flex h-6 max-h-6 min-h-6 w-full cursor-row-resize touch-none items-center justify-center bg-transparent p-0',
+              'transition-padding-top duration-300 ease-out focus-visible:outline-none sm:hidden',
+            )}
+            onClick={closeIfDismissible}
+            onMouseDown={dismissible ? handleDragStart : undefined}
+            onTouchStart={dismissible ? handleDragStart : undefined}
+            disabled={!dismissible}
+            aria-label={dragHandleLabel}
+          >
+            <span className='bg-base-content/50 group-focus-visible:ring-primary/40 h-1 w-10 rounded-full group-focus-visible:ring-2'></span>
+          </button>
+        ) : (
+          <div
+            className={clsx(
+              'drag-handle mb-2 h-6 max-h-6 min-h-6 w-full cursor-row-resize items-center justify-center',
+              'transition-padding-top flex duration-300 ease-out sm:hidden',
+            )}
+            onMouseDown={handleDragStart}
+            onTouchStart={handleDragStart}
+          >
+            <div className='bg-base-content/50 h-1 w-10 rounded-full'></div>
+          </div>
+        )}
         <div className='dialog-header sticky top-1 z-10 flex items-center justify-between px-2 sm:pe-3 sm:ps-2'>
           {header ? (
             header
@@ -240,7 +334,7 @@ const Dialog: React.FC<DialogProps> = ({
               <button
                 aria-label={_('Close')}
                 aria-hidden={!isOpen}
-                onClick={onClose}
+                onClick={closeIfDismissible}
                 disabled={!dismissible}
                 className={
                   'btn btn-ghost btn-circle flex h-8 min-h-8 w-8 hover:bg-transparent focus:outline-none disabled:bg-transparent sm:hidden'
@@ -258,7 +352,7 @@ const Dialog: React.FC<DialogProps> = ({
               <button
                 aria-label={_('Close')}
                 aria-hidden={!isOpen}
-                onClick={onClose}
+                onClick={closeIfDismissible}
                 disabled={!dismissible}
                 className={
                   'bg-base-300/65 btn btn-ghost btn-circle ml-auto hidden h-6 min-h-6 w-6 focus:outline-none sm:flex'

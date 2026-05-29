@@ -110,8 +110,8 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
             : '0px',
       }}
     >
-      <div className='flex w-full items-center justify-between space-x-6 sm:space-x-12'>
-        <div className='exclude-title-bar-mousedown flex w-full items-center pl-4'>
+      <div className='flex w-full items-center justify-between gap-2 sm:gap-4'>
+        <div className='exclude-title-bar-mousedown flex min-w-0 flex-1 items-center pl-2'>
           <div className='bg-base-300/45 flex h-9 w-full items-center rounded-full sm:h-7'>
             <div className='relative flex min-w-0 flex-1 items-center'>
               <span className='text-base-content/50 absolute ps-3'>
@@ -138,7 +138,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
                 )}
               />
             </div>
-            <div className='text-base-content/50 flex shrink-0 items-center space-x-2 pe-3 sm:space-x-4'>
+            <div className='text-base-content/50 flex shrink-0 items-center space-x-1 pe-2 sm:space-x-1 sm:pe-3'>
               {searchQuery && (
                 <button
                   type='button'
@@ -152,7 +152,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
                   <IoMdCloseCircle className='h-4 w-4' />
                 </button>
               )}
-              <span className='bg-base-content/50 mx-2 h-4 w-[0.5px]'></span>
+              <span className='bg-base-content/50 mx-1 h-4 w-[0.5px] sm:mx-2'></span>
               <Dropdown
                 label={_('Import Books')}
                 className={clsx(
@@ -208,7 +208,7 @@ const LibraryHeader: React.FC<LibraryHeaderProps> = ({
             </button>
           </div>
         ) : (
-          <div className='flex h-full items-center gap-x-2 sm:gap-x-4'>
+          <div className='flex h-full items-center gap-x-1 sm:gap-x-1'>
             <Dropdown
               label={_('View Menu')}
               className='exclude-title-bar-mousedown dropdown-bottom dropdown-end'

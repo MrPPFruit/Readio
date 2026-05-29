@@ -1,16 +1,14 @@
 import clsx from 'clsx';
 import React, { useEffect, useState } from 'react';
 
-import { Book } from '@/types/book';
+import { Book, DeleteBookOptions } from '@/types/book';
 import { BookMetadata } from '@/libs/document';
 import { useEnv } from '@/context/EnvContext';
-import { useThemeStore } from '@/store/themeStore';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useMetadataEdit } from './useMetadataEdit';
 import { DeleteAction } from '@/types/system';
 import { eventDispatcher } from '@/utils/event';
 import { isWebAppPlatform } from '@/services/environment';
-import Alert from '@/components/Alert';
 import Dialog from '@/components/Dialog';
 import BookDetailView from './BookDetailView';
 import BookDetailEdit from './BookDetailEdit';
@@ -23,7 +21,7 @@ interface BookDetailModalProps {
   onClose: () => void;
   handleBookDownload?: (book: Book, options?: { redownload?: boolean; queued?: boolean }) => void;
   handleBookUpload?: (book: Book) => void;
-  handleBookDelete?: (book: Book) => void;
+  handleBookDelete?: (book: Book, options?: DeleteBookOptions) => void;
   handleBookDeleteCloudBackup?: (book: Book) => void;
   handleBookDeleteLocalCopy?: (book: Book) => void;
   handleBookMetadataUpdate?: (book: Book, updatedMetadata: BookMetadata) => void;
@@ -32,7 +30,7 @@ interface BookDetailModalProps {
 interface DeleteConfig {
   title: string;
   message: string;
-  handler?: (book: Book) => void;
+  handler?: (book: Book, options?: DeleteBookOptions) => void;
 }
 
 const BookDetailModal: React.FC<BookDetailModalProps> = ({
@@ -48,8 +46,8 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
 }) => {
   const _ = useTranslation();
   const { envConfig, appService } = useEnv();
-  const { safeAreaInsets } = useThemeStore();
   const [activeDeleteAction, setActiveDeleteAction] = useState<DeleteAction | null>(null);
+  const [deleteLocalFile, setDeleteLocalFile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [bookMeta, setBookMeta] = useState<BookMetadata | null>(null);
@@ -76,18 +74,18 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
 
   const deleteConfigs: Record<DeleteAction, DeleteConfig> = {
     both: {
-      title: _('Confirm Deletion'),
-      message: _('Are you sure to delete the selected book?'),
+      title: _('删除这本书？'),
+      message: _('这本书将从书架中移除，阅读进度和相关记录可能也会被删除。'),
       handler: handleBookDelete,
     },
     cloud: {
-      title: _('Confirm Deletion'),
-      message: _('Are you sure to delete the cloud backup of the selected book?'),
+      title: _('删除这本书？'),
+      message: _('这将删除这本书的云端备份。'),
       handler: handleBookDeleteCloudBackup,
     },
     local: {
-      title: _('Confirm Deletion'),
-      message: _('Are you sure to delete the local copy of the selected book?'),
+      title: _('删除这本书？'),
+      message: _('这将删除这本书在当前设备上的本地副本。'),
       handler: handleBookDeleteLocalCopy,
     },
   };
@@ -135,6 +133,7 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
   };
 
   const handleDeleteAction = (action: DeleteAction) => {
+    setDeleteLocalFile(false);
     setActiveDeleteAction(action);
   };
 
@@ -145,12 +144,13 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
     handleClose();
 
     if (config.handler) {
-      config.handler(book);
+      config.handler(book, activeDeleteAction === 'both' ? { deleteLocalFile } : undefined);
     }
   };
 
   const cancelDeleteAction = () => {
     setActiveDeleteAction(null);
+    setDeleteLocalFile(false);
   };
 
   const handleDelete = () => handleDeleteAction('both');
@@ -254,19 +254,52 @@ const BookDetailModal: React.FC<BookDetailModalProps> = ({
         )}
 
         {activeDeleteAction && currentDeleteConfig && (
-          <div
-            className={clsx('fixed bottom-0 left-0 right-0 z-50 flex justify-center')}
-            style={{
-              paddingBottom: `${(safeAreaInsets?.bottom || 0) + 16}px`,
-            }}
+          <Dialog
+            title={currentDeleteConfig.title}
+            isOpen={true}
+            snapHeight={0.38}
+            dragHandleLabel={_('下拉关闭删除确认')}
+            header={<div className='sr-only'>{currentDeleteConfig.title}</div>}
+            boxClassName='sm:h-auto sm:max-h-[90%] sm:max-w-md'
+            contentClassName='!my-0 !px-5 !pb-5 !pt-0'
+            onClose={cancelDeleteAction}
           >
-            <Alert
-              title={currentDeleteConfig.title}
-              message={currentDeleteConfig.message}
-              onCancel={cancelDeleteAction}
-              onConfirm={confirmDeleteAction}
-            />
-          </div>
+            <div className='space-y-4'>
+              <div>
+                <h3 className='text-base font-semibold'>{currentDeleteConfig.title}</h3>
+                <p className='text-base-content/70 mt-2 text-sm leading-6'>
+                  {currentDeleteConfig.message}
+                </p>
+              </div>
+              {activeDeleteAction === 'both' && (
+                <label className='text-base-content/80 flex min-h-11 items-center gap-3 rounded-lg px-1 text-sm leading-5'>
+                  <input
+                    type='checkbox'
+                    className='checkbox checkbox-sm'
+                    checked={deleteLocalFile}
+                    onChange={(event) => setDeleteLocalFile(event.target.checked)}
+                  />
+                  <span>{_('同时删除本地文件')}</span>
+                </label>
+              )}
+              <div className='flex justify-end gap-2'>
+                <button
+                  type='button'
+                  className='btn btn-ghost btn-sm rounded-full px-4'
+                  onClick={cancelDeleteAction}
+                >
+                  {_('取消')}
+                </button>
+                <button
+                  type='button'
+                  className='btn btn-error btn-sm rounded-full px-4'
+                  onClick={confirmDeleteAction}
+                >
+                  {_('删除')}
+                </button>
+              </div>
+            </div>
+          </Dialog>
         )}
       </div>
     </>

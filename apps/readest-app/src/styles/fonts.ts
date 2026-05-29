@@ -52,6 +52,11 @@ const getAdditionalCJKFontLinks = () => `
 
 const getAdditionalCJKFontFaces = () => `
   @font-face {
+    font-family: "Luo";
+    font-display: swap;
+    src: url("/fonts/Luo-Regular.woff2") format("woff2");
+  }
+  @font-face {
     font-family: "FangSong";
     font-display: swap;
     src: local("Fang Song"), local("FangSong"), local("Noto Serif CJK"), local("Source Han Serif SC VF"), url("https://db.onlinewebfonts.com/t/2ecbfe1d9bfc191c6f15c0ccc23cbd43.eot");

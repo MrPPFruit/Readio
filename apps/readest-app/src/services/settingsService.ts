@@ -22,6 +22,7 @@ import {
   DEFAULT_ANNOTATOR_CONFIG,
   DEFAULT_EINK_VIEW_SETTINGS,
   DEFAULT_VIEW_SETTINGS_CONFIG,
+  DEFAULT_DIAGNOSTICS_SETTINGS,
 } from './constants';
 import { DEFAULT_AI_SETTINGS } from './ai/constants';
 import { getTargetLang, isCJKEnv } from '@/utils/misc';
@@ -59,6 +60,18 @@ export function getDefaultViewSettings(ctx: Context): ViewSettings {
  *   draft builds of this feature) is folded in: hex entries attach to matching user
  *   colors, named entries move into `defaultHighlightLabels`.
  */
+const PREVIOUS_BUNDLED_CJK_DEFAULT_FONT = 'LXGW WenKai GB Screen';
+const LUO_CJK_FONT_MIGRATION_VERSION = 2;
+
+function migrateBundledCJKFontPrefs(view: ViewSettings, version: number): void {
+  if (
+    version < LUO_CJK_FONT_MIGRATION_VERSION &&
+    view.defaultCJKFont === PREVIOUS_BUNDLED_CJK_DEFAULT_FONT
+  ) {
+    view.defaultCJKFont = DEFAULT_BOOK_FONT.defaultCJKFont;
+  }
+}
+
 export function migrateHighlightColorPrefs(read: ReadSettings): void {
   const rawUser = (read.userHighlightColors ?? []) as unknown[];
   const userColors: UserHighlightColor[] = rawUser
@@ -143,9 +156,14 @@ export async function loadSettings(ctx: Context): Promise<SystemSettings> {
     scrolled: false,
     noContinuousScroll: false,
   };
+  migrateBundledCJKFontPrefs(settings.globalViewSettings, version);
   settings.aiSettings = {
     ...DEFAULT_AI_SETTINGS,
     ...settings.aiSettings,
+  };
+  settings.diagnostics = {
+    ...DEFAULT_DIAGNOSTICS_SETTINGS,
+    ...settings.diagnostics,
   };
 
   settings.localBooksDir = await ctx.fs.getPrefix('Books');

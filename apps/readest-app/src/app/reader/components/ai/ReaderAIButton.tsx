@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import React, { useRef } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { MdAutoAwesome, MdMenuBook } from 'react-icons/md';
 
 import { useEnv } from '@/context/EnvContext';
@@ -12,39 +12,82 @@ interface ReaderAIButtonProps {
 
 const READER_AI_BUTTON_BOTTOM_OFFSET = {
   default: 64,
+  panelGap: 0,
 } as const;
 
-const MOBILE_FOOTER_PANEL_TABS = new Set(['progress', 'font', 'color']);
+const MOBILE_FOOTER_PANEL_SELECTORS = {
+  progress: '.footerbar-progress-mobile',
+  font: '.footerbar-font-mobile',
+  color: '.footerbar-color-mobile',
+} as const;
+
+type MobileFooterPanelTab = keyof typeof MOBILE_FOOTER_PANEL_SELECTORS;
+
+const MOBILE_FOOTER_PANEL_HEIGHTS: Record<MobileFooterPanelTab, number> = {
+  progress: 143,
+  font: 140,
+  color: 283,
+};
+
+const MOBILE_FOOTER_PANEL_TABS = new Set<MobileFooterPanelTab>(['progress', 'font', 'color']);
 
 const ReaderAIButton: React.FC<ReaderAIButtonProps> = ({ bookKey, onClick }) => {
   const { appService } = useEnv();
-  const pointerOpenedRef = useRef(false);
   const { hoveredBookKey, getFooterActionTab, getViewSettings } = useReaderStore();
   const viewSettings = getViewSettings(bookKey);
   const footerActionTab = getFooterActionTab(bookKey);
   const isMobileFooter =
     appService?.isMobile || window.innerWidth < 640 || window.innerHeight < 640;
-  const isMobileFooterPanelOpen = isMobileFooter && MOBILE_FOOTER_PANEL_TABS.has(footerActionTab);
-  const bottomOffset = READER_AI_BUTTON_BOTTOM_OFFSET.default;
-  const openAIOnPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
+  const footerPanelTab = MOBILE_FOOTER_PANEL_TABS.has(footerActionTab as MobileFooterPanelTab)
+    ? (footerActionTab as MobileFooterPanelTab)
+    : null;
+  const isMobileFooterPanelOpen = isMobileFooter && footerPanelTab;
+  const expectedMobileFooterPanelHeight = footerPanelTab
+    ? MOBILE_FOOTER_PANEL_HEIGHTS[footerPanelTab]
+    : 0;
+  const [mobileFooterPanelHeight, setMobileFooterPanelHeight] = useState(
+    expectedMobileFooterPanelHeight,
+  );
+
+  useLayoutEffect(() => {
+    if (!isMobileFooterPanelOpen || !footerPanelTab) {
+      setMobileFooterPanelHeight(0);
+      return;
+    }
+
+    const expectedPanelHeight = MOBILE_FOOTER_PANEL_HEIGHTS[footerPanelTab];
+    setMobileFooterPanelHeight(expectedPanelHeight);
+
+    const measurePanelHeight = () => {
+      const panel = document.querySelector<HTMLElement>(
+        MOBILE_FOOTER_PANEL_SELECTORS[footerPanelTab],
+      );
+      if (!panel) return;
+
+      const panelHeight = Math.round(panel.getBoundingClientRect().height);
+      if (panelHeight > expectedPanelHeight) setMobileFooterPanelHeight(panelHeight);
+    };
+
+    const animationFrame = window.requestAnimationFrame(measurePanelHeight);
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [footerPanelTab, isMobileFooterPanelOpen]);
+
+  const bottomOffset =
+    READER_AI_BUTTON_BOTTOM_OFFSET.default +
+    mobileFooterPanelHeight +
+    (isMobileFooterPanelOpen ? READER_AI_BUTTON_BOTTOM_OFFSET.panelGap : 0);
+  const stopAIButtonPointerPropagation = (event: React.PointerEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    pointerOpenedRef.current = true;
-    onClick();
   };
 
   const openAIOnClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    if (pointerOpenedRef.current) {
-      pointerOpenedRef.current = false;
-      return;
-    }
     onClick();
   };
 
-  if (hoveredBookKey !== bookKey || isMobileFooterPanelOpen) return null;
+  if (hoveredBookKey !== bookKey && !isMobileFooterPanelOpen) return null;
 
   return (
     <div
@@ -53,14 +96,16 @@ const ReaderAIButton: React.FC<ReaderAIButtonProps> = ({ bookKey, onClick }) => 
         viewSettings?.rtl ? 'left-4 sm:left-5' : 'right-4 sm:right-5',
       )}
       style={{
-        bottom: appService?.hasSafeAreaInset
-          ? `calc(env(safe-area-inset-bottom, 0px) * ${appService?.isIOSApp ? 0.33 : 1} + ${bottomOffset}px)`
-          : `${bottomOffset}px`,
+        bottom: isMobileFooterPanelOpen
+          ? `calc(env(safe-area-inset-bottom, 0px) + ${bottomOffset}px)`
+          : appService?.hasSafeAreaInset
+            ? `calc(env(safe-area-inset-bottom, 0px) * ${appService?.isIOSApp ? 0.33 : 1} + ${bottomOffset}px)`
+            : `${bottomOffset}px`,
       }}
     >
       <button
         type='button'
-        onPointerDown={openAIOnPointerDown}
+        onPointerDown={stopAIButtonPointerPropagation}
         onClick={openAIOnClick}
         className={clsx(
           'border-base-content/10 bg-base-100/95 text-base-content relative h-12 min-h-12 w-12 rounded-2xl border shadow-xl backdrop-blur-md sm:h-12 sm:min-h-12 sm:w-12',

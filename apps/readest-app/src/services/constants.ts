@@ -19,6 +19,7 @@ import {
 import {
   HardcoverSettings,
   KOSyncSettings,
+  DiagnosticsSettings,
   LibraryGroupByType,
   LibrarySortByType,
   ReadSettings,
@@ -81,6 +82,11 @@ export const DEFAULT_HARDCOVER_SETTINGS = {
   lastSyncedAt: 0,
 } as HardcoverSettings;
 
+export const DEFAULT_DIAGNOSTICS_SETTINGS = {
+  enabled: true,
+  includeDebugEvents: false,
+} as DiagnosticsSettings;
+
 export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   keepLogin: false,
   autoUpload: true,
@@ -113,6 +119,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   readwise: DEFAULT_READWISE_SETTINGS,
   hardcover: DEFAULT_HARDCOVER_SETTINGS,
   aiSettings: DEFAULT_AI_SETTINGS,
+  diagnostics: DEFAULT_DIAGNOSTICS_SETTINGS,
 
   lastSyncedAtBooks: 0,
   lastSyncedAtConfigs: 0,
@@ -172,7 +179,7 @@ export const DEFAULT_BOOK_FONT: BookFont = {
   sansSerifFont: 'Roboto',
   monospaceFont: 'Consolas',
   defaultFont: 'Serif',
-  defaultCJKFont: 'LXGW WenKai GB Screen',
+  defaultCJKFont: 'Luo',
   defaultFontSize: 16,
   minimumFontSize: 8,
   fontWeight: 400,
@@ -364,7 +371,7 @@ export const DEFAULT_VIEW_SETTINGS_CONFIG: ViewSettingsConfig = {
   isGlobal: true,
 };
 
-export const SYSTEM_SETTINGS_VERSION = 1;
+export const SYSTEM_SETTINGS_VERSION = 2;
 
 export const SERIF_FONTS = [
   'Bitter',
@@ -380,6 +387,7 @@ export const SERIF_FONTS = [
 export const NON_FREE_FONTS = ['Georgia', 'Times New Roman'];
 
 export const CJK_SERIF_FONTS = [
+  _('Luo'),
   _('LXGW WenKai GB Screen'),
   _('LXGW WenKai TC'),
   _('GuanKiapTsingKhai-T'),
@@ -706,6 +714,7 @@ export const CJK_FONTS_PATTENS = new RegExp(
     'Gungsuh',
     'OPPO sans',
     'MiSans',
+    '^Luo$',
     'Fallback',
   ].join('|'),
   'i',

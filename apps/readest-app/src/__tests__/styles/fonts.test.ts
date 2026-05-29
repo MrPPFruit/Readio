@@ -347,6 +347,8 @@ describe('mountAdditionalFonts', () => {
 
     const styleContent = styles[0]!.textContent || '';
     expect(styleContent).toContain('@font-face');
+    expect(styleContent).toContain('font-family: "Luo"');
+    expect(styleContent).toContain('/fonts/Luo-Regular.woff2');
     expect(styleContent).toContain('FangSong');
     expect(styleContent).toContain('Kaiti');
     expect(styleContent).toContain('Heiti');
