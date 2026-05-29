@@ -1,8 +1,8 @@
 ## 1. Runner Input Validation
 
-- [ ] 1.1 Add a metadata-only report runner input type for local JSON envelopes containing `cases`, `results`, and optional `traces` arrays.
-- [ ] 1.2 Add validation that rejects non-object inputs and non-array envelope fields with deterministic validation issues.
-- [ ] 1.3 Reuse existing eval case/result validators so unsafe content-bearing case/result fields fail closed before report generation.
+- [x] 1.1 Add a metadata-only report runner input type for local JSON envelopes containing `cases`, `results`, and optional `traces` arrays.
+- [x] 1.2 Add validation that rejects non-object inputs and non-array envelope fields with deterministic validation issues.
+- [x] 1.3 Reuse existing eval case/result validators so unsafe content-bearing case/result fields fail closed before report generation.
 
 ## 2. Report Generation
 
