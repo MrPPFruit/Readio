@@ -2,6 +2,8 @@
 comet_change: reader-ai-eval-harness-phase-2
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-05-29-reader-ai-eval-harness-phase-2
+status: final
 ---
 
 # Reader AI Eval Harness Phase 2 Design

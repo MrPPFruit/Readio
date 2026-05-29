@@ -2,6 +2,7 @@
 change: reader-ai-eval-harness-phase-2
 design-doc: docs/superpowers/specs/2026-05-29-reader-ai-eval-harness-phase-2-design.md
 base-ref: 33c9e3144fafc403a6d89e7c88f43a044b72a1fa
+archived-with: 2026-05-29-reader-ai-eval-harness-phase-2
 ---
 
 # Reader AI Eval Harness Phase 2 Implementation Plan
@@ -14,7 +15,7 @@ base-ref: 33c9e3144fafc403a6d89e7c88f43a044b72a1fa
 
 **Tech Stack:** TypeScript, Vitest, existing Readio path alias imports, OpenSpec/Comet workflow.
 
----
+## archived-with: 2026-05-29-reader-ai-eval-harness-phase-2
 
 ## File Structure
 
