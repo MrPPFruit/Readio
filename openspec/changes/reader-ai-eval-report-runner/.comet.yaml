@@ -1,0 +1,14 @@
+workflow: full
+phase: verify
+build_mode: executing-plans
+isolation: branch
+verify_mode: full
+design_doc: docs/superpowers/specs/2026-05-30-reader-ai-eval-report-runner-design.md
+plan: docs/superpowers/plans/2026-05-30-reader-ai-eval-report-runner.md
+verify_result: pending
+verification_report: null
+branch_status: pending
+verified_at: null
+archived: false
+handoff_context: openspec/changes/reader-ai-eval-report-runner/.comet/handoff/design-context.json
+handoff_hash: a08b5f2bee7044774df3c8329aad5b1ec595bc5953e5969eac228d7add6979a3
