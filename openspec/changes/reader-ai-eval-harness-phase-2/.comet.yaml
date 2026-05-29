@@ -1,0 +1,14 @@
+workflow: full
+phase: build
+build_mode: executing-plans
+isolation: branch
+verify_mode: null
+design_doc: docs/superpowers/specs/2026-05-29-reader-ai-eval-harness-phase-2-design.md
+plan: docs/superpowers/plans/2026-05-29-reader-ai-eval-harness-phase-2.md
+verify_result: pending
+verification_report: null
+branch_status: pending
+verified_at: null
+archived: false
+handoff_context: openspec/changes/reader-ai-eval-harness-phase-2/.comet/handoff/design-context.json
+handoff_hash: 144ca1672290ceab46b0f34db632fccd4c6d90770a20084fc7616db09a195e68
