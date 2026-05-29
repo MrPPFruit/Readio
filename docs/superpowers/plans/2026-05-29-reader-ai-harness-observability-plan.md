@@ -4,6 +4,7 @@ design-doc: docs/superpowers/specs/2026-05-29-reader-ai-harness-observability-de
 base-ref: 35c7713ae4f66224aa8af89fa4ae7a23369f4eaa
 status: draft
 created: 2026-05-29
+archived-with: 2026-05-29-improve-reader-ai-harness-observability
 ---
 
 # Reader AI Harness Observability Implementation Plan

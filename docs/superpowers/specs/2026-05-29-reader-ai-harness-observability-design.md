@@ -5,6 +5,8 @@ role: technical-design
 canonical_spec: openspec
 status: draft
 created: 2026-05-29
+archived-with: 2026-05-29-improve-reader-ai-harness-observability
+status: final
 ---
 
 # Reader AI Harness Observability Design
