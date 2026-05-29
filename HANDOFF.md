@@ -4,13 +4,13 @@
 
 - Product line: Readio on the Readest-based mainline.
 - Repo: this repository checkout.
-- Branch: `improve-reader-ai-harness-observability` (branched from `readio/restart-readest-base`).
+- Branch: `reader-ai-eval-report-runner` (branched from `readio/restart-readest-base`).
 - Current app version: `0.1.0-alpha.15` in `./apps/readest-app/package.json`.
 - Android package/identifier: `com.ppg.readio`.
 - Android `versionCode`: `1001015` in `./apps/readest-app/src-tauri/tauri.conf.json`.
-- Current active feature: local-only privacy-safe diagnostics logging for bug/crash investigation; Reader AI citation preview/highlight optimization and AI 搜书 full prototype migration remain in the local post-release source state.
+- Current active change: `reader-ai-eval-report-runner`, a local-only pure helper slice for deterministic Reader AI eval JSON/Markdown reports from metadata envelopes.
 - Distribution status: `v0.1.0-alpha.15` prerelease is published on `MrPPFruit/Readio` with a signed APK and checksum. Current local source has additional post-release AI 搜书 fixes. Versioning preference: only major feature upgrade iterations should bump alpha versions, and the user decides when to bump.
-- Working tree note: `./.codepilot-uploads/` and `./temp/` are unrelated/untracked unless explicitly intended.
+- Working tree note: `./.claude/`, `./.codepilot-uploads/`, and `./.codepilot/` are unrelated/untracked unless explicitly intended.
 
 ## Reader AI Eval Harness Phase 2
 
@@ -31,6 +31,28 @@
   - real service-level eval runner around `streamReaderAIAnswer`;
   - LLM-as-judge after deterministic grounding checks stabilize;
   - NotebookLM automation, if ever useful, as a separate change.
+
+## Reader AI Eval Report Runner
+
+- Change: `reader-ai-eval-report-runner`.
+- Scope: pure local helper composition under `apps/readest-app/src/services/ai/eval/`; no CLI, file I/O, package script changes, model calls, real book loading, indexing, NotebookLM automation, Reader AI runtime changes, UI changes, or telemetry upload.
+- Implemented:
+  - `buildReaderAIEvalReportRun(input: unknown)` accepts metadata-only envelopes with `cases`, `results`, and optional `traces` arrays;
+  - envelope validation rejects non-object inputs and non-array envelope fields with deterministic issues;
+  - existing case/result validators fail closed on unsafe content-bearing fields before any report is generated;
+  - trace-like metadata is aggregated by opaque `runId` via existing trace summary helpers;
+  - deterministic `ReaderAIEvalReport` JSON and Markdown sections cover overview, category summary, over-budget stages, and run summaries;
+  - unsafe trace-like fields such as raw source text, prompts, answer text, and unknown nested content are omitted from JSON and Markdown output;
+  - eval README documents the local input shape, pure-helper scope, and non-authoritative NotebookLM/manual benchmark boundary.
+- Validation evidence:
+  - `pnpm --dir apps/readest-app test src/__tests__/ai/reader-ai-eval-report-runner.test.ts` passed: 1 file, 4 tests.
+  - `pnpm --dir apps/readest-app test src/__tests__/ai/reader-ai-eval-report-runner.test.ts src/__tests__/ai/reader-ai-eval.test.ts src/__tests__/services/diagnostics/reader-ai-trace.test.ts` passed: 3 files, 14 tests.
+  - `pnpm --dir apps/readest-app lint` passed: TypeScript and Biome checks, 857 files checked.
+  - `pnpm --dir apps/readest-app test` passed: 213 passed / 2 skipped files, 3863 passed / 7 skipped tests.
+- Deferred follow-ups:
+  - add a CLI/file-loading wrapper after the metadata contract stabilizes;
+  - build a real service-level eval runner around `streamReaderAIAnswer` only after deterministic local reports are accepted;
+  - keep NotebookLM automation and LLM-as-judge as separate future changes, not scoring inputs for this runner.
 
 ## Latest source-level state
 
