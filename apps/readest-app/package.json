@@ -21,6 +21,7 @@
     "lint": "tsgo --noEmit && biome check .",
     "test": "dotenv -e .env -e .env.test.local -- vitest",
     "test:coverage": "dotenv -e .env -e .env.test.local -- vitest run --coverage",
+    "reader-ai:report": "tsx scripts/reader-ai-eval-report.ts",
     "test:browser": "dotenv -e .env -e .env.test.local -- vitest run --config vitest.browser.config.mts",
     "test:tauri": "bash scripts/test-tauri.sh",
     "test:pr:web": "pnpm test -- --watch=false && pnpm test:browser",

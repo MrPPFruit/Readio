@@ -13,9 +13,9 @@
 
 ## 3. Package Script and Documentation
 
-- [ ] 3.1 Add a package script for invoking the local report CLI from `apps/readest-app`.
-- [ ] 3.2 Document CLI usage, output shape, and scope boundaries in the eval README.
-- [ ] 3.3 Keep model execution, real book loading, NotebookLM automation, telemetry, and UI/runtime behavior explicitly out of scope.
+- [x] 3.1 Add a package script for invoking the local report CLI from `apps/readest-app`.
+- [x] 3.2 Document CLI usage, output shape, and scope boundaries in the eval README.
+- [x] 3.3 Keep model execution, real book loading, NotebookLM automation, telemetry, and UI/runtime behavior explicitly out of scope.
 
 ## 4. Verification and Handoff
 

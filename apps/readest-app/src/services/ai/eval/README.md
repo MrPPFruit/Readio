@@ -32,6 +32,31 @@ The report runner accepts a parsed local JSON-style envelope:
 
 It validates cases and results, aggregates trace-like metadata by opaque `runId`, and returns a deterministic metadata-only JSON report plus Markdown. Invalid case/result input fails closed and does not produce a partial report.
 
-The runner is intentionally pure: it does not read files, write files, call model providers, load books, run indexing, automate NotebookLM, or change Reader AI UI/runtime behavior. A CLI wrapper can be added later after this data contract stabilizes.
+The runner is intentionally pure: it does not read files, write files, call model providers, load books, run indexing, automate NotebookLM, or change Reader AI UI/runtime behavior.
 
 Manual benchmark observations remain non-authoritative metadata. They can help compare Readio against NotebookLM during manual analysis, but they do not affect deterministic pass/fail scoring and are not rendered into the Markdown report.
+
+## Local report CLI
+
+Run the local file wrapper from the app package:
+
+```bash
+pnpm --dir apps/readest-app reader-ai:report -- \
+  --input eval-input.json \
+  --json-out report.json \
+  --markdown-out report.md
+```
+
+The input file must contain the same parsed envelope accepted by the pure report runner:
+
+```ts
+{
+  cases: ReaderAIEvalCase[];
+  results: ReaderAIEvalResult[];
+  traces?: ReaderAITraceLike[];
+}
+```
+
+On success, `--json-out` contains only the sanitized `ReaderAIEvalReport` object, and `--markdown-out` contains deterministic Markdown generated from that report. On usage errors, invalid JSON, invalid envelopes, or unsafe case/result metadata, the command exits non-zero and does not write partial report files.
+
+The CLI is intentionally a local file wrapper only. It does not call model providers, load books, run indexing or retrieval, automate NotebookLM, upload telemetry, or change Reader AI UI/runtime behavior.
