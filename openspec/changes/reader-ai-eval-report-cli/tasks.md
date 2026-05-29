@@ -6,10 +6,10 @@
 
 ## 2. File-Based Report Generation
 
-- [ ] 2.1 Read and parse the input JSON envelope as `unknown` and report deterministic errors for invalid JSON or unreadable input.
-- [ ] 2.2 Delegate validation and report generation to `buildReaderAIEvalReportRun` without duplicating eval scoring or trace aggregation logic.
-- [ ] 2.3 Write only sanitized `ReaderAIEvalReport` JSON and deterministic Markdown outputs after successful validation.
-- [ ] 2.4 Add tests proving valid input writes both files and invalid/unsafe input writes no partial artifacts.
+- [x] 2.1 Read and parse the input JSON envelope as `unknown` and report deterministic errors for invalid JSON or unreadable input.
+- [x] 2.2 Delegate validation and report generation to `buildReaderAIEvalReportRun` without duplicating eval scoring or trace aggregation logic.
+- [x] 2.3 Write only sanitized `ReaderAIEvalReport` JSON and deterministic Markdown outputs after successful validation.
+- [x] 2.4 Add tests proving valid input writes both files and invalid/unsafe input writes no partial artifacts.
 
 ## 3. Package Script and Documentation
 

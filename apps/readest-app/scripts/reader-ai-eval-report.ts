@@ -1,3 +1,5 @@
+import { buildReaderAIEvalReportRun } from '@/services/ai/eval/readerAIEvalReportRunner';
+
 export type ReaderAIEvalReportCliIO = {
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<void>;
@@ -69,6 +71,14 @@ const parseArgs = (
   return { ok: true, args };
 };
 
+const parseJsonInput = (content: string): { ok: true; value: unknown } | { ok: false } => {
+  try {
+    return { ok: true, value: JSON.parse(content) as unknown };
+  } catch {
+    return { ok: false };
+  }
+};
+
 export async function runReaderAIEvalReportCli(
   argv: string[],
   io: ReaderAIEvalReportCliIO,
@@ -79,6 +89,34 @@ export async function runReaderAIEvalReportCli(
     return 1;
   }
 
+  const { input, jsonOut, markdownOut } = parsedArgs.args;
+  if (input === undefined || jsonOut === undefined || markdownOut === undefined) {
+    io.stderr('Missing required report file paths');
+    return 1;
+  }
+
+  let inputContent: string;
+  try {
+    inputContent = await io.readFile(input);
+  } catch {
+    io.stderr(`Unable to read input: ${input}`);
+    return 1;
+  }
+
+  const parsedJson = parseJsonInput(inputContent);
+  if (!parsedJson.ok) {
+    io.stderr(`Invalid JSON input: ${input}`);
+    return 1;
+  }
+
+  const output = buildReaderAIEvalReportRun(parsedJson.value);
+  if (!output.ok) {
+    output.issues.forEach((issue) => io.stderr(issue));
+    return 1;
+  }
+
+  await io.writeFile(jsonOut, `${JSON.stringify(output.report, null, 2)}\n`);
+  await io.writeFile(markdownOut, output.markdown);
   return 0;
 }
 
