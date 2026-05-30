@@ -75,3 +75,61 @@ It is intentionally dependency-injected:
 The runner may inspect streamed chunks in memory to derive objective labels such as `no_output`, `unexpected_insufficient_answer`, `stream_error`, or `aborted`, but it must not return raw answer text, source text, prompts, book titles, author names, book hashes, local paths, URLs, API keys, or stable private identifiers.
 
 Real-book fixtures, live-provider cost guardrails, file-based service eval CLI support, NotebookLM automation, and LLM-as-judge are deferred follow-ups.
+
+## Local live fixture runner
+
+The live fixture runner is a local-only wrapper for deliberately running a small, metadata-only Reader AI fixture through the existing service eval runner:
+
+```bash
+pnpm --dir apps/readest-app reader-ai:live-fixture -- \
+  --fixture tmp/reader-ai/live-fixture/fixture.json \
+  --live
+```
+
+Live execution is explicitly opt-in at two layers:
+
+- the CLI refuses to run unless `--live` is present;
+- the fixture JSON must also set `"live": true`.
+
+Tests must continue to inject fake streamers and must not call real providers. The CLI loads the real `streamReaderAIAnswer` only after the explicit live gate is satisfied. Local fixture runs may therefore use the caller's configured provider/API key and can incur provider cost; keep fixtures intentionally small, use `caseLimit` and `timeoutMs`, and run them only on a developer machine with the intended local settings.
+
+A fixture contains only controlled eval metadata plus the runtime book handle needed by the existing Reader AI service contract:
+
+```ts
+{
+  fixtureId: string;
+  live: true;
+  caseLimit?: number;
+  timeoutMs?: number;
+  settings: {
+    provider: AIProviderName;
+    model: string;
+    maxContextChunks?: number;
+    spoilerProtection?: boolean;
+  };
+  runtimeBook: {
+    label: string;
+    bookHash: string;
+    bookTitle: string;
+    authorName?: string;
+    currentPage: number;
+    currentAIPage?: number;
+  };
+  outputs: {
+    envelope: string;
+    reportJson?: string;
+    reportMarkdown?: string;
+  };
+  cases: ReaderAIEvalCase[];
+}
+```
+
+Privacy boundaries:
+
+- committed fixtures and generated artifacts must remain metadata-only;
+- eval cases may include user-style questions and expected-behavior labels, but not raw source text, raw answer text, prompt text, API keys, URLs, local paths, book hashes, stable private identifiers, or raw exception messages;
+- output paths must be relative local paths, with no URL schemes, absolute paths, or `..` traversal;
+- reports are generated through `buildReaderAIEvalReportRun`, so service output remains compatible with the existing sanitized report envelope and Markdown path;
+- generated local artifacts are developer evidence, not telemetry, and should not be committed unless they have been reviewed for the metadata-only contract.
+
+Deferred scope remains separate from this runner: real-book batch management, fixture discovery over a library, NotebookLM automation/comparison runs, and LLM-as-judge scoring are intentionally not part of the local live fixture runner. NotebookLM and LLM judging may be used later only as separate, non-authoritative manual/quality layers after deterministic privacy and grounding checks are stable.

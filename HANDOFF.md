@@ -98,6 +98,23 @@
   - NotebookLM automation;
   - LLM-as-judge/manual qualitative layer.
 
+## Reader AI Live Fixture Eval Runner
+
+- Change: `reader-ai-live-fixture-eval-runner`.
+- Scope: local-only live fixture wrapper for small, explicitly opted-in Reader AI service eval runs. It documents and validates metadata-only fixtures, requires both CLI `--live` and fixture `"live": true`, delegates execution through the existing service eval runner/report path, and writes only local relative-path artifacts. Tests use fake streamers; no real provider calls are made by the automated test suite.
+- Documentation updated:
+  - `apps/readest-app/src/services/ai/eval/README.md` now documents local live fixture CLI usage, explicit live opt-in, privacy boundaries, metadata-only artifact expectations, local output path limits, and deferred real-book batch / NotebookLM automation / LLM-as-judge scope.
+- Validation evidence from Task 4:
+  - Focused eval tests: `pnpm --dir apps/readest-app test src/__tests__/ai/reader-ai-live-fixture-eval-runner.test.ts src/__tests__/ai/reader-ai-live-fixture-eval-cli.test.ts src/__tests__/ai/reader-ai-service-eval-runner.test.ts src/__tests__/ai/reader-ai-eval-report-cli.test.ts src/__tests__/ai/reader-ai-eval-report-runner.test.ts -- --watch=false` passed: 5 files, 30 tests.
+  - Lint: `pnpm --dir apps/readest-app lint` passed: `tsgo --noEmit && biome check .`, 865 files checked, no fixes applied.
+  - Full app test suite: `pnpm --dir apps/readest-app test` passed: 217 passed / 2 skipped files, 3889 passed / 7 skipped tests.
+  - OpenSpec: `openspec validate --all --strict` passed: 6 passed / 0 failed.
+- Deferred follow-ups:
+  - real-book batch fixture management and library discovery;
+  - NotebookLM automation/comparison runs;
+  - LLM-as-judge scoring or qualitative judge layer;
+  - committing generated live artifacts, only after manual metadata-only review if ever needed.
+
 ## Latest source-level state
 
 - Library header local search is pure again: the `全网搜书` pill was removed from `LibraryHeader` so local search is not compressed or scope-confused.
@@ -223,7 +240,7 @@
   - Lint/type check: `pnpm --dir "apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `849 files checked`, no fixes applied.
 - May 26 Reader AI entity evidence-coverage fix:
   - User feedback: even after richer prompt/tone changes, `阿兹克是谁？`-style answers stayed too shallow and missed known read-so-far facts such as teacher/mentor relationship, amnesia/mystery, rescue/help, and repeated prior mentions.
-  - NotebookLM skill was invoked for benchmark guidance. The remembered login profile is `NOTEBOOKLM_HOME=/Users/ppg/.notebooklm/profiles/default` and the Readio notebook ID is `1f45c537-1155-4b4f-9ae8-436c5151ef61`; plain `notebooklm ask` works for manual benchmark, while `ask --json` previously returned an empty error.
+  - NotebookLM skill was invoked for benchmark guidance. The benchmark used an existing NotebookLM profile/notebook configured outside this handoff; plain `notebooklm ask` works for manual benchmark, while `ask --json` previously returned an empty error.
   - Agent review concluded the main quality blocker was RAG evidence coverage, not wording: entity lookup used the normal small context budget and boosted shallow current-section mentions enough to crowd out distributed prior evidence.
   - Fix: `entity_lookup` now uses a larger evidence budget (`max(settings.maxContextChunks, 8)` with broader retrieval K), and pure entity questions no longer apply the 1000-point current-context boost unless the user explicitly asks about current/here/list context.
   - Fix: `packReaderContext` now supports `preferSectionDiversity`, used for entity lookup, so a single section's repeated shallow mentions cannot fill the whole context before older/other-section identity, relationship, action, and mystery evidence is included.
@@ -443,7 +460,7 @@
 
 - May 22 current-source Android emulator smoke passed:
   - Device: `emulator-5554`, Android `15`, model `sdk_gphone64_arm64`.
-  - Build command: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build-readio-apk`; result exit `0`.
+  - Build command: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" build-readio-apk`; result exit `0`.
   - APK artifact: `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`, size `53M`, v2/v3 signature verified, signer count `1`.
   - Install command: `adb install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
   - Installed package check: `com.ppg.readio`, `versionName=0.1.0-alpha.15`, `versionCode=1001015`.
@@ -546,8 +563,8 @@
   - Searching `alice` produced direct-download results with `可带回 29`; opening the first direct result showed the redesigned detail sheet with centered cover/title and source row `访问 + 下载`.
   - Smoke screenshots captured at `/tmp/readio-ai-search-final-home.png`, `/tmp/readio-ai-search-final-top-entry.png`, `/tmp/readio-ai-search-final-alice-results-3.png`, and `/tmp/readio-ai-search-final-detail-cover.png`.
 - Fresh final verification after the hit-area structural fix:
-  - Full suite: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test`; result `201 passed`, `2 skipped` test files; `3644 passed`, `7 skipped` tests.
-  - Lint/type check: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `835 files checked`, no fixes applied.
+  - Full suite: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" test`; result `201 passed`, `2 skipped` test files; `3644 passed`, `7 skipped` tests.
+  - Lint/type check: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `835 files checked`, no fixes applied.
 
 ## Latest local post-release fix: reader/global CJK font switched to Luo
 
@@ -560,15 +577,15 @@
   - Per-book view settings are preserved as explicit book-level choices; only global settings migration is applied.
   - Non-reader UI now uses `Inter` first and `Luo` as the Chinese fallback via Tailwind `fontFamily.sans`, with a global `@font-face` for `/fonts/Luo-Regular.woff2` in `globals.css`; Latin UI text keeps Inter while Chinese UI text falls back to Luo.
 - Red/green and regression verification:
-  - Red focused tests before implementation: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/styles/fonts.test.ts src/__tests__/services/constants.test.ts --reporter=dot` failed on missing `font-family: "Luo"` injection and old `DEFAULT_BOOK_FONT.defaultCJKFont`.
-  - Red migration test before implementation: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/services/settings-font-migration.test.ts --reporter=dot` failed because old persisted `LXGW WenKai GB Screen` was preserved.
-  - Red one-shot regression before review fix: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/services/settings-font-migration.test.ts --reporter=dot` failed because version-2 settings with an intentional `LXGW WenKai GB Screen` choice were rewritten to `Luo`.
-  - Focused green command: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/styles/fonts.test.ts src/__tests__/services/constants.test.ts src/__tests__/services/settings-font-migration.test.ts --reporter=dot`; result `3 passed` test files, `200 passed` tests.
-  - Lint/type check: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `834 files checked`, no fixes applied.
-  - Full suite: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test`; result `200 passed`, `2 skipped` test files; `3639 passed`, `7 skipped` tests.
-  - Global UI font red/green: `src/__tests__/styles/global-ui-fonts.test.ts` first failed because Tailwind lacked `Luo` and `globals.css` did not register it; after the fix, `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test src/__tests__/styles/global-ui-fonts.test.ts src/__tests__/styles/fonts.test.ts` passed with `2 passed` files and `63 passed` tests.
-  - Latest lint/type check after global UI fallback: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `835 files checked`, no fixes applied.
-  - Latest APK rebuild/install for Luo global UI fallback: `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build-readio-apk` exited 0; signed artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk` rebuilt May 19 23:52 local, v2/v3 signature verified, signer count 1.
+  - Red focused tests before implementation: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" exec vitest run src/__tests__/styles/fonts.test.ts src/__tests__/services/constants.test.ts --reporter=dot` failed on missing `font-family: "Luo"` injection and old `DEFAULT_BOOK_FONT.defaultCJKFont`.
+  - Red migration test before implementation: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" exec vitest run src/__tests__/services/settings-font-migration.test.ts --reporter=dot` failed because old persisted `LXGW WenKai GB Screen` was preserved.
+  - Red one-shot regression before review fix: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" exec vitest run src/__tests__/services/settings-font-migration.test.ts --reporter=dot` failed because version-2 settings with an intentional `LXGW WenKai GB Screen` choice were rewritten to `Luo`.
+  - Focused green command: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" exec vitest run src/__tests__/styles/fonts.test.ts src/__tests__/services/constants.test.ts src/__tests__/services/settings-font-migration.test.ts --reporter=dot`; result `3 passed` test files, `200 passed` tests.
+  - Lint/type check: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `834 files checked`, no fixes applied.
+  - Full suite: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" test`; result `200 passed`, `2 skipped` test files; `3639 passed`, `7 skipped` tests.
+  - Global UI font red/green: `src/__tests__/styles/global-ui-fonts.test.ts` first failed because Tailwind lacked `Luo` and `globals.css` did not register it; after the fix, `pnpm --dir "$PROJECT_ROOT/apps/readest-app" test src/__tests__/styles/global-ui-fonts.test.ts src/__tests__/styles/fonts.test.ts` passed with `2 passed` files and `63 passed` tests.
+  - Latest lint/type check after global UI fallback: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `835 files checked`, no fixes applied.
+  - Latest APK rebuild/install for Luo global UI fallback: `PATH="<home>/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "$PROJECT_ROOT/apps/readest-app" build-readio-apk` exited 0; signed artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk` rebuilt May 19 23:52 local, v2/v3 signature verified, signer count 1.
   - Emulator install command `adb install -r "./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"` returned `Success`; cold start succeeded. A first screenshot caught a transient blank WebView before content render, then `readio://library` opened Library correctly.
   - Emulator visual verification: Library screenshot `/tmp/readio-luo-library-ui-2.png` shows Chinese UI text such as `在 4 本书籍中搜索...`, `寻书`, `诡秘之主`, `雪中悍刀行` rendered with Luo-style Chinese fallback while Latin text such as `CONTINUE READING`/`Alice's Adventures...` remains Inter-like; reader screenshots `/tmp/readio-luo-search-page-2.png` and `/tmp/readio-reader-controls.png` show reading text still renders correctly with no missing glyph boxes.
 
@@ -588,17 +605,17 @@
   - `./apps/readest-app/src/__tests__/app/library/ai-book-search-dialog.test.tsx`
 - Red/green and regression verification:
   - New dialog test was verified red before implementation: it expected readable key logs, `正在整理结果...`, and the active badge animation class, none of which existed yet.
-  - Fresh command after initial realtime-progress fixes: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test -- src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts && pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`
+  - Fresh command after initial realtime-progress fixes: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" test -- src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts && pnpm --dir "$PROJECT_ROOT/apps/readest-app" lint`
   - Result: full test suite ran through project config: `199 passed`, `2 skipped` test files; `3635 passed`, `7 skipped` tests.
   - After emulator review, visible logs were capped back to the latest three lines per user request.
   - Red test before the three-line cap: updated dialog expectations failed because old visible logs were still present.
-  - Fresh targeted command after the cap: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts --reporter=verbose`
+  - Fresh targeted command after the cap: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" exec vitest run src/__tests__/app/library/ai-book-search-dialog.test.tsx src/__tests__/app/library/ai-book-search-service.test.ts --reporter=verbose`
   - Targeted result: `2 passed` test files; `58 passed` tests.
-  - Fresh lint/type check after the cap: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `833 files checked`, no fixes applied.
+  - Fresh lint/type check after the cap: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" lint`; result `tsgo --noEmit && biome check .`, `833 files checked`, no fixes applied.
 - Current APK rebuild and emulator smoke after this realtime-progress fix:
-  - Build command: `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build-readio-apk`
+  - Build command: `PATH="<home>/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "$PROJECT_ROOT/apps/readest-app" build-readio-apk`
   - Build result: exit 0; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`; rebuilt May 19 20:27 local; APK signature verified with v2/v3 schemes and signer count 1.
-  - Install command: `adb install -r "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+  - Install command: `adb install -r "$PROJECT_ROOT/apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
   - Launch command: `adb shell am force-stop com.ppg.readio && adb shell am start -W -n com.ppg.readio/.MainActivity`; result `Status: ok`, `LaunchState: COLD`, `Activity: com.ppg.readio/.MainActivity`.
   - Emulator smoke opened `寻书` from the current-reading-card entry, verified the fullscreen search page with top safe-area spacing and placeholder `想读什么？书名、作者，或一个念头`.
   - Query `a` showed the new realtime flow: initial `正在理解你的想法...` / `理解中`, then `正在为你寻书...` / `寻书中`; logs included `AI 正在理解书名、作者和语言偏好`, `已理解你的寻书意图`, `正在查找 Open Library、GitHub、Gutendex`, source result/timeout lines, `AI 正在合并重复结果`, and final no-result summary.
@@ -615,14 +632,14 @@
 - Red/green and regression verification:
   - Reader Android Back regression test was verified red before the fix: it expected `close-reader-to-library` but the old Android Back path did not dispatch it.
   - Delete-option regression test was verified red before the fix: `Remove from Library` and the `Also delete the local file` checkbox did not exist yet.
-  - Fresh test command after final fixes: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" test -- src/__tests__/components/BookDetailModalDelete.test.tsx src/__tests__/app/library/epub-scan-import-flow.test.tsx src/__tests__/app/reader/reader-android-back.test.tsx src/__tests__/app/reader/reader-content-close-to-library.test.tsx`
+  - Fresh test command after final fixes: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" test -- src/__tests__/components/BookDetailModalDelete.test.tsx src/__tests__/app/library/epub-scan-import-flow.test.tsx src/__tests__/app/reader/reader-android-back.test.tsx src/__tests__/app/reader/reader-content-close-to-library.test.tsx`
   - Result: `199 passed`, `2 skipped` test files; `3634 passed`, `7 skipped` tests.
-  - Fresh lint command: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" lint`
+  - Fresh lint command: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" lint`
   - Result: `tsgo --noEmit && biome check .`, `833 files checked`, no fixes applied.
 - Current APK rebuild and emulator smoke:
-  - Build command: `pnpm --dir "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apps/readest-app" build-readio-apk`
+  - Build command: `pnpm --dir "$PROJECT_ROOT/apps/readest-app" build-readio-apk`
   - Build result: exit 0 by output log; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`; rebuilt May 19 19:16 local; APK signature verified with v2/v3 schemes and signer count 1.
-  - Install command: `adb install -r "/Users/ppg/Documents/CloudCodeWorkSpace/Program_Readio_Readest/apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
+  - Install command: `adb install -r "$PROJECT_ROOT/apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
   - Launch command: `adb shell am force-stop com.ppg.readio && adb shell am start -W -n com.ppg.readio/.MainActivity`; result `Status: ok`, `LaunchState: COLD`, `Activity: com.ppg.readio/.MainActivity`.
   - Reader Back smoke: opened `Alice's Adventures in Wonderland` from the bookshelf, pressed Android Back, and the UI returned to `书库`/`Continue Reading`/`书架` instead of exiting or bypassing the Library return path.
   - Bookshelf multi-select delete smoke: long-pressed a book, tapped `删除`, and the confirmation showed `Also delete the local file` with `checked=false`.
@@ -687,7 +704,7 @@
   - Manual caveat: long-press batch deletion was covered by the fresh unit/UI test path; emulator smoke did not complete a clean two-record long-press batch scenario because the automated text-clear attempt concatenated a second query.
 
 - Local APK rebuild and emulator smoke after the latest scoring-precision fix:
-  - Build command: `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "apps/readest-app" build-readio-apk`
+  - Build command: `PATH="<home>/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir "apps/readest-app" build-readio-apk`
   - Build result: exit 0; artifact `./apks/readio-v0.1.0-alpha.15-android-arm64-release.apk`; signature verified with v2/v3 schemes and signer count 1.
   - Install command: `adb install -r "apks/readio-v0.1.0-alpha.15-android-arm64-release.apk"`; result `Success`.
   - Launch command: `adb shell am force-stop com.ppg.readio && adb shell am start -W -n com.ppg.readio/.MainActivity`; result `Status: ok`, `LaunchState: COLD`, `Activity: com.ppg.readio/.MainActivity`.
@@ -719,8 +736,8 @@
   - Android Back returned from the search workspace to Library.
   - Smoke screenshots captured under `/tmp/readio-alpha15-*.png` during validation.
 - Rust/Tauri checks passed after adding the Rust toolchain bin path to `PATH` because the default shell could not find `cargo`:
-  - `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir apps/readest-app fmt:check`
-  - `PATH="/Users/ppg/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir apps/readest-app clippy:check`
+  - `PATH="<home>/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir apps/readest-app fmt:check`
+  - `PATH="<home>/.rustup/toolchains/stable-aarch64-apple-darwin/bin:$PATH" pnpm --dir apps/readest-app clippy:check`
   - Result: both exited 0. `clippy` printed upstream dependency warnings, but the local package check passed with `-D warnings`.
 - Signed APK build passed:
   - `pnpm --filter @readest/readest-app build-readio-apk`
@@ -750,7 +767,7 @@
 ## Published release
 
 - GitHub prerelease: `v0.1.0-alpha.15`
-- URL: `https://github.com/MrPPFruit/Readio/releases/tag/v0.1.0-alpha.15`
+- URL: release URL recorded externally
 - Uploaded assets:
   - `readio-v0.1.0-alpha.15-android-arm64-release.apk`
   - `readio-v0.1.0-alpha.15-android-arm64-release.apk.sha256`

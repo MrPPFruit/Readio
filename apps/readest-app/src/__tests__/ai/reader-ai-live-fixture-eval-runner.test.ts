@@ -134,6 +134,15 @@ const createWritableMemory = () => {
   };
 };
 
+const expectMetadataOnlyOutput = (content: string): void => {
+  expect(content).not.toContain('runtime-private-book-hash');
+  expect(content).not.toContain('Runtime Private Title');
+  expect(content).not.toContain('Runtime Private Author');
+  expect(content).not.toContain('local-test-book');
+  expect(content).not.toContain('private answer must not be written');
+  expect(content).not.toContain('private preview must not be written');
+};
+
 describe('runReaderAILiveFixtureEval guarded execution', () => {
   it('refuses to call the streamer without explicit live opt-in', async () => {
     const memory = createWritableMemory();
@@ -232,5 +241,61 @@ describe('runReaderAILiveFixtureEval guarded execution', () => {
     expect(memory.writes.has('tmp/reader-ai/live-fixture/report.json')).toBe(true);
     expect(memory.writes.has('tmp/reader-ai/live-fixture/report.md')).toBe(true);
     expect(output.envelope.results).toHaveLength(1);
+
+    const writtenOutput = Array.from(memory.writes.values()).join('\n');
+    expectMetadataOnlyOutput(writtenOutput);
+  });
+
+  it('records safe metadata only when live fixture streaming is aborted', async () => {
+    const memory = createWritableMemory();
+    const rawErrorMessage =
+      'raw provider timeout leaked Runtime Private Title private answer must not be written';
+    const streamer: ReaderAIServiceEvalStreamer = async function* (options) {
+      await new Promise<void>((resolve) =>
+        options.signal?.addEventListener('abort', () => resolve()),
+      );
+      if (options.signal?.aborted) throw new Error(rawErrorMessage);
+      yield 'private answer must not be written';
+    };
+
+    const fixture = {
+      ...validFixture,
+      live: true,
+      timeoutMs: 1,
+    };
+
+    const output = await runReaderAILiveFixtureEval(fixture, {
+      live: true,
+      streamAnswer: streamer,
+      writeFile: memory.writeFile,
+      now: (() => {
+        const values = [1000, 1005, 1005];
+        let index = 0;
+        return () => values[Math.min(index++, values.length - 1)] ?? 0;
+      })(),
+    });
+
+    expect(output.ok).toBe(true);
+    if (!output.ok) throw new Error(output.issues.join('\n'));
+    expect(output.envelope.results).toHaveLength(1);
+    expect(output.envelope.results[0]).toMatchObject({
+      passed: false,
+      reasons: ['aborted'],
+      overBudgetStage: 'cancelled',
+    });
+    expect(output.envelope.traces).toContainEqual(
+      expect.objectContaining({
+        status: 'cancelled',
+        recoveryHint: 'aborted',
+        overBudgetStage: 'cancelled',
+      }),
+    );
+
+    const serializedOutput = [
+      JSON.stringify(output.envelope),
+      ...Array.from(memory.writes.values()),
+    ].join('\n');
+    expect(serializedOutput).not.toContain(rawErrorMessage);
+    expectMetadataOnlyOutput(serializedOutput);
   });
 });

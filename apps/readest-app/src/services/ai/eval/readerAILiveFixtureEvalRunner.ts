@@ -1,4 +1,10 @@
-import { validateReaderAIEvalCase, type ReaderAIEvalCase } from '@/services/ai/eval/readerAIEval';
+import {
+  validateReaderAIEvalCase,
+  type ReaderAIEvalBenchmarkMode,
+  type ReaderAIEvalCase,
+  type ReaderAIEvalCaseCategory,
+  type ReaderAIEvalSpoilerMode,
+} from '@/services/ai/eval/readerAIEval';
 import { buildReaderAIEvalReportRun } from '@/services/ai/eval/readerAIEvalReportRunner';
 import {
   runReaderAIServiceEval,
@@ -55,14 +61,105 @@ const providerNames = new Set<AIProviderName>([
   'custom-openai-compatible',
 ]);
 
+const caseCategories = new Set<ReaderAIEvalCaseCategory>([
+  'person_recall',
+  'object_recall',
+  'event_recap',
+  'relationship_recall',
+  'current_recap',
+  'citation_grounding',
+  'spoiler_safety',
+]);
+const spoilerModes = new Set<ReaderAIEvalSpoilerMode>([
+  'read_so_far',
+  'whole_book',
+  'selected_text',
+]);
+const benchmarkModes = new Set<ReaderAIEvalBenchmarkMode>([
+  'readio',
+  'notebooklm_manual',
+  'human_manual',
+]);
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const hasString = (value: Record<string, unknown>, key: string): boolean =>
   typeof value[key] === 'string' && value[key].trim().length > 0;
 
+const getRequiredString = (value: Record<string, unknown>, key: string): string => {
+  const field = value[key];
+  if (typeof field !== 'string' || field.trim().length === 0) {
+    throw new Error(`Expected validated string field: ${key}`);
+  }
+  return field;
+};
+
+const getOptionalString = (value: Record<string, unknown>, key: string): string | undefined => {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (typeof field !== 'string') throw new Error(`Expected validated string field: ${key}`);
+  return field;
+};
+
+const getRequiredBoolean = (value: Record<string, unknown>, key: string): boolean => {
+  const field = value[key];
+  if (typeof field !== 'boolean') throw new Error(`Expected validated boolean field: ${key}`);
+  return field;
+};
+
+const getOptionalBoolean = (value: Record<string, unknown>, key: string): boolean | undefined => {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (typeof field !== 'boolean') throw new Error(`Expected validated boolean field: ${key}`);
+  return field;
+};
+
+const getRequiredNumber = (value: Record<string, unknown>, key: string): number => {
+  const field = value[key];
+  if (typeof field !== 'number' || !Number.isFinite(field)) {
+    throw new Error(`Expected validated number field: ${key}`);
+  }
+  return field;
+};
+
+const getOptionalNumber = (value: Record<string, unknown>, key: string): number | undefined => {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (typeof field !== 'number' || !Number.isFinite(field)) {
+    throw new Error(`Expected validated number field: ${key}`);
+  }
+  return field;
+};
+
+const getOptionalPositiveInteger = (
+  value: Record<string, unknown>,
+  key: string,
+): number | undefined => {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (!isPositiveInteger(field))
+    throw new Error(`Expected validated positive integer field: ${key}`);
+  return field;
+};
+
 const isPositiveInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value > 0;
+
+const isProviderName = (value: unknown): value is AIProviderName =>
+  typeof value === 'string' && providerNames.has(value as AIProviderName);
+
+const isCaseCategory = (value: unknown): value is ReaderAIEvalCaseCategory =>
+  typeof value === 'string' && caseCategories.has(value as ReaderAIEvalCaseCategory);
+
+const isSpoilerMode = (value: unknown): value is ReaderAIEvalSpoilerMode =>
+  typeof value === 'string' && spoilerModes.has(value as ReaderAIEvalSpoilerMode);
+
+const isBenchmarkMode = (value: unknown): value is ReaderAIEvalBenchmarkMode =>
+  typeof value === 'string' && benchmarkModes.has(value as ReaderAIEvalBenchmarkMode);
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
 
 const isRelativeLocalOutputPath = (value: unknown): value is string => {
   if (typeof value !== 'string' || value.trim().length === 0) return false;
@@ -83,82 +180,146 @@ const validateOutputPath = (
   }
 };
 
+const getRequiredRecord = (
+  value: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> => {
+  const field = value[key];
+  if (!isRecord(field)) throw new Error(`Expected validated object field: ${key}`);
+  return field;
+};
+
+const getRequiredRecordArray = (
+  value: Record<string, unknown>,
+  key: string,
+): Record<string, unknown>[] => {
+  const field = value[key];
+  if (!Array.isArray(field) || !field.every(isRecord)) {
+    throw new Error(`Expected validated object array field: ${key}`);
+  }
+  return field;
+};
+
+const getRequiredProvider = (value: Record<string, unknown>, key: string): AIProviderName => {
+  const field = value[key];
+  if (!isProviderName(field)) throw new Error(`Expected validated provider field: ${key}`);
+  return field;
+};
+
+const getRequiredCaseCategory = (
+  value: Record<string, unknown>,
+  key: string,
+): ReaderAIEvalCaseCategory => {
+  const field = value[key];
+  if (!isCaseCategory(field)) throw new Error(`Expected validated category field: ${key}`);
+  return field;
+};
+
+const getRequiredSpoilerMode = (
+  value: Record<string, unknown>,
+  key: string,
+): ReaderAIEvalSpoilerMode => {
+  const field = value[key];
+  if (!isSpoilerMode(field)) throw new Error(`Expected validated spoiler mode field: ${key}`);
+  return field;
+};
+
+const getOptionalStringArray = (
+  value: Record<string, unknown>,
+  key: string,
+): string[] | undefined => {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (!isStringArray(field)) throw new Error(`Expected validated string array field: ${key}`);
+  return field;
+};
+
+const getOptionalBenchmarkMode = (
+  value: Record<string, unknown>,
+  key: string,
+): ReaderAIEvalBenchmarkMode | undefined => {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (!isBenchmarkMode(field)) throw new Error(`Expected validated benchmark mode field: ${key}`);
+  return field;
+};
+
+const getRequiredOutputPath = (value: Record<string, unknown>, key: string): string => {
+  const field = value[key];
+  if (!isRelativeLocalOutputPath(field))
+    throw new Error(`Expected validated output path field: ${key}`);
+  return field;
+};
+
+const getOptionalOutputPath = (value: Record<string, unknown>, key: string): string | undefined => {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (!isRelativeLocalOutputPath(field))
+    throw new Error(`Expected validated output path field: ${key}`);
+  return field;
+};
+
 const sanitizeReaderAIEvalCase = (value: Record<string, unknown>): ReaderAIEvalCase => {
   const fixtureCase: ReaderAIEvalCase = {
-    id: value['id'] as ReaderAIEvalCase['id'],
-    category: value['category'] as ReaderAIEvalCase['category'],
-    language: value['language'] as ReaderAIEvalCase['language'],
-    question: value['question'] as ReaderAIEvalCase['question'],
-    expectedBehavior: value['expectedBehavior'] as ReaderAIEvalCase['expectedBehavior'],
-    spoilerMode: value['spoilerMode'] as ReaderAIEvalCase['spoilerMode'],
+    id: getRequiredString(value, 'id'),
+    category: getRequiredCaseCategory(value, 'category'),
+    language: getRequiredString(value, 'language'),
+    question: getRequiredString(value, 'question'),
+    expectedBehavior: getRequiredString(value, 'expectedBehavior'),
+    spoilerMode: getRequiredSpoilerMode(value, 'spoilerMode'),
   };
 
-  if (value['tags'] !== undefined) fixtureCase.tags = value['tags'] as ReaderAIEvalCase['tags'];
-  if (value['benchmarkMode'] !== undefined) {
-    fixtureCase.benchmarkMode = value['benchmarkMode'] as ReaderAIEvalCase['benchmarkMode'];
-  }
-  if (value['notes'] !== undefined) fixtureCase.notes = value['notes'] as ReaderAIEvalCase['notes'];
+  const tags = getOptionalStringArray(value, 'tags');
+  if (tags !== undefined) fixtureCase.tags = tags;
+  const benchmarkMode = getOptionalBenchmarkMode(value, 'benchmarkMode');
+  if (benchmarkMode !== undefined) fixtureCase.benchmarkMode = benchmarkMode;
+  const notes = getOptionalStringArray(value, 'notes');
+  if (notes !== undefined) fixtureCase.notes = notes;
 
   return fixtureCase;
 };
 
 const sanitizeReaderAILiveFixture = (value: Record<string, unknown>): ReaderAILiveFixture => {
-  const settings = value['settings'] as Record<string, unknown>;
-  const runtimeBook = value['runtimeBook'] as Record<string, unknown>;
-  const outputs = value['outputs'] as Record<string, unknown>;
-  const cases = value['cases'] as Record<string, unknown>[];
+  const settings = getRequiredRecord(value, 'settings');
+  const runtimeBook = getRequiredRecord(value, 'runtimeBook');
+  const outputs = getRequiredRecord(value, 'outputs');
+  const cases = getRequiredRecordArray(value, 'cases');
 
   const fixture: ReaderAILiveFixture = {
-    fixtureId: value['fixtureId'] as ReaderAILiveFixture['fixtureId'],
-    live: value['live'] as ReaderAILiveFixture['live'],
+    fixtureId: getRequiredString(value, 'fixtureId'),
+    live: getRequiredBoolean(value, 'live'),
     settings: {
-      provider: settings['provider'] as ReaderAILiveFixtureSettings['provider'],
-      model: settings['model'] as ReaderAILiveFixtureSettings['model'],
+      provider: getRequiredProvider(settings, 'provider'),
+      model: getRequiredString(settings, 'model'),
     },
     runtimeBook: {
-      label: runtimeBook['label'] as ReaderAILiveFixtureRuntimeBook['label'],
-      bookHash: runtimeBook['bookHash'] as ReaderAILiveFixtureRuntimeBook['bookHash'],
-      bookTitle: runtimeBook['bookTitle'] as ReaderAILiveFixtureRuntimeBook['bookTitle'],
-      currentPage: runtimeBook['currentPage'] as ReaderAILiveFixtureRuntimeBook['currentPage'],
+      label: getRequiredString(runtimeBook, 'label'),
+      bookHash: getRequiredString(runtimeBook, 'bookHash'),
+      bookTitle: getRequiredString(runtimeBook, 'bookTitle'),
+      currentPage: getRequiredNumber(runtimeBook, 'currentPage'),
     },
     outputs: {
-      envelope: outputs['envelope'] as ReaderAILiveFixtureOutputs['envelope'],
+      envelope: getRequiredOutputPath(outputs, 'envelope'),
     },
     cases: cases.map(sanitizeReaderAIEvalCase),
   };
 
-  if (value['caseLimit'] !== undefined)
-    fixture.caseLimit = value['caseLimit'] as ReaderAILiveFixture['caseLimit'];
-  if (value['timeoutMs'] !== undefined)
-    fixture.timeoutMs = value['timeoutMs'] as ReaderAILiveFixture['timeoutMs'];
-  if (settings['maxContextChunks'] !== undefined) {
-    fixture.settings.maxContextChunks = settings[
-      'maxContextChunks'
-    ] as ReaderAILiveFixtureSettings['maxContextChunks'];
-  }
-  if (settings['spoilerProtection'] !== undefined) {
-    fixture.settings.spoilerProtection = settings[
-      'spoilerProtection'
-    ] as ReaderAILiveFixtureSettings['spoilerProtection'];
-  }
-  if (runtimeBook['authorName'] !== undefined) {
-    fixture.runtimeBook.authorName = runtimeBook[
-      'authorName'
-    ] as ReaderAILiveFixtureRuntimeBook['authorName'];
-  }
-  if (runtimeBook['currentAIPage'] !== undefined) {
-    fixture.runtimeBook.currentAIPage = runtimeBook[
-      'currentAIPage'
-    ] as ReaderAILiveFixtureRuntimeBook['currentAIPage'];
-  }
-  if (outputs['reportJson'] !== undefined) {
-    fixture.outputs.reportJson = outputs['reportJson'] as ReaderAILiveFixtureOutputs['reportJson'];
-  }
-  if (outputs['reportMarkdown'] !== undefined) {
-    fixture.outputs.reportMarkdown = outputs[
-      'reportMarkdown'
-    ] as ReaderAILiveFixtureOutputs['reportMarkdown'];
-  }
+  const caseLimit = getOptionalPositiveInteger(value, 'caseLimit');
+  if (caseLimit !== undefined) fixture.caseLimit = caseLimit;
+  const timeoutMs = getOptionalPositiveInteger(value, 'timeoutMs');
+  if (timeoutMs !== undefined) fixture.timeoutMs = timeoutMs;
+  const maxContextChunks = getOptionalPositiveInteger(settings, 'maxContextChunks');
+  if (maxContextChunks !== undefined) fixture.settings.maxContextChunks = maxContextChunks;
+  const spoilerProtection = getOptionalBoolean(settings, 'spoilerProtection');
+  if (spoilerProtection !== undefined) fixture.settings.spoilerProtection = spoilerProtection;
+  const authorName = getOptionalString(runtimeBook, 'authorName');
+  if (authorName !== undefined) fixture.runtimeBook.authorName = authorName;
+  const currentAIPage = getOptionalNumber(runtimeBook, 'currentAIPage');
+  if (currentAIPage !== undefined) fixture.runtimeBook.currentAIPage = currentAIPage;
+  const reportJson = getOptionalOutputPath(outputs, 'reportJson');
+  if (reportJson !== undefined) fixture.outputs.reportJson = reportJson;
+  const reportMarkdown = getOptionalOutputPath(outputs, 'reportMarkdown');
+  if (reportMarkdown !== undefined) fixture.outputs.reportMarkdown = reportMarkdown;
 
   return fixture;
 };
@@ -184,7 +345,7 @@ export function validateReaderAILiveFixture(value: unknown): ReaderAILiveFixture
     issues.push('settings must be an object');
   } else {
     const provider = settings['provider'];
-    if (typeof provider !== 'string' || !providerNames.has(provider as AIProviderName)) {
+    if (!isProviderName(provider)) {
       issues.push('settings.provider is required');
     }
     if (!hasString(settings, 'model')) issues.push('settings.model is required');
