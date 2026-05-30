@@ -50,6 +50,49 @@ describe('Reader AI live fixture validation', () => {
     expect(parsed.fixture.runtimeBook.currentPage).toBe(42);
   });
 
+  it('omits unknown safe-looking fields from parsed fixtures', () => {
+    const fixture = {
+      ...validFixture,
+      displayName: 'safe extra top-level field',
+      settings: {
+        ...validFixture.settings,
+        temperature: 0.2,
+        label: 'safe extra settings field',
+      },
+      runtimeBook: {
+        ...validFixture.runtimeBook,
+        readingProgressLabel: 'safe extra runtime field',
+      },
+      outputs: {
+        ...validFixture.outputs,
+        summary: 'safe extra output field',
+      },
+      cases: [
+        {
+          ...validFixture.cases[0],
+          difficulty: 'easy',
+          tags: ['recall'],
+          notes: ['safe declared notes field'],
+        },
+      ],
+    };
+
+    const parsed = parseReaderAILiveFixture(JSON.stringify(fixture));
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.issues.join('\n'));
+    expect(parsed.fixture).toEqual({
+      ...validFixture,
+      cases: [
+        {
+          ...validFixture.cases[0],
+          tags: ['recall'],
+          notes: ['safe declared notes field'],
+        },
+      ],
+    });
+  });
+
   it('rejects unsafe persisted fixture metadata before execution', () => {
     const fixture = {
       ...validFixture,

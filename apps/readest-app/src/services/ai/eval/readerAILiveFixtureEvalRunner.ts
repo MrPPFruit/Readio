@@ -77,6 +77,86 @@ const validateOutputPath = (
   }
 };
 
+const sanitizeReaderAIEvalCase = (value: Record<string, unknown>): ReaderAIEvalCase => {
+  const fixtureCase: ReaderAIEvalCase = {
+    id: value['id'] as ReaderAIEvalCase['id'],
+    category: value['category'] as ReaderAIEvalCase['category'],
+    language: value['language'] as ReaderAIEvalCase['language'],
+    question: value['question'] as ReaderAIEvalCase['question'],
+    expectedBehavior: value['expectedBehavior'] as ReaderAIEvalCase['expectedBehavior'],
+    spoilerMode: value['spoilerMode'] as ReaderAIEvalCase['spoilerMode'],
+  };
+
+  if (value['tags'] !== undefined) fixtureCase.tags = value['tags'] as ReaderAIEvalCase['tags'];
+  if (value['benchmarkMode'] !== undefined) {
+    fixtureCase.benchmarkMode = value['benchmarkMode'] as ReaderAIEvalCase['benchmarkMode'];
+  }
+  if (value['notes'] !== undefined) fixtureCase.notes = value['notes'] as ReaderAIEvalCase['notes'];
+
+  return fixtureCase;
+};
+
+const sanitizeReaderAILiveFixture = (value: Record<string, unknown>): ReaderAILiveFixture => {
+  const settings = value['settings'] as Record<string, unknown>;
+  const runtimeBook = value['runtimeBook'] as Record<string, unknown>;
+  const outputs = value['outputs'] as Record<string, unknown>;
+  const cases = value['cases'] as Record<string, unknown>[];
+
+  const fixture: ReaderAILiveFixture = {
+    fixtureId: value['fixtureId'] as ReaderAILiveFixture['fixtureId'],
+    live: value['live'] as ReaderAILiveFixture['live'],
+    settings: {
+      provider: settings['provider'] as ReaderAILiveFixtureSettings['provider'],
+      model: settings['model'] as ReaderAILiveFixtureSettings['model'],
+    },
+    runtimeBook: {
+      label: runtimeBook['label'] as ReaderAILiveFixtureRuntimeBook['label'],
+      bookHash: runtimeBook['bookHash'] as ReaderAILiveFixtureRuntimeBook['bookHash'],
+      bookTitle: runtimeBook['bookTitle'] as ReaderAILiveFixtureRuntimeBook['bookTitle'],
+      currentPage: runtimeBook['currentPage'] as ReaderAILiveFixtureRuntimeBook['currentPage'],
+    },
+    outputs: {
+      envelope: outputs['envelope'] as ReaderAILiveFixtureOutputs['envelope'],
+    },
+    cases: cases.map(sanitizeReaderAIEvalCase),
+  };
+
+  if (value['caseLimit'] !== undefined)
+    fixture.caseLimit = value['caseLimit'] as ReaderAILiveFixture['caseLimit'];
+  if (value['timeoutMs'] !== undefined)
+    fixture.timeoutMs = value['timeoutMs'] as ReaderAILiveFixture['timeoutMs'];
+  if (settings['maxContextChunks'] !== undefined) {
+    fixture.settings.maxContextChunks = settings[
+      'maxContextChunks'
+    ] as ReaderAILiveFixtureSettings['maxContextChunks'];
+  }
+  if (settings['spoilerProtection'] !== undefined) {
+    fixture.settings.spoilerProtection = settings[
+      'spoilerProtection'
+    ] as ReaderAILiveFixtureSettings['spoilerProtection'];
+  }
+  if (runtimeBook['authorName'] !== undefined) {
+    fixture.runtimeBook.authorName = runtimeBook[
+      'authorName'
+    ] as ReaderAILiveFixtureRuntimeBook['authorName'];
+  }
+  if (runtimeBook['currentAIPage'] !== undefined) {
+    fixture.runtimeBook.currentAIPage = runtimeBook[
+      'currentAIPage'
+    ] as ReaderAILiveFixtureRuntimeBook['currentAIPage'];
+  }
+  if (outputs['reportJson'] !== undefined) {
+    fixture.outputs.reportJson = outputs['reportJson'] as ReaderAILiveFixtureOutputs['reportJson'];
+  }
+  if (outputs['reportMarkdown'] !== undefined) {
+    fixture.outputs.reportMarkdown = outputs[
+      'reportMarkdown'
+    ] as ReaderAILiveFixtureOutputs['reportMarkdown'];
+  }
+
+  return fixture;
+};
+
 export function validateReaderAILiveFixture(value: unknown): ReaderAILiveFixtureValidationResult {
   const issues: string[] = [];
   if (!isRecord(value)) return { ok: false, issues: ['fixture must be an object'] };
@@ -159,7 +239,7 @@ export function validateReaderAILiveFixture(value: unknown): ReaderAILiveFixture
   }
 
   if (issues.length > 0) return { ok: false, issues };
-  return { ok: true, fixture: value as ReaderAILiveFixture };
+  return { ok: true, fixture: sanitizeReaderAILiveFixture(value) };
 }
 
 export function parseReaderAILiveFixture(source: string): ReaderAILiveFixtureValidationResult {
