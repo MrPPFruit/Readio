@@ -2,6 +2,8 @@
 comet_change: reader-ai-service-eval-runner
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-05-31-reader-ai-service-eval-runner
+status: final
 ---
 
 # Reader AI Service Eval Runner Design

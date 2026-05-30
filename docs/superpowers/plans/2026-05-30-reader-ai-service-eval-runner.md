@@ -2,6 +2,7 @@
 change: reader-ai-service-eval-runner
 design-doc: docs/superpowers/specs/2026-05-30-reader-ai-service-eval-runner-design.md
 base-ref: 076f2e8df5b3bdb70c3ab3f7d38b233e243e0877
+archived-with: 2026-05-31-reader-ai-service-eval-runner
 ---
 
 # Reader AI Service Eval Runner Implementation Plan
@@ -14,7 +15,7 @@ base-ref: 076f2e8df5b3bdb70c3ab3f7d38b233e243e0877
 
 **Tech Stack:** TypeScript, Vitest, existing Reader AI eval types, existing `StreamReaderAIAnswerOptions`/`ReaderAISource` types, existing `buildReaderAIEvalReportRun` validator/report runner.
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ## File Structure
 
@@ -32,7 +33,7 @@ base-ref: 076f2e8df5b3bdb70c3ab3f7d38b233e243e0877
   - `apps/readest-app/src/services/ai/eval/readerAIEvalReportRunner.ts`
   - `apps/readest-app/src/services/ai/readerChatService.ts`
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ### Task 1: Add the failing service runner happy-path test
 
@@ -204,7 +205,7 @@ git add apps/readest-app/src/__tests__/ai/reader-ai-service-eval-runner.test.ts
 git commit -m "test(readio): cover reader ai service eval runner happy path"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ### Task 2: Implement the minimal happy-path runner
 
@@ -352,7 +353,7 @@ git add apps/readest-app/src/services/ai/eval/readerAIServiceEvalRunner.ts
 git commit -m "feat(readio): add reader ai service eval runner"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ### Task 3: Add deterministic failure, insufficient, and abort coverage
 
@@ -792,7 +793,7 @@ git add apps/readest-app/src/__tests__/ai/reader-ai-service-eval-runner.test.ts 
 git commit -m "test(readio): cover reader ai service eval outcomes"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ### Task 4: Add trace injection and explicit run id support
 
@@ -982,7 +983,7 @@ git add apps/readest-app/src/__tests__/ai/reader-ai-service-eval-runner.test.ts 
 git commit -m "feat(readio): capture service eval trace metadata"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ### Task 5: Document the service eval runner scope
 
@@ -1018,7 +1019,7 @@ git add apps/readest-app/src/services/ai/eval/README.md
 git commit -m "docs(readio): document reader ai service eval runner"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ### Task 6: Run focused and full verification
 
@@ -1066,7 +1067,7 @@ openspec validate --all --strict
 
 Expected: PASS, including `reader-ai-service-eval-runner`.
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ### Task 7: Update handoff and Comet metadata
 
@@ -1123,7 +1124,7 @@ git commit -m "docs(readio): record service eval runner validation"
 
 Expected: commit succeeds. Do not add `.claude/`, `.codepilot/`, or `.codepilot-uploads/`.
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ### Task 8: Comet verify/archive handoff
 
@@ -1175,7 +1176,7 @@ git commit -m "docs(comet): archive reader ai service eval runner"
 
 Expected: archive commit succeeds. Do not add `.claude/`, `.codepilot/`, or `.codepilot-uploads/`.
 
----
+## archived-with: 2026-05-31-reader-ai-service-eval-runner
 
 ## Self-Review Notes
 
