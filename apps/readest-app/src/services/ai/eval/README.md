@@ -60,3 +60,18 @@ The input file must contain the same parsed envelope accepted by the pure report
 On success, `--json-out` contains only the sanitized `ReaderAIEvalReport` object, and `--markdown-out` contains deterministic Markdown generated from that report. On usage errors, invalid JSON, invalid envelopes, or unsafe case/result metadata, the command exits non-zero and does not write partial report files.
 
 The CLI is intentionally a local file wrapper only. It does not call model providers, load books, run indexing or retrieval, automate NotebookLM, upload telemetry, or change Reader AI UI/runtime behavior.
+
+## Service eval runner
+
+The service eval runner converts controlled Reader AI service runs into the same metadata-only envelope accepted by `buildReaderAIEvalReportRun` and the `reader-ai:report` CLI.
+
+It is intentionally dependency-injected:
+
+- callers provide the answer stream function;
+- tests should use fake streamers;
+- a real `streamReaderAIAnswer` call must be wired explicitly by a future caller;
+- the runner itself does not choose providers, call APIs, load real books, scan the library, parse EPUB files, write files, upload telemetry, or change Reader AI UI/runtime behavior.
+
+The runner may inspect streamed chunks in memory to derive objective labels such as `no_output`, `unexpected_insufficient_answer`, `stream_error`, or `aborted`, but it must not return raw answer text, source text, prompts, book titles, author names, book hashes, local paths, URLs, API keys, or stable private identifiers.
+
+Real-book fixtures, live-provider cost guardrails, file-based service eval CLI support, NotebookLM automation, and LLM-as-judge are deferred follow-ups.

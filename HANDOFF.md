@@ -4,11 +4,11 @@
 
 - Product line: Readio on the Readest-based mainline.
 - Repo: this repository checkout.
-- Branch: `reader-ai-eval-report-runner` (branched from `readio/restart-readest-base`).
+- Branch: `reader-ai-service-eval-runner` (branched from `readio/restart-readest-base`).
 - Current app version: `0.1.0-alpha.15` in `./apps/readest-app/package.json`.
 - Android package/identifier: `com.ppg.readio`.
 - Android `versionCode`: `1001015` in `./apps/readest-app/src-tauri/tauri.conf.json`.
-- Current active change: `reader-ai-eval-report-runner`, a local-only pure helper slice for deterministic Reader AI eval JSON/Markdown reports from metadata envelopes.
+- Current active change: `reader-ai-service-eval-runner`, an A-first dependency-injected Reader AI service eval harness that turns controlled answer streams into metadata-only eval envelopes.
 - Distribution status: `v0.1.0-alpha.15` prerelease is published on `MrPPFruit/Readio` with a signed APK and checksum. Current local source has additional post-release AI 搜书 fixes. Versioning preference: only major feature upgrade iterations should bump alpha versions, and the user decides when to bump.
 - Working tree note: `./.claude/`, `./.codepilot-uploads/`, and `./.codepilot/` are unrelated/untracked unless explicitly intended.
 
@@ -77,6 +77,26 @@
   - add a CLI/file-loading wrapper after the metadata contract stabilizes;
   - build a real service-level eval runner around `streamReaderAIAnswer` only after deterministic local reports are accepted;
   - keep NotebookLM automation and LLM-as-judge as separate future changes, not scoring inputs for this runner.
+
+## Reader AI Service Eval Runner
+
+- Change: `reader-ai-service-eval-runner`.
+- Scope: A-first dependency-injected service eval harness that turns controlled Reader AI answer streams into metadata-only eval envelopes. Real-book/live-provider runner remains deferred.
+- Implemented:
+  - `runReaderAIServiceEval(input, deps)` under `apps/readest-app/src/services/ai/eval/readerAIServiceEvalRunner.ts`;
+  - focused fake-streamer tests under `apps/readest-app/src/__tests__/ai/reader-ai-service-eval-runner.test.ts`;
+  - eval README section documenting fake-streamer scope and deferred live/real-book work.
+- Validation evidence:
+  - `pnpm --dir apps/readest-app test src/__tests__/ai/reader-ai-service-eval-runner.test.ts src/__tests__/ai/reader-ai-eval-report-runner.test.ts`: PASS, 2 files / 11 tests;
+  - `pnpm --dir apps/readest-app lint`: PASS;
+  - `pnpm --dir apps/readest-app test`: PASS, 215 passed / 2 skipped files, 3876 passed / 7 skipped tests;
+  - `openspec validate --all --strict`: PASS, 5 passed / 0 failed.
+- Deferred follow-ups:
+  - file-based service eval CLI;
+  - live-provider runner with cost/privacy guardrails;
+  - real local book fixtures;
+  - NotebookLM automation;
+  - LLM-as-judge/manual qualitative layer.
 
 ## Latest source-level state
 
