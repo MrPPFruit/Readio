@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ReaderAIServiceEvalStreamer } from '@/services/ai/eval/readerAIServiceEvalRunner';
+import type { StreamReaderAIAnswerOptions } from '@/services/ai/readerChatService';
 import {
   parseReaderAILiveFixture,
+  runReaderAILiveFixtureEval,
   validateReaderAILiveFixture,
 } from '@/services/ai/eval/readerAILiveFixtureEvalRunner';
 
@@ -118,5 +121,116 @@ describe('Reader AI live fixture validation', () => {
       'cases[0].metadata.sourceText is not allowed in Reader AI eval metadata',
       'outputs.reportJson must be a relative local output path',
     ]);
+  });
+});
+
+const createWritableMemory = () => {
+  const writes = new Map<string, string>();
+  return {
+    writes,
+    writeFile: async (path: string, content: string): Promise<void> => {
+      writes.set(path, content);
+    },
+  };
+};
+
+describe('runReaderAILiveFixtureEval guarded execution', () => {
+  it('refuses to call the streamer without explicit live opt-in', async () => {
+    const memory = createWritableMemory();
+    let called = false;
+    const streamer: ReaderAIServiceEvalStreamer = async function* () {
+      called = true;
+      yield 'private answer must not be returned';
+    };
+
+    const output = await runReaderAILiveFixtureEval(validFixture, {
+      live: false,
+      streamAnswer: streamer,
+      writeFile: memory.writeFile,
+      now: () => 1000,
+    });
+
+    expect(output.ok).toBe(false);
+    if (output.ok) throw new Error('expected guarded failure');
+    expect(output.issues).toEqual(['Live fixture execution requires --live']);
+    expect(called).toBe(false);
+    expect(memory.writes.size).toBe(0);
+  });
+
+  it('refuses to call the streamer unless the fixture is marked live', async () => {
+    const memory = createWritableMemory();
+    let called = false;
+    const streamer: ReaderAIServiceEvalStreamer = async function* () {
+      called = true;
+      yield 'private answer must not be returned';
+    };
+
+    const output = await runReaderAILiveFixtureEval(validFixture, {
+      live: true,
+      streamAnswer: streamer,
+      writeFile: memory.writeFile,
+      now: () => 1000,
+    });
+
+    expect(output.ok).toBe(false);
+    if (output.ok) throw new Error('expected guarded failure');
+    expect(output.issues).toEqual(['Live fixture execution requires --live']);
+    expect(called).toBe(false);
+    expect(memory.writes.size).toBe(0);
+  });
+
+  it('executes bounded live fixture cases through the injected streamer', async () => {
+    const memory = createWritableMemory();
+    const calls: StreamReaderAIAnswerOptions[] = [];
+    const streamer: ReaderAIServiceEvalStreamer = async function* (options) {
+      calls.push(options);
+      options.onSources?.([
+        {
+          id: 'source-a',
+          chapterTitle: 'Chapter 1',
+          previewText: 'private preview must not be written',
+          href: 'readio://private-source',
+          confidence: 'exact',
+        },
+      ]);
+      yield 'private answer must not be written';
+    };
+
+    const fixture = {
+      ...validFixture,
+      live: true,
+      caseLimit: 1,
+      cases: [
+        validFixture.cases[0],
+        { ...validFixture.cases[0], id: 'second-case', question: '第二个问题是什么？' },
+      ],
+    };
+
+    const output = await runReaderAILiveFixtureEval(fixture, {
+      live: true,
+      streamAnswer: streamer,
+      writeFile: memory.writeFile,
+      now: (() => {
+        const values = [1000, 1200, 1200];
+        let index = 0;
+        return () => values[Math.min(index++, values.length - 1)] ?? 0;
+      })(),
+    });
+
+    expect(output.ok).toBe(true);
+    if (!output.ok) throw new Error(output.issues.join('\n'));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      bookHash: 'runtime-private-book-hash',
+      bookTitle: 'Runtime Private Title',
+      authorName: 'Runtime Private Author',
+      currentPage: 42,
+      currentAIPage: 40,
+      question: '阿兹克是谁？',
+    });
+    expect(memory.writes.has('tmp/reader-ai/live-fixture/envelope.json')).toBe(true);
+    expect(memory.writes.has('tmp/reader-ai/live-fixture/report.json')).toBe(true);
+    expect(memory.writes.has('tmp/reader-ai/live-fixture/report.md')).toBe(true);
+    expect(output.envelope.results).toHaveLength(1);
   });
 });

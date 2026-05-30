@@ -1,5 +1,11 @@
 import { validateReaderAIEvalCase, type ReaderAIEvalCase } from '@/services/ai/eval/readerAIEval';
-import type { AIProviderName } from '@/services/ai/types';
+import { buildReaderAIEvalReportRun } from '@/services/ai/eval/readerAIEvalReportRunner';
+import {
+  runReaderAIServiceEval,
+  type ReaderAIServiceEvalEnvelope,
+  type ReaderAIServiceEvalStreamer,
+} from '@/services/ai/eval/readerAIServiceEvalRunner';
+import type { AIProviderName, AISettings } from '@/services/ai/types';
 
 export type ReaderAILiveFixtureRuntimeBook = {
   label: string;
@@ -247,5 +253,114 @@ export function parseReaderAILiveFixture(source: string): ReaderAILiveFixtureVal
     return validateReaderAILiveFixture(JSON.parse(source) as unknown);
   } catch (_error: unknown) {
     return { ok: false, issues: ['fixture must be valid JSON'] };
+  }
+}
+
+export type ReaderAILiveFixtureEvalDeps = {
+  live: boolean;
+  streamAnswer: ReaderAIServiceEvalStreamer;
+  writeFile: (path: string, content: string) => Promise<void>;
+  now?: () => number;
+};
+
+export type ReaderAILiveFixtureEvalOutput =
+  | {
+      ok: true;
+      envelope: ReaderAIServiceEvalEnvelope;
+      writtenPaths: string[];
+      issues: [];
+    }
+  | {
+      ok: false;
+      envelope: null;
+      writtenPaths: [];
+      issues: string[];
+    };
+
+const toAISettings = (fixture: ReaderAILiveFixture): AISettings => ({
+  enabled: true,
+  showReaderAIEntrypoints: true,
+  provider: fixture.settings.provider,
+  providerApiKeys: {},
+  providerModels: { [fixture.settings.provider]: fixture.settings.model },
+  customProviderBaseUrl: '',
+  spoilerProtection: fixture.settings.spoilerProtection ?? true,
+  maxContextChunks: fixture.settings.maxContextChunks ?? 6,
+  indexingMode: 'on-demand',
+});
+
+const limitCases = (fixture: ReaderAILiveFixture): ReaderAIEvalCase[] =>
+  fixture.cases.slice(0, fixture.caseLimit ?? fixture.cases.length);
+
+export async function runReaderAILiveFixtureEval(
+  fixtureInput: unknown,
+  deps: ReaderAILiveFixtureEvalDeps,
+): Promise<ReaderAILiveFixtureEvalOutput> {
+  const validation = validateReaderAILiveFixture(fixtureInput);
+  if (!validation.ok) {
+    return { ok: false, envelope: null, writtenPaths: [], issues: validation.issues };
+  }
+
+  const fixture = validation.fixture;
+  if (!deps.live || !fixture.live) {
+    return {
+      ok: false,
+      envelope: null,
+      writtenPaths: [],
+      issues: ['Live fixture execution requires --live'],
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = fixture.timeoutMs
+    ? globalThis.setTimeout(() => controller.abort(), fixture.timeoutMs)
+    : undefined;
+
+  try {
+    const envelope = await runReaderAIServiceEval(
+      {
+        cases: limitCases(fixture),
+        context: {
+          settings: toAISettings(fixture),
+          bookHash: fixture.runtimeBook.bookHash,
+          bookTitle: fixture.runtimeBook.bookTitle,
+          authorName: fixture.runtimeBook.authorName,
+          currentPage: fixture.runtimeBook.currentPage,
+          currentAIPage: fixture.runtimeBook.currentAIPage,
+          messages: [],
+          signal: controller.signal,
+        },
+      },
+      {
+        streamAnswer: deps.streamAnswer,
+        now: deps.now,
+      },
+    );
+
+    const reportOutput = buildReaderAIEvalReportRun(envelope);
+    if (!reportOutput.ok) {
+      return { ok: false, envelope: null, writtenPaths: [], issues: reportOutput.issues };
+    }
+
+    const writtenPaths: string[] = [];
+    await deps.writeFile(fixture.outputs.envelope, `${JSON.stringify(envelope, null, 2)}\n`);
+    writtenPaths.push(fixture.outputs.envelope);
+
+    if (fixture.outputs.reportJson !== undefined) {
+      await deps.writeFile(
+        fixture.outputs.reportJson,
+        `${JSON.stringify(reportOutput.report, null, 2)}\n`,
+      );
+      writtenPaths.push(fixture.outputs.reportJson);
+    }
+
+    if (fixture.outputs.reportMarkdown !== undefined) {
+      await deps.writeFile(fixture.outputs.reportMarkdown, reportOutput.markdown);
+      writtenPaths.push(fixture.outputs.reportMarkdown);
+    }
+
+    return { ok: true, envelope, writtenPaths, issues: [] };
+  } finally {
+    if (timeout !== undefined) globalThis.clearTimeout(timeout);
   }
 }
