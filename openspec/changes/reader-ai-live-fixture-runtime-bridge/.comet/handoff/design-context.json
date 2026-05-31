@@ -1,0 +1,30 @@
+{
+  "change": "reader-ai-live-fixture-runtime-bridge",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "4a7d027165d0056f90d17f5137fba9d411ce5da4d7dba181acf3ea1f7af8ea50",
+  "files": [
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-runtime-bridge/proposal.md",
+      "sha256": "7b608f507859098ca6d204b3ab0b69aedbd0e49609f9cb4187637892c18c3402"
+    },
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-runtime-bridge/design.md",
+      "sha256": "603a0e4ea43809865c7037cefca9c6cb4926738bd9d1fe7691e4bea165ab48b6"
+    },
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-runtime-bridge/tasks.md",
+      "sha256": "310e7b76e33045350057ad1919bea6d1f3c48ed3384dc663a6cc13839a416bb5"
+    },
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-runtime-bridge/specs/reader-ai-live-fixture-eval-runner/spec.md",
+      "sha256": "3a6aed8702ce027b8b70093e020f59b433030fab935046a734e955e290c01ec8"
+    },
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-runtime-bridge/specs/reader-ai-live-fixture-runtime-bridge/spec.md",
+      "sha256": "eaf8db73bb7b4a04e47dbf4b456f455dadab0f7a11092f329a592f41011b068e"
+    }
+  ]
+}
