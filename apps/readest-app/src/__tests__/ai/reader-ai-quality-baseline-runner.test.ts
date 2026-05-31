@@ -124,4 +124,51 @@ describe('Reader AI quality baseline runner output', () => {
     expect(output.markdown).not.toContain('阿兹克是谁');
     expect(output.markdown).not.toContain('What just happened');
   });
+
+  it('rejects duplicate case IDs before building baseline groups', () => {
+    const output = buildReaderAIQualityBaselineRun({
+      cases: [
+        {
+          id: 'duplicate-case',
+          category: 'person_recall',
+          language: 'zh-CN',
+          question: '阿兹克是谁？',
+          expectedBehavior: 'Identify the person using cited read-so-far evidence.',
+          spoilerMode: 'read_so_far',
+        },
+        {
+          id: 'duplicate-case',
+          category: 'event_recap',
+          language: 'en',
+          question: 'What just happened?',
+          expectedBehavior: 'Recap the current event without spoilers.',
+          spoilerMode: 'read_so_far',
+        },
+      ],
+      results: [
+        {
+          caseId: 'duplicate-case',
+          runId: 'run-a',
+          classificationIntent: 'entity_lookup',
+          sourceCount: 3,
+          citationValid: true,
+          insufficientAnswer: false,
+          firstOutputMs: 1200,
+          passed: true,
+          reasons: ['service_eval_passed'],
+          provider: 'custom-openai-compatible',
+          model: 'baseline-model',
+          spoilerMode: 'read_so_far',
+          overBudgetStage: 'none',
+        },
+      ],
+    });
+
+    expect(output).toEqual({
+      ok: false,
+      baseline: null,
+      markdown: '',
+      issues: ['cases[1].id duplicates an earlier input case'],
+    });
+  });
 });

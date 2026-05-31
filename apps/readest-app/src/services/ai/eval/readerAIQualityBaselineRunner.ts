@@ -41,6 +41,8 @@ export type ReaderAIQualityBaselineRunnerOutput =
     }
   | {
       ok: false;
+      baseline: null;
+      markdown: '';
       issues: string[];
     };
 
@@ -145,7 +147,17 @@ const parseInput = (input: unknown): { input?: ReaderAIQualityBaselineInput; iss
 
   if (issues.length > 0) return { issues };
 
-  const caseIds = new Set(cases.map((evalCase) => evalCase.id));
+  const caseIds = new Set<string>();
+  cases.forEach((evalCase, index) => {
+    if (caseIds.has(evalCase.id)) {
+      issues.push(`cases[${index}].id duplicates an earlier input case`);
+      return;
+    }
+    caseIds.add(evalCase.id);
+  });
+
+  if (issues.length > 0) return { issues };
+
   results.forEach((result, index) => {
     if (!caseIds.has(result.caseId)) {
       issues.push(`results[${index}].caseId does not match an input case`);
@@ -288,7 +300,9 @@ export function buildReaderAIQualityBaselineRun(
   input: unknown,
 ): ReaderAIQualityBaselineRunnerOutput {
   const parsed = parseInput(input);
-  if (!parsed.input) return { ok: false, issues: parsed.issues };
+  if (!parsed.input) {
+    return { ok: false, baseline: null, markdown: '', issues: parsed.issues };
+  }
 
   const baseline = buildBaseline(parsed.input);
   return {
