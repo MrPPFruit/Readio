@@ -6,9 +6,9 @@
 
 ## 2. Baseline Runner and CLI Workflow
 
-- [ ] 2.1 Add failing tests for a local baseline runner or CLI wrapper that reads sanitized eval artifacts and writes JSON/Markdown outputs.
-- [ ] 2.2 Implement the minimal local baseline runner or CLI wrapper without calling providers, reading runtime settings, preparing retrieval, automating NotebookLM, or changing UI/runtime app behavior.
-- [ ] 2.3 Ensure invalid input, unsafe metadata, and output write failures fail closed without partial baseline artifacts.
+- [x] 2.1 Add failing tests for a local baseline runner or CLI wrapper that reads sanitized eval artifacts and writes JSON/Markdown outputs.
+- [x] 2.2 Implement the minimal local baseline runner or CLI wrapper without calling providers, reading runtime settings, preparing retrieval, automating NotebookLM, or changing UI/runtime app behavior.
+- [x] 2.3 Ensure invalid input, unsafe metadata, and output write failures fail closed without partial baseline artifacts.
 
 ## 3. Manual Observation and Documentation
 
