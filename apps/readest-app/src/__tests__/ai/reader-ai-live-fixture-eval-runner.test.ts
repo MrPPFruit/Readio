@@ -7,6 +7,11 @@ import {
   runReaderAILiveFixtureEval,
   validateReaderAILiveFixture,
 } from '@/services/ai/eval/readerAILiveFixtureEvalRunner';
+import {
+  buildReaderAILiveFixtureRuntimeBridge,
+  parseReaderAILiveFixtureRuntimeSettings,
+  runtimeBridgeInputFromEnv,
+} from '@/services/ai/eval/readerAILiveFixtureRuntimeBridge';
 
 const validFixture = {
   fixtureId: 'local-smoke-001',
@@ -121,6 +126,142 @@ describe('Reader AI live fixture validation', () => {
       'cases[0].metadata.sourceText is not allowed in Reader AI eval metadata',
       'outputs.reportJson must be a relative local output path',
     ]);
+  });
+});
+
+describe('Reader AI live fixture runtime provider bridge', () => {
+  it('builds in-memory AI settings from a runtime API key without changing fixture metadata', () => {
+    const parsed = parseReaderAILiveFixture(JSON.stringify(validFixture));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.issues.join('\n'));
+
+    const bridge = buildReaderAILiveFixtureRuntimeBridge(parsed.fixture, {
+      provider: { apiKey: 'sk-runtime-provider-secret' },
+    });
+
+    expect(bridge.ok).toBe(true);
+    if (!bridge.ok) throw new Error(bridge.issues.join('\n'));
+    expect(bridge.settings).toMatchObject({
+      enabled: true,
+      showReaderAIEntrypoints: true,
+      provider: 'openai',
+      providerModels: { openai: 'gpt-test' },
+      spoilerProtection: true,
+      maxContextChunks: 6,
+      indexingMode: 'on-demand',
+    });
+    expect(bridge.settings.providerApiKeys.openai).toBe('sk-runtime-provider-secret');
+    expect(parsed.fixture.settings).toEqual({ provider: 'openai', model: 'gpt-test' });
+  });
+
+  it('fails closed when runtime provider credentials are missing', () => {
+    const parsed = parseReaderAILiveFixture(JSON.stringify(validFixture));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.issues.join('\n'));
+
+    const bridge = buildReaderAILiveFixtureRuntimeBridge(parsed.fixture, {});
+
+    expect(bridge.ok).toBe(false);
+    if (bridge.ok) throw new Error('expected provider preflight failure');
+    expect(bridge.issues).toEqual(['runtime provider API key is required']);
+  });
+
+  it('accepts an explicitly allowed custom local testing proxy without an API key', () => {
+    const parsed = parseReaderAILiveFixture(
+      JSON.stringify({
+        ...validFixture,
+        settings: { provider: 'custom-openai-compatible', model: 'local-model' },
+      }),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.issues.join('\n'));
+
+    const bridge = buildReaderAILiveFixtureRuntimeBridge(parsed.fixture, {
+      provider: {
+        customProviderBaseUrl: 'http://127.0.0.1:11434/v1',
+        allowUnsafeCustomProviderBaseUrl: true,
+      },
+    });
+
+    expect(bridge.ok).toBe(true);
+    if (!bridge.ok) throw new Error(bridge.issues.join('\n'));
+    expect(bridge.settings.customProviderBaseUrl).toBe('http://127.0.0.1:11434/v1');
+    expect(bridge.settings.allowUnsafeCustomProviderBaseUrl).toBe(true);
+    expect(bridge.settings.providerApiKeys['custom-openai-compatible']).toBeUndefined();
+  });
+
+  it('rejects invalid custom provider base URLs with safe deterministic issues', () => {
+    const parsed = parseReaderAILiveFixture(
+      JSON.stringify({
+        ...validFixture,
+        settings: { provider: 'custom-openai-compatible', model: 'local-model' },
+      }),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.issues.join('\n'));
+
+    const bridge = buildReaderAILiveFixtureRuntimeBridge(parsed.fixture, {
+      provider: {
+        customProviderBaseUrl: 'http://public.example.invalid/v1',
+        allowUnsafeCustomProviderBaseUrl: true,
+      },
+    });
+
+    expect(bridge.ok).toBe(false);
+    if (bridge.ok) throw new Error('expected custom URL failure');
+    expect(bridge.issues).toEqual(['runtime custom provider base URL is invalid']);
+  });
+
+  it('rejects provider secrets and base URLs persisted in fixture JSON', () => {
+    const validation = validateReaderAILiveFixture({
+      ...validFixture,
+      settings: {
+        ...validFixture.settings,
+        apiKey: 'sk-fixture-secret',
+        customProviderBaseUrl: 'https://private.example.test/v1',
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) throw new Error('expected fixture secret rejection');
+    expect(validation.issues).toContain(
+      'settings.apiKey is not allowed in Reader AI eval metadata',
+    );
+    expect(validation.issues).toContain(
+      'settings.customProviderBaseUrl is not allowed in Reader AI eval metadata',
+    );
+  });
+
+  it('parses runtime settings JSON and eval-specific environment variables', () => {
+    const parsed = parseReaderAILiveFixtureRuntimeSettings(
+      JSON.stringify({
+        provider: {
+          apiKey: 'sk-runtime-file-secret',
+          customProviderBaseUrl: 'https://private.example.test/v1',
+        },
+      }),
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.issues.join('\n'));
+    expect(parsed.runtime.provider?.apiKey).toBe('sk-runtime-file-secret');
+    expect(parsed.runtime.provider?.customProviderBaseUrl).toBe('https://private.example.test/v1');
+
+    expect(
+      runtimeBridgeInputFromEnv({
+        READER_AI_LIVE_FIXTURE_API_KEY: 'sk-runtime-env-secret',
+        READER_AI_LIVE_FIXTURE_CUSTOM_BASE_URL: 'https://env.example.test/v1',
+        READER_AI_LIVE_FIXTURE_ALLOW_UNSAFE_LOCAL_PROXY: 'true',
+        READER_AI_LIVE_FIXTURE_RETRIEVAL_SEED: 'tmp/reader-ai/live-fixture/seed.local.json',
+      }),
+    ).toEqual({
+      provider: {
+        apiKey: 'sk-runtime-env-secret',
+        customProviderBaseUrl: 'https://env.example.test/v1',
+        allowUnsafeCustomProviderBaseUrl: true,
+      },
+      retrievalSeedPath: 'tmp/reader-ai/live-fixture/seed.local.json',
+    });
   });
 });
 

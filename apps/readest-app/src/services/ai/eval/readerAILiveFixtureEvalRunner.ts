@@ -169,6 +169,32 @@ const isRelativeLocalOutputPath = (value: unknown): value is string => {
   return true;
 };
 
+const liveFixtureUnsafeFieldNames = new Set([
+  'apiKey',
+  'customProviderBaseUrl',
+  'baseUrl',
+  'token',
+  'authorization',
+]);
+
+const collectUnsafeLiveFixtureFields = (value: unknown, path: string, issues: string[]): void => {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) =>
+      collectUnsafeLiveFixtureFields(item, `${path}[${index}]`, issues),
+    );
+    return;
+  }
+  if (!isRecord(value)) return;
+
+  Object.entries(value).forEach(([key, field]) => {
+    const fieldPath = path ? `${path}.${key}` : key;
+    if (liveFixtureUnsafeFieldNames.has(key)) {
+      issues.push(`${fieldPath} is not allowed in Reader AI eval metadata`);
+    }
+    collectUnsafeLiveFixtureFields(field, fieldPath, issues);
+  });
+};
+
 const validateOutputPath = (
   value: Record<string, unknown>,
   key: keyof ReaderAILiveFixtureOutputs,
@@ -327,6 +353,8 @@ const sanitizeReaderAILiveFixture = (value: Record<string, unknown>): ReaderAILi
 export function validateReaderAILiveFixture(value: unknown): ReaderAILiveFixtureValidationResult {
   const issues: string[] = [];
   if (!isRecord(value)) return { ok: false, issues: ['fixture must be an object'] };
+
+  collectUnsafeLiveFixtureFields(value, '', issues);
 
   if (!hasString(value, 'fixtureId')) issues.push('fixtureId is required');
   if (typeof value['live'] !== 'boolean') issues.push('live is required');
