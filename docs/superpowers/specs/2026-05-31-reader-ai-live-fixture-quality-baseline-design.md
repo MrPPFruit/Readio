@@ -2,6 +2,8 @@
 comet_change: reader-ai-live-fixture-quality-baseline
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-05-31-reader-ai-live-fixture-quality-baseline
+status: final
 ---
 
 # Reader AI Live Fixture Quality Baseline Design

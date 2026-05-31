@@ -2,6 +2,7 @@
 change: reader-ai-live-fixture-quality-baseline
 design-doc: docs/superpowers/specs/2026-05-31-reader-ai-live-fixture-quality-baseline-design.md
 base-ref: 38fe8c010a780f22475cdbf9fee2d98d900a0735
+archived-with: 2026-05-31-reader-ai-live-fixture-quality-baseline
 ---
 
 # Reader AI Live Fixture Quality Baseline Implementation Plan
