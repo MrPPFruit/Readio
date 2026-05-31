@@ -30,7 +30,9 @@ type ReaderAILiveFixtureEvalCliDeps = Pick<
   env?: Record<string, string | undefined>;
 };
 
-const loadDefaultStreamAnswer = async (): Promise<ReaderAILiveFixtureEvalDeps['streamAnswer']> => {
+const loadDefaultStreamAnswer = async (): Promise<
+  NonNullable<ReaderAILiveFixtureEvalDeps['streamAnswer']>
+> => {
   const { streamReaderAIAnswer } = await import('@/services/ai/readerChatService');
   return streamReaderAIAnswer;
 };
