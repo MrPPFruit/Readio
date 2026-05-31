@@ -2,6 +2,7 @@
 change: reader-ai-live-fixture-eval-runner
 design-doc: docs/superpowers/specs/2026-05-31-reader-ai-live-fixture-eval-runner-design.md
 base-ref: 88855abbd10a74e07d971b97d9ff1e99523d8ee8
+archived-with: 2026-05-31-reader-ai-live-fixture-eval-runner
 ---
 
 # Reader AI Live Fixture Eval Runner Implementation Plan
@@ -14,7 +15,7 @@ base-ref: 88855abbd10a74e07d971b97d9ff1e99523d8ee8
 
 **Tech Stack:** TypeScript, Vitest, Node `fs/promises`, existing `StreamReaderAIAnswerOptions`, existing Reader AI eval/report/service runner types, existing `tsx` script pattern.
 
----
+## archived-with: 2026-05-31-reader-ai-live-fixture-eval-runner
 
 ## File Structure
 
@@ -39,7 +40,7 @@ base-ref: 88855abbd10a74e07d971b97d9ff1e99523d8ee8
 - Modify: `openspec/changes/reader-ai-live-fixture-eval-runner/tasks.md`
   - Check off tasks as they are completed.
 
----
+## archived-with: 2026-05-31-reader-ai-live-fixture-eval-runner
 
 ### Task 1: Add fixture parser and validation tests
 
@@ -375,7 +376,7 @@ git add apps/readest-app/src/__tests__/ai/reader-ai-live-fixture-eval-runner.tes
 git commit -m "feat(readio): add live fixture eval validation"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-live-fixture-eval-runner
 
 ### Task 2: Add guarded runner orchestration
 
@@ -639,7 +640,7 @@ git add apps/readest-app/src/__tests__/ai/reader-ai-live-fixture-eval-runner.tes
 git commit -m "feat(readio): add guarded live fixture eval runner"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-live-fixture-eval-runner
 
 ### Task 3: Add CLI wrapper and privacy output coverage
 
@@ -890,7 +891,7 @@ git add apps/readest-app/scripts/reader-ai-live-fixture-eval.ts apps/readest-app
 git commit -m "feat(readio): add live fixture eval cli"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-live-fixture-eval-runner
 
 ### Task 4: Document and verify the live fixture runner
 
@@ -1004,7 +1005,7 @@ git add apps/readest-app/src/services/ai/eval/README.md HANDOFF.md openspec/chan
 git commit -m "docs(readio): document live fixture eval runner"
 ```
 
----
+## archived-with: 2026-05-31-reader-ai-live-fixture-eval-runner
 
 ## Self-Review Notes
 

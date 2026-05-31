@@ -2,6 +2,8 @@
 comet_change: reader-ai-live-fixture-eval-runner
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-05-31-reader-ai-live-fixture-eval-runner
+status: final
 ---
 
 # Reader AI Live Fixture Eval Runner Design
