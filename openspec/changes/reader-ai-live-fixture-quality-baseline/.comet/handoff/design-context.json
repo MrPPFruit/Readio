@@ -1,0 +1,30 @@
+{
+  "change": "reader-ai-live-fixture-quality-baseline",
+  "phase": "design",
+  "mode": "compact",
+  "canonical_spec": "openspec",
+  "generated_by": "comet-handoff.sh",
+  "context_hash": "bb69319b99e901714c939fe54c02c2eac1ab4b73de813df4fa7a448483425603",
+  "files": [
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-quality-baseline/proposal.md",
+      "sha256": "14a79f690f64fe3b2b44c243690aecc88cec0603cb714e5eb8d18e901b33f290"
+    },
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-quality-baseline/design.md",
+      "sha256": "55f2b19716a02415810087b4fc8d89c4ef09caf51faab4ff494b641e2b54a37d"
+    },
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-quality-baseline/tasks.md",
+      "sha256": "df3bea57d45a70abbbb66da59a3a3c5c96f173f7cdaf86948d51ae7bb6a3efa9"
+    },
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-quality-baseline/specs/reader-ai-live-fixture-eval-runner/spec.md",
+      "sha256": "77c04a53a333dd9a66438fa296f94adcfcd8b10d3b26cde9d3025145509f3563"
+    },
+    {
+      "path": "openspec/changes/reader-ai-live-fixture-quality-baseline/specs/reader-ai-live-fixture-quality-baseline/spec.md",
+      "sha256": "8b930315a02f6476484a9682318b938c618252d5ab816286ee3aa76e0c23f65c"
+    }
+  ]
+}
