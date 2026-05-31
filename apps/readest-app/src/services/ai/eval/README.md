@@ -176,3 +176,30 @@ Privacy boundaries:
 - generated local artifacts are developer evidence, not telemetry, and should not be committed unless they have been reviewed for the metadata-only contract.
 
 Deferred scope remains separate from this runner: real-book batch management, fixture discovery over a library, NotebookLM automation/comparison runs, and LLM-as-judge scoring are intentionally not part of the local live fixture runner. NotebookLM and LLM judging may be used later only as separate, non-authoritative manual/quality layers after deterministic privacy and grounding checks are stable.
+
+## Local quality baseline runner
+
+The quality baseline runner summarizes metadata-only Reader AI live fixture envelopes into deterministic JSON and Markdown baseline snapshots. It is a local developer workflow only: it does not call model providers, load books, prepare retrieval seeds, automate NotebookLM, upload telemetry, or change Reader AI UI/runtime behavior.
+
+```bash
+pnpm --dir apps/readest-app reader-ai:baseline -- \
+  --input tmp/reader-ai/live-fixture/envelope.json \
+  --json-out tmp/reader-ai/live-fixture/baseline.json \
+  --markdown-out tmp/reader-ai/live-fixture/baseline.md
+```
+
+The baseline summarizes safe metadata only:
+
+- total cases and results;
+- category, language, and provider/model counts;
+- pass/fail totals;
+- failure reason labels;
+- citation-valid counts;
+- source-count buckets;
+- first-output latency buckets;
+- over-budget stage counts;
+- optional manual NotebookLM/human observation label counts.
+
+Manual NotebookLM or human observations are non-authoritative labels. They do not change deterministic pass/fail totals, and copied NotebookLM or Readio answer text must not be stored in eval cases, results, or baseline artifacts.
+
+Generated baseline artifacts are developer evidence, not telemetry. Do not commit generated baseline files unless they have been reviewed for the metadata-only contract. They must not contain raw answer text, source text, prompt text, API keys, custom base URLs, local paths, URLs, book hashes, stable private identifiers, raw exception details, or copied NotebookLM/Readio output.
