@@ -47,6 +47,10 @@ const validFixture = {
   ],
 };
 
+const validRuntime = {
+  provider: { apiKey: 'sk-runtime-provider-secret' },
+};
+
 describe('Reader AI live fixture validation', () => {
   it('accepts a metadata-only fixture with runtime-only book context', () => {
     const parsed = parseReaderAILiveFixture(JSON.stringify(validFixture));
@@ -383,6 +387,7 @@ describe('runReaderAILiveFixtureEval guarded execution', () => {
 
     const output = await runReaderAILiveFixtureEval(fixture, {
       live: true,
+      runtime: validRuntime,
       streamAnswer: streamer,
       writeFile: memory.writeFile,
       now: (() => {
@@ -412,6 +417,72 @@ describe('runReaderAILiveFixtureEval guarded execution', () => {
     expectMetadataOnlyOutput(writtenOutput);
   });
 
+  it('fails provider preflight before calling the streamer or writing artifacts', async () => {
+    const memory = createWritableMemory();
+    let called = false;
+    const streamer: ReaderAIServiceEvalStreamer = async function* () {
+      called = true;
+      yield 'private answer must not be written';
+    };
+
+    const output = await runReaderAILiveFixtureEval(
+      { ...validFixture, live: true },
+      {
+        live: true,
+        streamAnswer: streamer,
+        writeFile: memory.writeFile,
+        now: () => 1000,
+      },
+    );
+
+    expect(output.ok).toBe(false);
+    if (output.ok) throw new Error('expected provider preflight failure');
+    expect(output.issues).toEqual(['runtime provider API key is required']);
+    expect(called).toBe(false);
+    expect(memory.writes.size).toBe(0);
+  });
+
+  it('passes runtime AI settings to the streamer after provider preflight succeeds', async () => {
+    const memory = createWritableMemory();
+    const calls: StreamReaderAIAnswerOptions[] = [];
+    const streamer: ReaderAIServiceEvalStreamer = async function* (options) {
+      calls.push(options);
+      options.onSources?.([
+        {
+          id: 'source-a',
+          chapterTitle: 'Chapter 1',
+          previewText: 'private preview must not be written',
+          href: 'readio://private-source',
+          confidence: 'exact',
+        },
+      ]);
+      yield 'private answer must not be written';
+    };
+
+    const output = await runReaderAILiveFixtureEval(
+      { ...validFixture, live: true },
+      {
+        live: true,
+        runtime: validRuntime,
+        streamAnswer: streamer,
+        writeFile: memory.writeFile,
+        now: (() => {
+          const values = [1000, 1200, 1200];
+          let index = 0;
+          return () => values[Math.min(index++, values.length - 1)] ?? 0;
+        })(),
+      },
+    );
+
+    expect(output.ok).toBe(true);
+    if (!output.ok) throw new Error(output.issues.join('\n'));
+    expect(calls).toHaveLength(1);
+    const firstCall = calls[0];
+    if (firstCall === undefined) throw new Error('expected streamer call');
+    expect(firstCall.settings.providerApiKeys.openai).toBe('sk-runtime-provider-secret');
+    expect(firstCall.settings.providerModels.openai).toBe('gpt-test');
+  });
+
   it('records safe metadata only when live fixture streaming is aborted', async () => {
     const memory = createWritableMemory();
     const rawErrorMessage =
@@ -432,6 +503,7 @@ describe('runReaderAILiveFixtureEval guarded execution', () => {
 
     const output = await runReaderAILiveFixtureEval(fixture, {
       live: true,
+      runtime: validRuntime,
       streamAnswer: streamer,
       writeFile: memory.writeFile,
       now: (() => {

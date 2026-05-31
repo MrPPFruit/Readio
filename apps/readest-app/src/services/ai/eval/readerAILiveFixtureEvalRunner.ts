@@ -11,7 +11,11 @@ import {
   type ReaderAIServiceEvalEnvelope,
   type ReaderAIServiceEvalStreamer,
 } from '@/services/ai/eval/readerAIServiceEvalRunner';
-import type { AIProviderName, AISettings } from '@/services/ai/types';
+import {
+  buildReaderAILiveFixtureRuntimeBridge,
+  type ReaderAILiveFixtureRuntimeInput,
+} from '@/services/ai/eval/readerAILiveFixtureRuntimeBridge';
+import type { AIProviderName } from '@/services/ai/types';
 
 export type ReaderAILiveFixtureRuntimeBook = {
   label: string;
@@ -447,6 +451,7 @@ export function parseReaderAILiveFixture(source: string): ReaderAILiveFixtureVal
 
 export type ReaderAILiveFixtureEvalDeps = {
   live: boolean;
+  runtime?: ReaderAILiveFixtureRuntimeInput;
   streamAnswer: ReaderAIServiceEvalStreamer;
   writeFile: (path: string, content: string) => Promise<void>;
   now?: () => number;
@@ -465,18 +470,6 @@ export type ReaderAILiveFixtureEvalOutput =
       writtenPaths: [];
       issues: string[];
     };
-
-const toAISettings = (fixture: ReaderAILiveFixture): AISettings => ({
-  enabled: true,
-  showReaderAIEntrypoints: true,
-  provider: fixture.settings.provider,
-  providerApiKeys: {},
-  providerModels: { [fixture.settings.provider]: fixture.settings.model },
-  customProviderBaseUrl: '',
-  spoilerProtection: fixture.settings.spoilerProtection ?? true,
-  maxContextChunks: fixture.settings.maxContextChunks ?? 6,
-  indexingMode: 'on-demand',
-});
 
 const limitCases = (fixture: ReaderAILiveFixture): ReaderAIEvalCase[] =>
   fixture.cases.slice(0, fixture.caseLimit ?? fixture.cases.length);
@@ -500,6 +493,11 @@ export async function runReaderAILiveFixtureEval(
     };
   }
 
+  const runtimeBridge = buildReaderAILiveFixtureRuntimeBridge(fixture, deps.runtime ?? {});
+  if (!runtimeBridge.ok) {
+    return { ok: false, envelope: null, writtenPaths: [], issues: runtimeBridge.issues };
+  }
+
   const controller = new AbortController();
   const timeout = fixture.timeoutMs
     ? globalThis.setTimeout(() => controller.abort(), fixture.timeoutMs)
@@ -510,7 +508,7 @@ export async function runReaderAILiveFixtureEval(
       {
         cases: limitCases(fixture),
         context: {
-          settings: toAISettings(fixture),
+          settings: runtimeBridge.settings,
           bookHash: fixture.runtimeBook.bookHash,
           bookTitle: fixture.runtimeBook.bookTitle,
           authorName: fixture.runtimeBook.authorName,
