@@ -2,6 +2,7 @@
 change: reader-ai-live-fixture-runtime-bridge
 design-doc: docs/superpowers/specs/2026-05-31-reader-ai-live-fixture-runtime-bridge-design.md
 base-ref: b9b9f655ea67f2f8601b2727dbc17fac63bbfc71
+archived-with: 2026-05-31-reader-ai-live-fixture-runtime-bridge
 ---
 
 # Reader AI Live Fixture Runtime Bridge Implementation Plan

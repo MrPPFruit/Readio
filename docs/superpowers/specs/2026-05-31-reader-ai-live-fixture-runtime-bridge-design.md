@@ -2,6 +2,8 @@
 comet_change: reader-ai-live-fixture-runtime-bridge
 role: technical-design
 canonical_spec: openspec
+archived-with: 2026-05-31-reader-ai-live-fixture-runtime-bridge
+status: final
 ---
 
 # Reader AI Live Fixture Runtime Bridge Technical Design
