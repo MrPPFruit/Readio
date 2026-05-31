@@ -87,6 +87,8 @@ const privateTokens = [
   'sk-live-fixture-secret',
   'https://private.example.test/v1/chat',
   '/Users/ppg/private/book.epub',
+  '/Users/ppg/private/runtime.local.json',
+  '/Users/ppg/private/seed.local.json',
   'raw exception secret should never be written',
   'raw seed text should never be written',
   'private-seed-chunk-cli',
@@ -410,7 +412,11 @@ describe('Reader AI live fixture eval CLI execution', () => {
   it('fails closed with safe issues when runtime settings are missing provider or retrieval inputs', async () => {
     const memory = createMemoryIO({
       'fixture.json': JSON.stringify(validFixture),
-      'runtime.local.json': JSON.stringify({ provider: {} }),
+      '/Users/ppg/private/runtime.local.json': JSON.stringify({
+        provider: {},
+        retrievalSeedPath: '/Users/ppg/private/seed.local.json',
+      }),
+      '/Users/ppg/private/seed.local.json': JSON.stringify(validSeedFile),
     });
     let called = false;
     const streamAnswer: ReaderAIServiceEvalStreamer = async function* () {
@@ -419,7 +425,7 @@ describe('Reader AI live fixture eval CLI execution', () => {
     };
 
     const exitCode = await runReaderAILiveFixtureEvalCli(
-      ['--fixture', 'fixture.json', '--runtime', 'runtime.local.json', '--live'],
+      ['--fixture', 'fixture.json', '--runtime', '/Users/ppg/private/runtime.local.json', '--live'],
       toCliIO(memory),
       { streamAnswer, prepareRetrievalContext: async () => undefined },
     );
@@ -431,8 +437,11 @@ describe('Reader AI live fixture eval CLI execution', () => {
     expectNoPrivateTokens(memory.errors.join('\n'));
   });
 
-  it('does not leak prompts, keys, urls, paths, or raw exception messages before seed parsing exists', async () => {
-    const memory = createMemoryIO({ 'fixture.json': JSON.stringify(validFixture) });
+  it('does not leak prompts, keys, urls, paths, or raw exception messages after runtime inputs are used', async () => {
+    const memory = createMemoryIO({
+      'fixture.json': JSON.stringify(validFixture),
+      '/Users/ppg/private/runtime.local.json': JSON.stringify(validRuntimeSettings),
+    });
     const streamAnswer: ReaderAIServiceEvalStreamer = async function* (options) {
       options.onSources?.([
         {
@@ -454,17 +463,28 @@ describe('Reader AI live fixture eval CLI execution', () => {
     };
 
     const exitCode = await runReaderAILiveFixtureEvalCli(
-      ['--fixture', 'fixture.json', '--live'],
+      ['--fixture', 'fixture.json', '--runtime', '/Users/ppg/private/runtime.local.json', '--live'],
       toCliIO(memory),
       {
         streamAnswer,
+        prepareRetrievalContext: async () => undefined,
         env: { READER_AI_LIVE_FIXTURE_API_KEY: 'sk-live-fixture-env-secret' },
+        now: (() => {
+          const values = [1000, 1010, 1010];
+          let index = 0;
+          return () => values[Math.min(index++, values.length - 1)] ?? 0;
+        })(),
       },
     );
 
-    expect(exitCode).toBe(1);
-    expect(memory.errors).toEqual(['runtime retrieval seed is required']);
-    expect(memory.writes).toEqual([]);
-    expectNoPrivateTokens(memory.errors.join('\n'));
+    expect(exitCode).toBe(0);
+    expect(memory.errors).toEqual([]);
+    expect(memory.writes).toEqual([
+      'tmp/reader-ai/live-fixture/cli-envelope.json',
+      'tmp/reader-ai/live-fixture/cli-report.json',
+      'tmp/reader-ai/live-fixture/cli-report.md',
+    ]);
+    expectNoPrivateTokens(memory.logs.join('\n'));
+    expectNoPrivateTokens(combinedWrittenOutput(memory));
   });
 });

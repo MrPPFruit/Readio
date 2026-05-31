@@ -52,17 +52,20 @@ const validRetrievalSeed = {
   bookHash: 'runtime-private-book-hash',
   chunks: [
     {
-      id: 'runtime-private-book-hash-0',
+      id: 'runtime-private-stable-seed-chunk-id',
       sectionIndex: 0,
       chapterTitle: 'Private Chapter',
-      text: 'Runtime private retrieval text must not be written.',
+      text: 'Runtime private retrieval text must not be written with https://seed.example.test/raw and /Users/ppg/private/seed.txt.',
       pageNumber: 1,
     },
   ],
 };
 
 const validRuntime = {
-  provider: { apiKey: 'sk-runtime-provider-secret' },
+  provider: {
+    apiKey: 'sk-runtime-provider-secret',
+    customProviderBaseUrl: 'https://runtime-base.example.test/v1/chat',
+  },
   retrievalSeed: validRetrievalSeed,
 };
 
@@ -319,13 +322,26 @@ const createWritableMemory = () => {
   };
 };
 
+const privateRuntimeTokens = [
+  'sk-runtime-provider-secret',
+  'https://runtime-base.example.test/v1/chat',
+  'runtime-private-book-hash',
+  'Runtime Private Title',
+  'Runtime Private Author',
+  'local-test-book',
+  'runtime-private-stable-seed-chunk-id',
+  'Runtime private retrieval text must not be written',
+  'https://seed.example.test/raw',
+  '/Users/ppg/private/seed.txt',
+  'private answer must not be written',
+  'private preview must not be written',
+  'https://source.example.test/private',
+  '/Users/ppg/private/source.xhtml',
+  'stable-private-source-id',
+];
+
 const expectMetadataOnlyOutput = (content: string): void => {
-  expect(content).not.toContain('runtime-private-book-hash');
-  expect(content).not.toContain('Runtime Private Title');
-  expect(content).not.toContain('Runtime Private Author');
-  expect(content).not.toContain('local-test-book');
-  expect(content).not.toContain('private answer must not be written');
-  expect(content).not.toContain('private preview must not be written');
+  privateRuntimeTokens.forEach((token) => expect(content).not.toContain(token));
 };
 
 describe('runReaderAILiveFixtureEval guarded execution', () => {
@@ -382,10 +398,11 @@ describe('runReaderAILiveFixtureEval guarded execution', () => {
       calls.push(options);
       options.onSources?.([
         {
-          id: 'source-a',
+          id: 'stable-private-source-id',
           chapterTitle: 'Chapter 1',
           previewText: 'private preview must not be written',
-          href: 'readio://private-source',
+          href: 'https://source.example.test/private',
+          cfi: '/Users/ppg/private/source.xhtml',
           confidence: 'exact',
         },
       ]);
@@ -526,11 +543,11 @@ describe('runReaderAILiveFixtureEval guarded execution', () => {
     expect(preparedChunks).toEqual([
       [
         {
-          id: 'runtime-private-book-hash-0',
+          id: 'runtime-private-stable-seed-chunk-id',
           bookHash: 'runtime-private-book-hash',
           sectionIndex: 0,
           chapterTitle: 'Private Chapter',
-          text: 'Runtime private retrieval text must not be written.',
+          text: 'Runtime private retrieval text must not be written with https://seed.example.test/raw and /Users/ppg/private/seed.txt.',
           pageNumber: 1,
           sortIndex: 0,
           endPageNumber: undefined,
@@ -610,10 +627,11 @@ describe('runReaderAILiveFixtureEval guarded execution', () => {
       calls.push(options);
       options.onSources?.([
         {
-          id: 'source-a',
+          id: 'stable-private-source-id',
           chapterTitle: 'Chapter 1',
           previewText: 'private preview must not be written',
-          href: 'readio://private-source',
+          href: 'https://source.example.test/private',
+          cfi: '/Users/ppg/private/source.xhtml',
           confidence: 'exact',
         },
       ]);
