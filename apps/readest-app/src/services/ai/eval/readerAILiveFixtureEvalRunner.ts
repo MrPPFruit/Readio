@@ -455,7 +455,8 @@ export type ReaderAILiveFixtureEvalDeps = {
   live: boolean;
   runtime?: ReaderAILiveFixtureRuntimeInput;
   prepareRetrievalContext?: ReaderAILiveFixtureRetrievalContextPreparer;
-  streamAnswer: ReaderAIServiceEvalStreamer;
+  streamAnswer?: ReaderAIServiceEvalStreamer;
+  loadStreamAnswer?: () => Promise<ReaderAIServiceEvalStreamer>;
   writeFile: (path: string, content: string) => Promise<void>;
   now?: () => number;
 };
@@ -510,6 +511,16 @@ export async function runReaderAILiveFixtureEval(
     return { ok: false, envelope: null, writtenPaths: [], issues: retrievalContext.issues };
   }
 
+  const streamAnswer = deps.streamAnswer ?? (await deps.loadStreamAnswer?.());
+  if (!streamAnswer) {
+    return {
+      ok: false,
+      envelope: null,
+      writtenPaths: [],
+      issues: ['runtime streamer could not be loaded'],
+    };
+  }
+
   const controller = new AbortController();
   const timeout = fixture.timeoutMs
     ? globalThis.setTimeout(() => controller.abort(), fixture.timeoutMs)
@@ -531,7 +542,7 @@ export async function runReaderAILiveFixtureEval(
         },
       },
       {
-        streamAnswer: deps.streamAnswer,
+        streamAnswer,
         now: deps.now,
       },
     );

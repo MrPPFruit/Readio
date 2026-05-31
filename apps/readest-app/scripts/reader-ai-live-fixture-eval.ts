@@ -3,7 +3,12 @@ import {
   runReaderAILiveFixtureEval,
   type ReaderAILiveFixtureEvalDeps,
 } from '@/services/ai/eval/readerAILiveFixtureEvalRunner';
-import { runtimeBridgeInputFromEnv } from '@/services/ai/eval/readerAILiveFixtureRuntimeBridge';
+import {
+  mergeReaderAILiveFixtureRuntimeInputs,
+  parseReaderAILiveFixtureRuntimeSettings,
+  runtimeBridgeInputFromEnv,
+  type ReaderAILiveFixtureRuntimeInput,
+} from '@/services/ai/eval/readerAILiveFixtureRuntimeBridge';
 
 export type ReaderAILiveFixtureEvalCliIO = {
   readFile(path: string): Promise<string>;
@@ -14,16 +19,81 @@ export type ReaderAILiveFixtureEvalCliIO = {
 
 type ReaderAILiveFixtureEvalCliArgs = {
   fixture?: string;
+  runtime?: string;
   live: boolean;
 };
 
-type ReaderAILiveFixtureEvalCliDeps = Pick<ReaderAILiveFixtureEvalDeps, 'streamAnswer' | 'now'> & {
+type ReaderAILiveFixtureEvalCliDeps = Pick<
+  ReaderAILiveFixtureEvalDeps,
+  'streamAnswer' | 'prepareRetrievalContext' | 'now'
+> & {
   env?: Record<string, string | undefined>;
 };
 
 const loadDefaultStreamAnswer = async (): Promise<ReaderAILiveFixtureEvalDeps['streamAnswer']> => {
   const { streamReaderAIAnswer } = await import('@/services/ai/readerChatService');
   return streamReaderAIAnswer;
+};
+
+const loadRuntimeSeedFile = async ({
+  seedPath,
+  io,
+}: {
+  seedPath: string;
+  io: ReaderAILiveFixtureEvalCliIO;
+}): Promise<
+  | { ok: true; runtime: Pick<ReaderAILiveFixtureRuntimeInput, 'retrievalSeed'> }
+  | { ok: false; issues: string[] }
+> => {
+  let seedContent: string;
+  try {
+    seedContent = await io.readFile(seedPath);
+  } catch {
+    return { ok: false, issues: ['Unable to read runtime retrieval seed'] };
+  }
+
+  const parsedSeed = parseReaderAILiveFixtureRuntimeSettings(`{"retrievalSeed":${seedContent}}`);
+  if (!parsedSeed.ok) return { ok: false, issues: ['runtime retrieval seed must be valid JSON'] };
+  if (!parsedSeed.runtime.retrievalSeed) {
+    return { ok: false, issues: ['runtime retrieval seed is required'] };
+  }
+  return { ok: true, runtime: { retrievalSeed: parsedSeed.runtime.retrievalSeed } };
+};
+
+const loadRuntimeInput = async ({
+  runtimePath,
+  io,
+  env,
+}: {
+  runtimePath?: string;
+  io: ReaderAILiveFixtureEvalCliIO;
+  env: Record<string, string | undefined>;
+}): Promise<
+  { ok: true; runtime: ReaderAILiveFixtureRuntimeInput } | { ok: false; issues: string[] }
+> => {
+  const envRuntime = runtimeBridgeInputFromEnv(env);
+  let runtime: ReaderAILiveFixtureRuntimeInput = envRuntime;
+
+  if (runtimePath !== undefined) {
+    let runtimeContent: string;
+    try {
+      runtimeContent = await io.readFile(runtimePath);
+    } catch {
+      return { ok: false, issues: ['Unable to read runtime bridge settings'] };
+    }
+
+    const parsedRuntime = parseReaderAILiveFixtureRuntimeSettings(runtimeContent);
+    if (!parsedRuntime.ok) return { ok: false, issues: parsedRuntime.issues };
+    runtime = mergeReaderAILiveFixtureRuntimeInputs(envRuntime, parsedRuntime.runtime);
+  }
+
+  if (!runtime.retrievalSeed && runtime.retrievalSeedPath) {
+    const seedRuntime = await loadRuntimeSeedFile({ seedPath: runtime.retrievalSeedPath, io });
+    if (!seedRuntime.ok) return seedRuntime;
+    runtime = mergeReaderAILiveFixtureRuntimeInputs(runtime, seedRuntime.runtime);
+  }
+
+  return { ok: true, runtime };
 };
 
 const parseArgs = (
@@ -43,6 +113,16 @@ const parseArgs = (
         issues.push('Missing value for argument: --fixture');
       } else {
         args.fixture = value;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (token === '--runtime') {
+      if (value === undefined || value.startsWith('--')) {
+        issues.push('Missing value for argument: --runtime');
+      } else {
+        args.runtime = value;
         index += 1;
       }
       continue;
@@ -105,12 +185,22 @@ export async function runReaderAILiveFixtureEvalCli(
     return 1;
   }
 
-  const runtime = runtimeBridgeInputFromEnv(deps.env ?? process.env);
-  const streamAnswer = deps.streamAnswer ?? (await loadDefaultStreamAnswer());
+  const runtimeInput = await loadRuntimeInput({
+    runtimePath: parsedArgs.args.runtime,
+    io,
+    env: deps.env ?? process.env,
+  });
+  if (!runtimeInput.ok) {
+    runtimeInput.issues.forEach((issue) => io.stderr(issue));
+    return 1;
+  }
+
   const output = await runReaderAILiveFixtureEval(parsedFixture.fixture, {
     live,
-    runtime,
-    streamAnswer,
+    runtime: runtimeInput.runtime,
+    prepareRetrievalContext: deps.prepareRetrievalContext,
+    streamAnswer: deps.streamAnswer,
+    loadStreamAnswer: loadDefaultStreamAnswer,
     writeFile: io.writeFile,
     now: deps.now,
   });
