@@ -59,6 +59,28 @@ const getOptionalBoolean = (value: Record<string, unknown>, key: string): boolea
   return typeof field === 'boolean' ? field : undefined;
 };
 
+const collectOptionalStringTypeIssue = (
+  value: Record<string, unknown>,
+  key: string,
+  fieldName: string,
+  issues: string[],
+): void => {
+  if (value[key] !== undefined && typeof value[key] !== 'string') {
+    issues.push(`${fieldName} must be a string`);
+  }
+};
+
+const collectOptionalBooleanTypeIssue = (
+  value: Record<string, unknown>,
+  key: string,
+  fieldName: string,
+  issues: string[],
+): void => {
+  if (value[key] !== undefined && typeof value[key] !== 'boolean') {
+    issues.push(`${fieldName} must be a boolean`);
+  }
+};
+
 const parseBooleanEnv = (value: string | undefined): boolean | undefined => {
   if (value === undefined) return undefined;
   return value.trim().toLocaleLowerCase() === 'true';
@@ -158,8 +180,23 @@ export function parseReaderAILiveFixtureRuntimeSettings(
   if (!isRecord(parsed)) return { ok: false, issues: ['runtime settings must be an object'] };
 
   const runtime: ReaderAILiveFixtureRuntimeInput = {};
+  const issues: string[] = [];
   const providerInput = parsed['provider'];
   if (isRecord(providerInput)) {
+    collectOptionalStringTypeIssue(providerInput, 'apiKey', 'provider.apiKey', issues);
+    collectOptionalStringTypeIssue(
+      providerInput,
+      'customProviderBaseUrl',
+      'provider.customProviderBaseUrl',
+      issues,
+    );
+    collectOptionalBooleanTypeIssue(
+      providerInput,
+      'allowUnsafeCustomProviderBaseUrl',
+      'provider.allowUnsafeCustomProviderBaseUrl',
+      issues,
+    );
+
     const provider: ReaderAILiveFixtureRuntimeProviderInput = {};
     const apiKey = getOptionalTrimmedString(providerInput, 'apiKey');
     if (apiKey) provider.apiKey = apiKey;
@@ -177,9 +214,11 @@ export function parseReaderAILiveFixtureRuntimeSettings(
 
   const retrievalSeed = parseRetrievalSeed(parsed['retrievalSeed']);
   if (retrievalSeed) runtime.retrievalSeed = retrievalSeed;
+  collectOptionalStringTypeIssue(parsed, 'retrievalSeedPath', 'retrievalSeedPath', issues);
   const retrievalSeedPath = getOptionalTrimmedString(parsed, 'retrievalSeedPath');
   if (retrievalSeedPath) runtime.retrievalSeedPath = retrievalSeedPath;
 
+  if (issues.length > 0) return { ok: false, issues };
   return { ok: true, runtime };
 }
 

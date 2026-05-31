@@ -1,7 +1,7 @@
 ## 1. Runtime Provider Bridge
 
 - [x] 1.1 Add failing tests for runtime-only provider configuration inputs and missing credential preflight failures.
-- [ ] 1.2 Implement runtime provider bridge parsing without allowing API keys, base URLs, or secrets in fixture JSON or generated artifacts.
+- [x] 1.2 Implement runtime provider bridge parsing without allowing API keys, base URLs, or secrets in fixture JSON or generated artifacts.
 - [ ] 1.3 Wire the live fixture CLI to construct AI settings from runtime bridge inputs only after `--live` and fixture `live: true` pass.
 
 ## 2. Runtime Retrieval Seed Bridge

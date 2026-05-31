@@ -263,6 +263,31 @@ describe('Reader AI live fixture runtime provider bridge', () => {
       retrievalSeedPath: 'tmp/reader-ai/live-fixture/seed.local.json',
     });
   });
+
+  it('rejects present runtime settings fields with wrong types without echoing values', () => {
+    const parsed = parseReaderAILiveFixtureRuntimeSettings(
+      JSON.stringify({
+        provider: {
+          apiKey: 123,
+          customProviderBaseUrl: ['https://private.example.test/v1'],
+          allowUnsafeCustomProviderBaseUrl: 'true',
+        },
+        retrievalSeedPath: { path: 'tmp/reader-ai/live-fixture/seed.local.json' },
+      }),
+    );
+
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) throw new Error('expected runtime settings type failure');
+    expect(parsed.issues).toEqual([
+      'provider.apiKey must be a string',
+      'provider.customProviderBaseUrl must be a string',
+      'provider.allowUnsafeCustomProviderBaseUrl must be a boolean',
+      'retrievalSeedPath must be a string',
+    ]);
+    expect(parsed.issues.join('\n')).not.toContain('123');
+    expect(parsed.issues.join('\n')).not.toContain('private.example.test');
+    expect(parsed.issues.join('\n')).not.toContain('tmp/reader-ai/live-fixture/seed.local.json');
+  });
 });
 
 const createWritableMemory = () => {
