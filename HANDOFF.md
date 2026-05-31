@@ -4,12 +4,12 @@
 
 - Product line: Readio on the Readest-based mainline.
 - Repo: this repository checkout.
-- Branch: `reader-ai-service-eval-runner` (branched from `readio/restart-readest-base`).
+- Branch: `reader-ai-live-fixture-runtime-bridge` (branched from `readio/restart-readest-base`).
 - Current app version: `0.1.0-alpha.15` in `./apps/readest-app/package.json`.
 - Android package/identifier: `com.ppg.readio`.
 - Android `versionCode`: `1001015` in `./apps/readest-app/src-tauri/tauri.conf.json`.
-- Current active change: `reader-ai-service-eval-runner`, an A-first dependency-injected Reader AI service eval harness that turns controlled answer streams into metadata-only eval envelopes.
-- Distribution status: `v0.1.0-alpha.15` prerelease is published on `MrPPFruit/Readio` with a signed APK and checksum. Current local source has additional post-release AI 搜书 fixes. Versioning preference: only major feature upgrade iterations should bump alpha versions, and the user decides when to bump.
+- Current active change: `reader-ai-live-fixture-runtime-bridge`, a local-only runtime bridge that makes the guarded Reader AI live fixture runner executable with runtime-only provider credentials and retrieval seed context.
+- Distribution status: `v0.1.0-alpha.15` prerelease is published on `MrPPFruit/Readio` with a signed APK and checksum. Versioning preference: only major feature upgrade iterations should bump alpha versions, and the user decides when to bump.
 - Working tree note: `./.claude/`, `./.codepilot-uploads/`, and `./.codepilot/` are unrelated/untracked unless explicitly intended.
 
 ## Reader AI Eval Harness Phase 2
@@ -114,6 +114,29 @@
   - NotebookLM automation/comparison runs;
   - LLM-as-judge scoring or qualitative judge layer;
   - committing generated live artifacts, only after manual metadata-only review if ever needed.
+
+## Reader AI Live Fixture Runtime Bridge
+
+- Change: `reader-ai-live-fixture-runtime-bridge`.
+- Scope: local-only runtime bridge under the existing `reader-ai:live-fixture` command. It supplies provider credentials, optional custom provider base URL, and retrieval seed chunks at runtime only; fixture JSON and generated artifacts remain metadata-only.
+- Implemented:
+  - runtime provider bridge parsing from env and `--runtime` settings files;
+  - fixture validation rejecting provider secrets/base URLs in committed fixture JSON;
+  - provider preflight using existing custom-base-URL safety policy before streamer/provider execution;
+  - runtime retrieval seed validation and preparation into `TextChunk[]`, saving chunks and BM25 index via existing AI storage APIs without embeddings;
+  - CLI `--runtime <path>` support with strict ordering: `--live` gate → valid fixture → fixture `live: true` → runtime env/file/seed reads → provider/retrieval preflight → default streamer load;
+  - privacy tests proving envelope/report/stdout/stderr exclude API keys, custom base URLs, seed text, source previews, local runtime paths, URLs, book hashes, stable private identifiers, raw answer text, and raw exception details;
+  - eval README documenting local-only runtime workflow, env fallback names, runtime settings/seed shapes, non-commit guidance, and metadata-only artifact guarantees.
+- Validation evidence:
+  - focused eval tests: `pnpm --dir apps/readest-app test src/__tests__/ai/reader-ai-live-fixture-eval-runner.test.ts src/__tests__/ai/reader-ai-live-fixture-eval-cli.test.ts` passed: 2 files / 33 tests;
+  - lint: `pnpm --dir apps/readest-app lint` passed after `d457f035` type fix;
+  - full app test suite: `pnpm --dir apps/readest-app test` passed: 217 passed / 2 skipped files, 3909 passed / 7 skipped tests;
+  - OpenSpec: `openspec validate --all --strict` passed: 7 passed / 0 failed.
+- Deferred / out of scope:
+  - real-book fixture files committed to git;
+  - NotebookLM automation;
+  - LLM-as-judge;
+  - batch fixture discovery or Reader AI product UI/runtime behavior changes.
 
 ## Latest source-level state
 
