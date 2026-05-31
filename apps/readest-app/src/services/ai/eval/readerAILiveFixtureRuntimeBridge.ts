@@ -1,5 +1,6 @@
 import { getCustomBaseUrlSafety } from '@/services/ai/availability';
 import type { ReaderAILiveFixture } from '@/services/ai/eval/readerAILiveFixtureEvalRunner';
+import { aiStore } from '@/services/ai/storage/aiStore';
 import type { AIProviderName, AISettings, TextChunk } from '@/services/ai/types';
 
 export type ReaderAILiveFixtureRuntimeProviderInput = {
@@ -40,6 +41,15 @@ export type ReaderAILiveFixtureRuntimeBridgeResult =
 
 export type ReaderAILiveFixtureRuntimeSettingsParseResult =
   | { ok: true; runtime: ReaderAILiveFixtureRuntimeInput }
+  | { ok: false; issues: string[] };
+
+export type ReaderAILiveFixtureRetrievalContextPreparer = (
+  bookHash: string,
+  chunks: TextChunk[],
+) => Promise<void>;
+
+export type ReaderAILiveFixtureRetrievalContextResult =
+  | { ok: true; chunks: TextChunk[] }
   | { ok: false; issues: string[] };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -292,3 +302,38 @@ export const toTextChunks = (
     endPageNumber: chunk.endPageNumber,
     chunkIndex: chunk.chunkIndex ?? index,
   }));
+
+export const defaultPrepareReaderAILiveFixtureRetrievalContext: ReaderAILiveFixtureRetrievalContextPreparer =
+  async (bookHash, chunks) => {
+    await aiStore.saveChunks(chunks);
+    await aiStore.saveBM25Index(bookHash, chunks);
+  };
+
+export async function prepareReaderAILiveFixtureRetrievalContext(
+  fixture: ReaderAILiveFixture,
+  retrievalSeed: ReaderAILiveFixtureRuntimeRetrievalSeed | undefined,
+  prepareRetrievalContext: ReaderAILiveFixtureRetrievalContextPreparer = defaultPrepareReaderAILiveFixtureRetrievalContext,
+): Promise<ReaderAILiveFixtureRetrievalContextResult> {
+  if (!retrievalSeed) return { ok: false, issues: ['runtime retrieval seed is required'] };
+  if (retrievalSeed.bookHash !== fixture.runtimeBook.bookHash) {
+    return {
+      ok: false,
+      issues: ['runtime retrieval seed book handle does not match fixture'],
+    };
+  }
+
+  const chunks = toTextChunks(fixture.runtimeBook.bookHash, retrievalSeed).filter(
+    (chunk) => chunk.text.trim().length > 0,
+  );
+  if (chunks.length === 0) {
+    return { ok: false, issues: ['runtime retrieval seed must include at least one chunk'] };
+  }
+
+  try {
+    await prepareRetrievalContext(fixture.runtimeBook.bookHash, chunks);
+  } catch (_error: unknown) {
+    return { ok: false, issues: ['runtime retrieval context could not be prepared'] };
+  }
+
+  return { ok: true, chunks };
+}

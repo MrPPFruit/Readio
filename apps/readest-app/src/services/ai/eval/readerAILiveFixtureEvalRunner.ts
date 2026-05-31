@@ -13,6 +13,8 @@ import {
 } from '@/services/ai/eval/readerAIServiceEvalRunner';
 import {
   buildReaderAILiveFixtureRuntimeBridge,
+  prepareReaderAILiveFixtureRetrievalContext,
+  type ReaderAILiveFixtureRetrievalContextPreparer,
   type ReaderAILiveFixtureRuntimeInput,
 } from '@/services/ai/eval/readerAILiveFixtureRuntimeBridge';
 import type { AIProviderName } from '@/services/ai/types';
@@ -452,6 +454,7 @@ export function parseReaderAILiveFixture(source: string): ReaderAILiveFixtureVal
 export type ReaderAILiveFixtureEvalDeps = {
   live: boolean;
   runtime?: ReaderAILiveFixtureRuntimeInput;
+  prepareRetrievalContext?: ReaderAILiveFixtureRetrievalContextPreparer;
   streamAnswer: ReaderAIServiceEvalStreamer;
   writeFile: (path: string, content: string) => Promise<void>;
   now?: () => number;
@@ -496,6 +499,15 @@ export async function runReaderAILiveFixtureEval(
   const runtimeBridge = buildReaderAILiveFixtureRuntimeBridge(fixture, deps.runtime ?? {});
   if (!runtimeBridge.ok) {
     return { ok: false, envelope: null, writtenPaths: [], issues: runtimeBridge.issues };
+  }
+
+  const retrievalContext = await prepareReaderAILiveFixtureRetrievalContext(
+    fixture,
+    runtimeBridge.retrievalSeed,
+    deps.prepareRetrievalContext,
+  );
+  if (!retrievalContext.ok) {
+    return { ok: false, envelope: null, writtenPaths: [], issues: retrievalContext.issues };
   }
 
   const controller = new AbortController();

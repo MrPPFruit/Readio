@@ -204,7 +204,7 @@ describe('Reader AI live fixture eval CLI usage', () => {
 });
 
 describe('Reader AI live fixture eval CLI execution', () => {
-  it('delegates live fixture execution and writes privacy-safe artifacts only', async () => {
+  it('fails closed before streaming until CLI runtime seed parsing is implemented', async () => {
     const memory = createMemoryIO({ 'fixture.json': JSON.stringify(validFixture) });
     const calls: Array<{ question: string; bookTitle?: string; openAIKey?: string }> = [];
     const streamAnswer: ReaderAIServiceEvalStreamer = async function* (options) {
@@ -239,29 +239,15 @@ describe('Reader AI live fixture eval CLI execution', () => {
       },
     );
 
-    expect(exitCode).toBe(0);
-    expect(memory.errors).toEqual([]);
-    expect(memory.logs).toEqual([
-      'Wrote tmp/reader-ai/live-fixture/cli-envelope.json',
-      'Wrote tmp/reader-ai/live-fixture/cli-report.json',
-      'Wrote tmp/reader-ai/live-fixture/cli-report.md',
-    ]);
-    expect(memory.writes).toEqual([
-      'tmp/reader-ai/live-fixture/cli-envelope.json',
-      'tmp/reader-ai/live-fixture/cli-report.json',
-      'tmp/reader-ai/live-fixture/cli-report.md',
-    ]);
-    expect(calls).toEqual([
-      {
-        question: '这个人物是谁？',
-        bookTitle: 'Private CLI Book Title',
-        openAIKey: 'sk-live-fixture-env-secret',
-      },
-    ]);
-    expectNoPrivateTokens(combinedWrittenOutput(memory));
+    expect(exitCode).toBe(1);
+    expect(memory.errors).toEqual(['runtime retrieval seed is required']);
+    expect(memory.logs).toEqual([]);
+    expect(memory.writes).toEqual([]);
+    expect(calls).toEqual([]);
+    expectNoPrivateTokens(memory.errors.join('\n'));
   });
 
-  it('does not leak prompts, keys, urls, paths, or raw exception messages from failed streams', async () => {
+  it('does not leak prompts, keys, urls, paths, or raw exception messages before seed parsing exists', async () => {
     const memory = createMemoryIO({ 'fixture.json': JSON.stringify(validFixture) });
     const streamAnswer: ReaderAIServiceEvalStreamer = async function* (options) {
       options.onSources?.([
@@ -292,13 +278,9 @@ describe('Reader AI live fixture eval CLI execution', () => {
       },
     );
 
-    expect(exitCode).toBe(0);
-    expect(memory.errors).toEqual([]);
-    expect(memory.writes).toEqual([
-      'tmp/reader-ai/live-fixture/cli-envelope.json',
-      'tmp/reader-ai/live-fixture/cli-report.json',
-      'tmp/reader-ai/live-fixture/cli-report.md',
-    ]);
-    expectNoPrivateTokens(combinedWrittenOutput(memory));
+    expect(exitCode).toBe(1);
+    expect(memory.errors).toEqual(['runtime retrieval seed is required']);
+    expect(memory.writes).toEqual([]);
+    expectNoPrivateTokens(memory.errors.join('\n'));
   });
 });

@@ -6,9 +6,9 @@
 
 ## 2. Runtime Retrieval Seed Bridge
 
-- [ ] 2.1 Add failing tests for valid retrieval seed preparation and missing retrieval context preflight failures.
-- [ ] 2.2 Implement minimal retrieval seed preparation for bounded local fixture runs without depending on normal app UI state.
-- [ ] 2.3 Ensure provider execution is skipped when retrieval context cannot be prepared.
+- [x] 2.1 Add failing tests for valid retrieval seed preparation and missing retrieval context preflight failures.
+- [x] 2.2 Implement minimal retrieval seed preparation for bounded local fixture runs without depending on normal app UI state.
+- [x] 2.3 Ensure provider execution is skipped when retrieval context cannot be prepared.
 
 ## 3. Privacy and Reporting Validation
 
