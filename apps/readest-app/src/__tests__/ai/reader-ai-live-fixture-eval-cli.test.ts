@@ -155,6 +155,33 @@ describe('Reader AI live fixture eval CLI usage', () => {
     expectNoPrivateTokens(memory.errors.join('\n'));
   });
 
+  it('rejects fixture JSON without live opt-in before loading the default streamer', async () => {
+    vi.resetModules();
+    let defaultStreamerModuleLoaded = false;
+    const streamReaderAIAnswer = vi.fn();
+    vi.doMock('@/services/ai/readerChatService', () => {
+      defaultStreamerModuleLoaded = true;
+      return { streamReaderAIAnswer };
+    });
+    const { runReaderAILiveFixtureEvalCli: runCli } =
+      await import('../../../scripts/reader-ai-live-fixture-eval');
+    const memory = createMemoryIO({
+      'fixture.json': JSON.stringify({ ...validFixture, live: false }),
+    });
+
+    const exitCode = await runCli(['--fixture', 'fixture.json', '--live'], toCliIO(memory), {
+      env: { READER_AI_LIVE_FIXTURE_API_KEY: 'sk-live-fixture-env-secret' },
+    });
+
+    expect(exitCode).toBe(1);
+    expect(memory.errors).toEqual(['Live fixture execution requires --live']);
+    expect(memory.writes).toEqual([]);
+    expect(defaultStreamerModuleLoaded).toBe(false);
+    expect(streamReaderAIAnswer).not.toHaveBeenCalled();
+    vi.doUnmock('@/services/ai/readerChatService');
+    vi.resetModules();
+  });
+
   it('rejects unreadable or invalid fixtures without leaking raw read errors or local paths', async () => {
     const memory = createMemoryIO();
 
@@ -179,9 +206,13 @@ describe('Reader AI live fixture eval CLI usage', () => {
 describe('Reader AI live fixture eval CLI execution', () => {
   it('delegates live fixture execution and writes privacy-safe artifacts only', async () => {
     const memory = createMemoryIO({ 'fixture.json': JSON.stringify(validFixture) });
-    const calls: Array<{ question: string; bookTitle?: string }> = [];
+    const calls: Array<{ question: string; bookTitle?: string; openAIKey?: string }> = [];
     const streamAnswer: ReaderAIServiceEvalStreamer = async function* (options) {
-      calls.push({ question: options.question, bookTitle: options.bookTitle });
+      calls.push({
+        question: options.question,
+        bookTitle: options.bookTitle,
+        openAIKey: options.settings.providerApiKeys.openai,
+      });
       options.onSources?.([
         {
           id: 'source-a',
@@ -199,6 +230,7 @@ describe('Reader AI live fixture eval CLI execution', () => {
       toCliIO(memory),
       {
         streamAnswer,
+        env: { READER_AI_LIVE_FIXTURE_API_KEY: 'sk-live-fixture-env-secret' },
         now: (() => {
           const values = [1000, 1125, 1125];
           let index = 0;
@@ -219,7 +251,13 @@ describe('Reader AI live fixture eval CLI execution', () => {
       'tmp/reader-ai/live-fixture/cli-report.json',
       'tmp/reader-ai/live-fixture/cli-report.md',
     ]);
-    expect(calls).toEqual([{ question: '这个人物是谁？', bookTitle: 'Private CLI Book Title' }]);
+    expect(calls).toEqual([
+      {
+        question: '这个人物是谁？',
+        bookTitle: 'Private CLI Book Title',
+        openAIKey: 'sk-live-fixture-env-secret',
+      },
+    ]);
     expectNoPrivateTokens(combinedWrittenOutput(memory));
   });
 
@@ -248,7 +286,10 @@ describe('Reader AI live fixture eval CLI execution', () => {
     const exitCode = await runReaderAILiveFixtureEvalCli(
       ['--fixture', 'fixture.json', '--live'],
       toCliIO(memory),
-      { streamAnswer },
+      {
+        streamAnswer,
+        env: { READER_AI_LIVE_FIXTURE_API_KEY: 'sk-live-fixture-env-secret' },
+      },
     );
 
     expect(exitCode).toBe(0);

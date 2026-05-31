@@ -3,6 +3,7 @@ import {
   runReaderAILiveFixtureEval,
   type ReaderAILiveFixtureEvalDeps,
 } from '@/services/ai/eval/readerAILiveFixtureEvalRunner';
+import { runtimeBridgeInputFromEnv } from '@/services/ai/eval/readerAILiveFixtureRuntimeBridge';
 
 export type ReaderAILiveFixtureEvalCliIO = {
   readFile(path: string): Promise<string>;
@@ -16,7 +17,9 @@ type ReaderAILiveFixtureEvalCliArgs = {
   live: boolean;
 };
 
-type ReaderAILiveFixtureEvalCliDeps = Pick<ReaderAILiveFixtureEvalDeps, 'streamAnswer' | 'now'>;
+type ReaderAILiveFixtureEvalCliDeps = Pick<ReaderAILiveFixtureEvalDeps, 'streamAnswer' | 'now'> & {
+  env?: Record<string, string | undefined>;
+};
 
 const loadDefaultStreamAnswer = async (): Promise<ReaderAILiveFixtureEvalDeps['streamAnswer']> => {
   const { streamReaderAIAnswer } = await import('@/services/ai/readerChatService');
@@ -97,9 +100,16 @@ export async function runReaderAILiveFixtureEvalCli(
     return 1;
   }
 
+  if (!parsedFixture.fixture.live) {
+    io.stderr('Live fixture execution requires --live');
+    return 1;
+  }
+
+  const runtime = runtimeBridgeInputFromEnv(deps.env ?? process.env);
   const streamAnswer = deps.streamAnswer ?? (await loadDefaultStreamAnswer());
   const output = await runReaderAILiveFixtureEval(parsedFixture.fixture, {
     live,
+    runtime,
     streamAnswer,
     writeFile: io.writeFile,
     now: deps.now,
