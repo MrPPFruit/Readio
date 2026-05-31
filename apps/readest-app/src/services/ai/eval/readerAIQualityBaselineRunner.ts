@@ -221,11 +221,9 @@ const buildBaseline = ({
 
     const manualBenchmark = result.manualBenchmark;
     if (manualBenchmark) {
-      incrementCount(
-        manualObservationCounts,
-        `${manualBenchmark.source}/${manualBenchmark.mode}`,
-        manualBenchmark.observations.length,
-      );
+      for (const observation of manualBenchmark.observations) {
+        incrementCount(manualObservationCounts, observation);
+      }
     }
   }
 
@@ -270,6 +268,13 @@ const countTable = (title: string, counts: Record<string, number>): string[] => 
   '',
 ];
 
+const countList = (title: string, counts: Record<string, number>): string[] => [
+  `## ${title}`,
+  '',
+  ...Object.entries(counts).map(([key, count]) => `- ${key}: ${count}`),
+  '',
+];
+
 export function renderReaderAIQualityBaselineMarkdown(baseline: ReaderAIQualityBaseline): string {
   return [
     '# Reader AI Quality Baseline',
@@ -292,7 +297,7 @@ export function renderReaderAIQualityBaselineMarkdown(baseline: ReaderAIQualityB
     ...countTable('Source Count Buckets', baseline.sourceCountBuckets),
     ...countTable('First Output Latency Buckets', baseline.firstOutputLatencyBuckets),
     ...countTable('Over-Budget Stages', baseline.overBudgetStages),
-    ...countTable('Manual Observation Counts', baseline.manualObservationCounts),
+    ...countList('Manual Observation Counts', baseline.manualObservationCounts),
   ].join('\n');
 }
 

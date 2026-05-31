@@ -172,3 +172,137 @@ describe('Reader AI quality baseline runner output', () => {
     });
   });
 });
+
+describe('Reader AI quality baseline runner validation', () => {
+  it('rejects malformed envelope fields', () => {
+    expect(buildReaderAIQualityBaselineRun(null)).toEqual({
+      ok: false,
+      baseline: null,
+      markdown: '',
+      issues: ['input must be an object'],
+    });
+
+    expect(buildReaderAIQualityBaselineRun({ cases: {}, results: [] })).toEqual({
+      ok: false,
+      baseline: null,
+      markdown: '',
+      issues: ['cases must be an array'],
+    });
+  });
+
+  it('rejects unsafe metadata without returning private values', () => {
+    const output = buildReaderAIQualityBaselineRun({
+      cases: [
+        {
+          id: 'unsafe-case',
+          category: 'citation_grounding',
+          language: 'zh-CN',
+          question: '引用是否可靠？',
+          expectedBehavior: 'Check citation support.',
+          spoilerMode: 'read_so_far',
+          metadata: { sourceText: 'private source passage' },
+        },
+      ],
+      results: [
+        {
+          caseId: 'unsafe-case',
+          runId: 'run-private',
+          classificationIntent: 'citation_check',
+          sourceCount: 1,
+          citationValid: false,
+          insufficientAnswer: true,
+          firstOutputMs: 1500,
+          passed: false,
+          reasons: ['missing citation'],
+          evidence: { rawPrompt: 'private prompt text' },
+        },
+      ],
+    });
+
+    expect(output.ok).toBe(false);
+    expect(output.issues).toEqual([
+      'cases[0].metadata.sourceText is not allowed in Reader AI eval metadata',
+      'results[0].evidence.rawPrompt is not allowed in Reader AI eval metadata',
+    ]);
+    expect(JSON.stringify(output)).not.toContain('private source passage');
+    expect(JSON.stringify(output)).not.toContain('private prompt text');
+  });
+
+  it('rejects result caseIds that do not match input cases', () => {
+    const output = buildReaderAIQualityBaselineRun({
+      cases: [
+        {
+          id: 'known-case',
+          category: 'person_recall',
+          language: 'zh-CN',
+          question: '这个人是谁？',
+          expectedBehavior: 'Identify the person.',
+          spoilerMode: 'read_so_far',
+        },
+      ],
+      results: [
+        {
+          caseId: 'missing-case',
+          runId: 'run-a',
+          classificationIntent: 'entity_lookup',
+          sourceCount: 1,
+          citationValid: true,
+          insufficientAnswer: false,
+          firstOutputMs: 900,
+          passed: true,
+          reasons: ['service_eval_passed'],
+        },
+      ],
+    });
+
+    expect(output).toEqual({
+      ok: false,
+      baseline: null,
+      markdown: '',
+      issues: ['results[0].caseId does not match an input case'],
+    });
+  });
+
+  it('counts manual observation labels separately without changing pass/fail totals', () => {
+    const output = buildReaderAIQualityBaselineRun({
+      cases: [
+        {
+          id: 'manual-case',
+          category: 'relationship_recall',
+          language: 'zh-CN',
+          question: '他们是什么关系？',
+          expectedBehavior: 'Describe relationship using safe metadata.',
+          spoilerMode: 'read_so_far',
+        },
+      ],
+      results: [
+        {
+          caseId: 'manual-case',
+          runId: 'run-manual',
+          classificationIntent: 'relationship_lookup',
+          sourceCount: 2,
+          citationValid: false,
+          insufficientAnswer: false,
+          firstOutputMs: 2600,
+          passed: false,
+          reasons: ['missed_citation'],
+          manualBenchmark: {
+            source: 'notebooklm',
+            mode: 'whole_book',
+            observations: ['more_complete', 'missed_citation'],
+          },
+        },
+      ],
+    });
+
+    expect(output.ok).toBe(true);
+    if (!output.ok) throw new Error(output.issues.join('\n'));
+    expect(output.baseline.passed).toBe(0);
+    expect(output.baseline.failed).toBe(1);
+    expect(output.baseline.manualObservationCounts).toEqual({
+      missed_citation: 1,
+      more_complete: 1,
+    });
+    expect(output.markdown).toContain('- more_complete: 1');
+  });
+});
