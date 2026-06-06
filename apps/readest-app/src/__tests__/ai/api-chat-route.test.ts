@@ -50,7 +50,7 @@ describe('/api/ai/chat BYOK provider routing', () => {
         provider: 'deepseek',
         apiKey: 'deepseek-key',
         baseUrl: 'https://api.deepseek.com/v1',
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         readerContext: { bookTitle: 'Book', currentPage: 1, chunks: [] },
         messages: [{ role: 'user', content: 'hello' }],
       }),
@@ -61,8 +61,12 @@ describe('/api/ai/chat BYOK provider routing', () => {
       expect.objectContaining({
         provider: 'deepseek',
         apiKey: 'deepseek-key',
-        baseUrl: 'https://api.deepseek.com/v1',
-        model: 'deepseek-chat',
+        baseUrl: 'https://api.deepseek.com',
+        model: 'deepseek-v4-flash',
+        chatRequestOptions: {
+          thinking: { type: 'enabled' },
+          reasoning_effort: 'high',
+        },
       }),
     );
     expect(mocks.streamText).toHaveBeenCalledWith(

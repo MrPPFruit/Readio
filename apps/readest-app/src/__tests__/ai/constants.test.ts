@@ -24,6 +24,10 @@ type ProviderCatalogEntry = {
   defaultModel: string;
   modelPresets: { id: string; label: string }[];
   apiKeyPlaceholder: string;
+  chatRequestOptions?: {
+    thinking?: { type: 'enabled' | 'disabled' };
+    reasoning_effort?: 'high' | 'max';
+  };
 };
 
 describe('DEFAULT_AI_SETTINGS', () => {
@@ -72,6 +76,23 @@ describe('BYOK provider catalog', () => {
       expect(provider.modelPresets.map((model) => model.id)).toContain(provider.defaultModel);
       expect(provider.apiKeyPlaceholder).toBeTruthy();
     }
+  });
+
+  test('configures DeepSeek with V4 models and thinking mode enabled', () => {
+    const catalog = constants['AI_PROVIDER_CATALOG'] as Record<string, ProviderCatalogEntry>;
+
+    expect(catalog['deepseek']).toMatchObject({
+      baseUrl: 'https://api.deepseek.com',
+      defaultModel: 'deepseek-v4-flash',
+      chatRequestOptions: {
+        thinking: { type: 'enabled' },
+        reasoning_effort: 'high',
+      },
+    });
+    expect(catalog['deepseek']!.modelPresets).toEqual([
+      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
+    ]);
   });
 
   test('configures Xiaomi MiMo with the token-plan OpenAI-compatible endpoint and best chat model', () => {

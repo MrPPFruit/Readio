@@ -94,6 +94,24 @@ describe('BYOK provider factory', () => {
     }
   });
 
+  test('passes DeepSeek thinking options into the OpenAI-compatible model', () => {
+    const provider = getAIProvider(settingsFor('deepseek'));
+
+    provider.getModel();
+
+    expect(createOpenAICompatibleModel).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        provider: 'deepseek',
+        baseUrl: 'https://api.deepseek.com',
+        model: 'deepseek-v4-flash',
+        chatRequestOptions: {
+          thinking: { type: 'enabled' },
+          reasoning_effort: 'high',
+        },
+      }),
+    );
+  });
+
   test('uses custom base URL and custom model for OpenAI-compatible custom provider', () => {
     const provider = getAIProvider(
       settingsFor('custom-openai-compatible', {

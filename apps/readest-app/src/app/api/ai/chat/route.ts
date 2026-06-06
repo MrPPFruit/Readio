@@ -320,6 +320,7 @@ export async function POST(req: Request): Promise<Response> {
       apiKey: providerApiKey,
       baseUrl: effectiveBaseUrl,
       model: model || AI_PROVIDER_CATALOG[providerValue].defaultModel,
+      chatRequestOptions: AI_PROVIDER_CATALOG[providerValue].chatRequestOptions,
     });
 
     const result = streamText({

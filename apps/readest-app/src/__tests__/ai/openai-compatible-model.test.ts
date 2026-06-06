@@ -94,6 +94,43 @@ describe('OpenAI-compatible model transport', () => {
     fetchMock.mockRestore();
   });
 
+  test('adds configured chat request options to non-streaming requests', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const model = createOpenAICompatibleModel({
+      provider: 'deepseek',
+      apiKey: 'key',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-flash',
+      chatRequestOptions: {
+        thinking: { type: 'enabled' },
+        reasoning_effort: 'high',
+      },
+    }) as unknown as {
+      doGenerate: (options: { prompt: { role: string; content: string }[] }) => Promise<unknown>;
+    };
+
+    await model.doGenerate({ prompt: [{ role: 'user', content: 'hello' }] });
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(JSON.parse(requestInit?.body as string)).toMatchObject({
+      model: 'deepseek-v4-flash',
+      stream: false,
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'high',
+    });
+
+    fetchMock.mockRestore();
+  });
+
   test('does not expose non-streaming MiMo reasoning_content as answer text', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
@@ -126,6 +163,56 @@ describe('OpenAI-compatible model transport', () => {
     const result = await model.doGenerate({ prompt: [{ role: 'user', content: 'hello' }] });
 
     expect(result.content).toEqual([{ type: 'text', text: '' }]);
+
+    fetchMock.mockRestore();
+  });
+
+  test('adds configured chat request options to streaming requests', async () => {
+    const encoder = new TextEncoder();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              encoder.encode(
+                'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n',
+              ),
+            );
+            controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            controller.close();
+          },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        },
+      ),
+    );
+
+    const model = createOpenAICompatibleModel({
+      provider: 'deepseek',
+      apiKey: 'key',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-pro',
+      chatRequestOptions: {
+        thinking: { type: 'enabled' },
+        reasoning_effort: 'high',
+      },
+    });
+
+    const chunks: string[] = [];
+    for await (const chunk of streamText({ model, prompt: 'hello' }).textStream) {
+      chunks.push(chunk);
+    }
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(JSON.parse(requestInit?.body as string)).toMatchObject({
+      model: 'deepseek-v4-pro',
+      stream: true,
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'high',
+    });
+    expect(chunks.join('')).toBe('ok');
 
     fetchMock.mockRestore();
   });

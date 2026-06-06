@@ -46,6 +46,7 @@ class BYOKProvider implements AIProvider {
       apiKey: this.apiKey,
       baseUrl: this.baseUrl,
       model: this.model,
+      chatRequestOptions: AI_PROVIDER_CATALOG[this.id].chatRequestOptions,
     });
   }
 
