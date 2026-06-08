@@ -11,7 +11,13 @@ import {
   type ReaderAIServiceEvalEnvelope,
   type ReaderAIServiceEvalStreamer,
 } from '@/services/ai/eval/readerAIServiceEvalRunner';
-import type { AIProviderName, AISettings } from '@/services/ai/types';
+import {
+  buildReaderAILiveFixtureRuntimeBridge,
+  prepareReaderAILiveFixtureRetrievalContext,
+  type ReaderAILiveFixtureRetrievalContextPreparer,
+  type ReaderAILiveFixtureRuntimeInput,
+} from '@/services/ai/eval/readerAILiveFixtureRuntimeBridge';
+import type { AIProviderName } from '@/services/ai/types';
 
 export type ReaderAILiveFixtureRuntimeBook = {
   label: string;
@@ -167,6 +173,32 @@ const isRelativeLocalOutputPath = (value: unknown): value is string => {
   if (value.startsWith('/') || value.startsWith('\\')) return false;
   if (value.includes('..')) return false;
   return true;
+};
+
+const liveFixtureUnsafeFieldNames = new Set([
+  'apiKey',
+  'customProviderBaseUrl',
+  'baseUrl',
+  'token',
+  'authorization',
+]);
+
+const collectUnsafeLiveFixtureFields = (value: unknown, path: string, issues: string[]): void => {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) =>
+      collectUnsafeLiveFixtureFields(item, `${path}[${index}]`, issues),
+    );
+    return;
+  }
+  if (!isRecord(value)) return;
+
+  Object.entries(value).forEach(([key, field]) => {
+    const fieldPath = path ? `${path}.${key}` : key;
+    if (liveFixtureUnsafeFieldNames.has(key)) {
+      issues.push(`${fieldPath} is not allowed in Reader AI eval metadata`);
+    }
+    collectUnsafeLiveFixtureFields(field, fieldPath, issues);
+  });
 };
 
 const validateOutputPath = (
@@ -328,6 +360,8 @@ export function validateReaderAILiveFixture(value: unknown): ReaderAILiveFixture
   const issues: string[] = [];
   if (!isRecord(value)) return { ok: false, issues: ['fixture must be an object'] };
 
+  collectUnsafeLiveFixtureFields(value, '', issues);
+
   if (!hasString(value, 'fixtureId')) issues.push('fixtureId is required');
   if (typeof value['live'] !== 'boolean') issues.push('live is required');
 
@@ -419,7 +453,10 @@ export function parseReaderAILiveFixture(source: string): ReaderAILiveFixtureVal
 
 export type ReaderAILiveFixtureEvalDeps = {
   live: boolean;
-  streamAnswer: ReaderAIServiceEvalStreamer;
+  runtime?: ReaderAILiveFixtureRuntimeInput;
+  prepareRetrievalContext?: ReaderAILiveFixtureRetrievalContextPreparer;
+  streamAnswer?: ReaderAIServiceEvalStreamer;
+  loadStreamAnswer?: () => Promise<ReaderAIServiceEvalStreamer>;
   writeFile: (path: string, content: string) => Promise<void>;
   now?: () => number;
 };
@@ -437,18 +474,6 @@ export type ReaderAILiveFixtureEvalOutput =
       writtenPaths: [];
       issues: string[];
     };
-
-const toAISettings = (fixture: ReaderAILiveFixture): AISettings => ({
-  enabled: true,
-  showReaderAIEntrypoints: true,
-  provider: fixture.settings.provider,
-  providerApiKeys: {},
-  providerModels: { [fixture.settings.provider]: fixture.settings.model },
-  customProviderBaseUrl: '',
-  spoilerProtection: fixture.settings.spoilerProtection ?? true,
-  maxContextChunks: fixture.settings.maxContextChunks ?? 6,
-  indexingMode: 'on-demand',
-});
 
 const limitCases = (fixture: ReaderAILiveFixture): ReaderAIEvalCase[] =>
   fixture.cases.slice(0, fixture.caseLimit ?? fixture.cases.length);
@@ -472,6 +497,30 @@ export async function runReaderAILiveFixtureEval(
     };
   }
 
+  const runtimeBridge = buildReaderAILiveFixtureRuntimeBridge(fixture, deps.runtime ?? {});
+  if (!runtimeBridge.ok) {
+    return { ok: false, envelope: null, writtenPaths: [], issues: runtimeBridge.issues };
+  }
+
+  const retrievalContext = await prepareReaderAILiveFixtureRetrievalContext(
+    fixture,
+    runtimeBridge.retrievalSeed,
+    deps.prepareRetrievalContext,
+  );
+  if (!retrievalContext.ok) {
+    return { ok: false, envelope: null, writtenPaths: [], issues: retrievalContext.issues };
+  }
+
+  const streamAnswer = deps.streamAnswer ?? (await deps.loadStreamAnswer?.());
+  if (!streamAnswer) {
+    return {
+      ok: false,
+      envelope: null,
+      writtenPaths: [],
+      issues: ['runtime streamer could not be loaded'],
+    };
+  }
+
   const controller = new AbortController();
   const timeout = fixture.timeoutMs
     ? globalThis.setTimeout(() => controller.abort(), fixture.timeoutMs)
@@ -482,7 +531,7 @@ export async function runReaderAILiveFixtureEval(
       {
         cases: limitCases(fixture),
         context: {
-          settings: toAISettings(fixture),
+          settings: runtimeBridge.settings,
           bookHash: fixture.runtimeBook.bookHash,
           bookTitle: fixture.runtimeBook.bookTitle,
           authorName: fixture.runtimeBook.authorName,
@@ -493,7 +542,7 @@ export async function runReaderAILiveFixtureEval(
         },
       },
       {
-        streamAnswer: deps.streamAnswer,
+        streamAnswer,
         now: deps.now,
       },
     );

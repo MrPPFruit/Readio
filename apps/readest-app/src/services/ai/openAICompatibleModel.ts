@@ -1,12 +1,14 @@
 import { isTauriAppPlatform } from '@/services/environment';
 import type { EmbeddingModel, LanguageModel } from 'ai';
 import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
+import type { AIProviderChatRequestOptions } from './types';
 
 export interface OpenAICompatibleModelConfig {
   provider: string;
   apiKey: string;
   baseUrl: string;
   model: string;
+  chatRequestOptions?: AIProviderChatRequestOptions;
 }
 
 type PromptPart = { type: string; text?: string };
@@ -89,6 +91,7 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
         model: config.model,
         messages: messagesFromPrompt(options.prompt),
         stream: false,
+        ...config.chatRequestOptions,
       };
       const response = await providerFetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
@@ -126,6 +129,7 @@ export function createOpenAICompatibleModel(config: OpenAICompatibleModelConfig)
         model: config.model,
         messages: messagesFromPrompt(options.prompt),
         stream: true,
+        ...config.chatRequestOptions,
       };
       const response = await providerFetch(`${baseUrl}/chat/completions`, {
         method: 'POST',

@@ -59,14 +59,18 @@ export const AI_PROVIDER_CATALOG: Record<AIProviderName, AIProviderCatalogEntry>
     id: 'deepseek',
     label: 'DeepSeek',
     protocol: 'openai-compatible',
-    baseUrl: 'https://api.deepseek.com/v1',
+    baseUrl: 'https://api.deepseek.com',
     apiKeyUrl: 'https://platform.deepseek.com/api_keys',
     apiKeyPlaceholder: 'sk-...',
-    defaultModel: 'deepseek-chat',
+    defaultModel: 'deepseek-v4-flash',
     modelPresets: [
-      { id: 'deepseek-chat', label: 'DeepSeek Chat' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner' },
+      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
     ],
+    chatRequestOptions: {
+      thinking: { type: 'enabled' },
+      reasoning_effort: 'high',
+    },
   },
   dashscope: {
     id: 'dashscope',

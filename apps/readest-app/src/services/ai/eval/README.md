@@ -78,11 +78,12 @@ Real-book fixtures, live-provider cost guardrails, file-based service eval CLI s
 
 ## Local live fixture runner
 
-The live fixture runner is a local-only wrapper for deliberately running a small, metadata-only Reader AI fixture through the existing service eval runner:
+The live fixture runner is a local-only wrapper for deliberately running a small, metadata-only Reader AI fixture through the existing service eval runner. Runtime provider credentials and retrieval seed text stay outside committed fixture metadata.
 
 ```bash
 pnpm --dir apps/readest-app reader-ai:live-fixture -- \
   --fixture tmp/reader-ai/live-fixture/fixture.json \
+  --runtime tmp/reader-ai/live-fixture/runtime.local.json \
   --live
 ```
 
@@ -91,7 +92,47 @@ Live execution is explicitly opt-in at two layers:
 - the CLI refuses to run unless `--live` is present;
 - the fixture JSON must also set `"live": true`.
 
-Tests must continue to inject fake streamers and must not call real providers. The CLI loads the real `streamReaderAIAnswer` only after the explicit live gate is satisfied. Local fixture runs may therefore use the caller's configured provider/API key and can incur provider cost; keep fixtures intentionally small, use `caseLimit` and `timeoutMs`, and run them only on a developer machine with the intended local settings.
+Tests must continue to inject fake streamers and preparers and must not call real providers or networks. The CLI loads the real `streamReaderAIAnswer` only after the explicit live gate, fixture `live: true`, runtime provider preflight, and retrieval seed preflight all succeed. Local fixture runs can incur provider cost; keep fixtures intentionally small, use `caseLimit` and `timeoutMs`, and run them only on a developer machine with the intended local settings.
+
+Environment fallbacks are eval-specific:
+
+```text
+READER_AI_LIVE_FIXTURE_API_KEY
+READER_AI_LIVE_FIXTURE_CUSTOM_BASE_URL
+READER_AI_LIVE_FIXTURE_ALLOW_UNSAFE_LOCAL_PROXY
+READER_AI_LIVE_FIXTURE_RETRIEVAL_SEED
+```
+
+A local runtime settings file may provide provider settings, inline retrieval seed data, or a separate local seed file path. File values override environment values for bridge-owned runtime fields.
+
+```json
+{
+  "provider": {
+    "apiKey": "sk-placeholder-do-not-commit",
+    "customProviderBaseUrl": "https://placeholder.example.test/v1",
+    "allowUnsafeCustomProviderBaseUrl": false
+  },
+  "retrievalSeedPath": "tmp/reader-ai/live-fixture/seed.local.json"
+}
+```
+
+Inline seed data uses the same shape as the seed file. Use placeholder text in examples and keep real book text local only:
+
+```json
+{
+  "bookHash": "placeholder-runtime-book-hash",
+  "chunks": [
+    {
+      "id": "placeholder-chunk-1",
+      "sectionIndex": 0,
+      "chapterTitle": "Placeholder Chapter",
+      "text": "Placeholder retrieval text for local testing only.",
+      "pageNumber": 1,
+      "sortIndex": 0
+    }
+  ]
+}
+```
 
 A fixture contains only controlled eval metadata plus the runtime book handle needed by the existing Reader AI service contract:
 
@@ -126,10 +167,39 @@ A fixture contains only controlled eval metadata plus the runtime book handle ne
 
 Privacy boundaries:
 
+- never commit runtime settings files, retrieval seed files, real book text, API keys, custom base URLs, local file paths, or generated artifacts that have not been reviewed;
 - committed fixtures and generated artifacts must remain metadata-only;
 - eval cases may include user-style questions and expected-behavior labels, but not raw source text, raw answer text, prompt text, API keys, URLs, local paths, book hashes, stable private identifiers, or raw exception messages;
 - output paths must be relative local paths, with no URL schemes, absolute paths, or `..` traversal;
+- generated envelope/report artifacts are metadata-only and exclude runtime secret inputs, runtime file paths, retrieval seed text, source previews/context, raw answer text, URLs, book hashes, and stable private identifiers;
 - reports are generated through `buildReaderAIEvalReportRun`, so service output remains compatible with the existing sanitized report envelope and Markdown path;
 - generated local artifacts are developer evidence, not telemetry, and should not be committed unless they have been reviewed for the metadata-only contract.
 
 Deferred scope remains separate from this runner: real-book batch management, fixture discovery over a library, NotebookLM automation/comparison runs, and LLM-as-judge scoring are intentionally not part of the local live fixture runner. NotebookLM and LLM judging may be used later only as separate, non-authoritative manual/quality layers after deterministic privacy and grounding checks are stable.
+
+## Local quality baseline runner
+
+The quality baseline runner summarizes metadata-only Reader AI live fixture envelopes into deterministic JSON and Markdown baseline snapshots. It is a local developer workflow only: it does not call model providers, load books, prepare retrieval seeds, automate NotebookLM, upload telemetry, or change Reader AI UI/runtime behavior.
+
+```bash
+pnpm --dir apps/readest-app reader-ai:baseline -- \
+  --input tmp/reader-ai/live-fixture/envelope.json \
+  --json-out tmp/reader-ai/live-fixture/baseline.json \
+  --markdown-out tmp/reader-ai/live-fixture/baseline.md
+```
+
+The baseline summarizes safe metadata only:
+
+- total cases and results;
+- category, language, and provider/model counts;
+- pass/fail totals;
+- failure reason labels;
+- citation-valid counts;
+- source-count buckets;
+- first-output latency buckets;
+- over-budget stage counts;
+- optional manual NotebookLM/human observation label counts.
+
+Manual NotebookLM or human observations are non-authoritative labels. They do not change deterministic pass/fail totals, and copied NotebookLM or Readio answer text must not be stored in eval cases, results, or baseline artifacts.
+
+Generated baseline artifacts are developer evidence, not telemetry. Do not commit generated baseline files unless they have been reviewed for the metadata-only contract. They must not contain raw answer text, source text, prompt text, API keys, custom base URLs, local paths, URLs, book hashes, stable private identifiers, raw exception details, or copied NotebookLM/Readio output.

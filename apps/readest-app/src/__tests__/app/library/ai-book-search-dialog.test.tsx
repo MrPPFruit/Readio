@@ -663,6 +663,8 @@ describe('AIBookSearchDialog', () => {
         schemaVersion: 1,
       },
     ];
+    const historyLoad = deferred<typeof historyMocks.records>();
+    historyMocks.list.mockReturnValueOnce(historyLoad.promise);
 
     render(
       <AIBookSearchDialog
@@ -686,7 +688,13 @@ describe('AIBookSearchDialog', () => {
     expect(historySheet.querySelector('.drag-handle')).toBeTruthy();
     expect(within(historySheet).queryByRole('button', { name: 'Close' })).toBeNull();
     expect(within(historySheet).getByRole('button', { name: '下拉关闭最近寻书' })).toBeTruthy();
-    expect(within(historySheet).getByText('三体')).toBeTruthy();
+
+    await act(async () => {
+      historyLoad.resolve(historyMocks.records);
+      await historyLoad.promise;
+    });
+
+    expect(await within(historySheet).findByText('三体')).toBeTruthy();
     expect(within(historySheet).getByText('找到 2 本线索')).toBeTruthy();
     expect(within(historySheet).queryByText(/已上架/)).toBeNull();
     expect(within(historySheet).queryByText(/200/)).toBeNull();

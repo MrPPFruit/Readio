@@ -18,6 +18,11 @@ export interface AIProviderModelPreset {
   label: string;
 }
 
+export interface AIProviderChatRequestOptions {
+  thinking?: { type: 'enabled' | 'disabled' };
+  reasoning_effort?: 'high' | 'max';
+}
+
 export interface AIProviderCatalogEntry {
   id: AIProviderName;
   label: string;
@@ -27,6 +32,7 @@ export interface AIProviderCatalogEntry {
   apiKeyPlaceholder: string;
   defaultModel: string;
   modelPresets: AIProviderModelPreset[];
+  chatRequestOptions?: AIProviderChatRequestOptions;
 }
 
 export interface AIProvider {
