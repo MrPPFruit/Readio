@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import { useKeyDownActions } from '@/hooks/useKeyDownActions';
 import { getAIAvailability } from '@/services/ai/availability';
+import { AI_PROVIDER_CATALOG } from '@/services/ai/constants';
 import { getReflowableAIPageBoundary } from '@/app/reader/utils/pageInfo';
 import { indexBook, isBookIndexed, type BookDocType } from '@/services/ai/ragService';
-import type { EmbeddingProgress } from '@/services/ai/types';
+import type { AISettings, EmbeddingProgress } from '@/services/ai/types';
 import {
   narrowReaderAISourceFallbackHighlights,
   refineReaderAIAnswerCitations,
@@ -41,9 +42,15 @@ interface ReaderAIAssistantProps {
 }
 
 const READER_AI_ANSWER_TIMEOUT_MS = 60_000;
+const READER_AI_THINKING_ANSWER_TIMEOUT_MS = 180_000;
 const READER_AI_CITATION_REFINEMENT_TIMEOUT_MS = 15_000;
 const READER_AI_SUGGESTIONS_TIMEOUT_MS = 20_000;
 const READER_AI_FIRST_OUTPUT_TRACE_BUDGET_MS = 15_000;
+
+const getReaderAIAnswerTimeoutMs = (settings: AISettings): number =>
+  AI_PROVIDER_CATALOG[settings.provider].chatRequestOptions?.thinking?.type === 'enabled'
+    ? READER_AI_THINKING_ANSWER_TIMEOUT_MS
+    : READER_AI_ANSWER_TIMEOUT_MS;
 
 const createMessage = (
   role: ReaderAIMessage['role'],
@@ -546,10 +553,11 @@ const ReaderAIAssistant: React.FC<ReaderAIAssistantProps> = ({ bookKey, gridInse
     let answer = '';
     let answerSources: ReaderAISource[] = [];
     let timedOut = false;
+    const answerTimeoutMs = getReaderAIAnswerTimeoutMs(requestSettings);
     const timeoutId = setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, READER_AI_ANSWER_TIMEOUT_MS);
+    }, answerTimeoutMs);
 
     try {
       setGenerationStatus('connecting');

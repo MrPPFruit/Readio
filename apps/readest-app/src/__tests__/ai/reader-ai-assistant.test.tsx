@@ -247,6 +247,13 @@ function pendingStream(signal?: AbortSignal) {
   })();
 }
 
+function delayedStream(chunks: string[], delayMs: number) {
+  return (async function* () {
+    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    for (const chunk of chunks) yield chunk;
+  })();
+}
+
 type IndexBookOptions = {
   onProgress: (progress: { current: number; total: number; phase: string }) => void;
   signal: AbortSignal;
@@ -735,9 +742,7 @@ describe('ReaderAIAssistant integration safeguards', () => {
     await flushAsyncWork();
     expect(mocks.streamReaderAIAnswer).toHaveBeenCalled();
     await act(async () => {
-      vi.advanceTimersByTime(60_000);
-      await Promise.resolve();
-      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(60_000);
     });
     await flushAsyncWork();
 
@@ -745,6 +750,44 @@ describe('ReaderAIAssistant integration safeguards', () => {
       'AI 生成超时，请稍后重试，或切换更快的模型。',
     );
     expect(mocks.addMessage).not.toHaveBeenCalled();
+  });
+
+  it('allows DeepSeek thinking answers to exceed the default 60 second answer budget', async () => {
+    vi.useFakeTimers();
+    settings.provider = 'deepseek';
+    settings.providerApiKeys = { deepseek: 'deepseek-key' };
+    settings.providerModels = { deepseek: 'deepseek-v4-flash' };
+    mocks.streamReaderAIAnswer.mockReturnValue(delayedStream(['deepseek answer'], 90_000));
+
+    render(<ReaderAIAssistant bookKey='current-book-instance' />);
+    fireEvent.click(screen.getByText('open-ai'));
+    fireEvent.click(screen.getByText('ask-question'));
+
+    await flushAsyncWork();
+    expect(mocks.streamReaderAIAnswer).toHaveBeenCalled();
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await flushAsyncWork();
+
+    expect(screen.getByTestId('messages').textContent).not.toContain('AI 生成超时');
+    expect(screen.getByTestId('answer-panel').getAttribute('data-loading')).toBe('true');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+    await flushAsyncWork();
+
+    expect(screen.getByTestId('messages').textContent).toContain('deepseek answer');
+    expect(mocks.addMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'new-conversation',
+        role: 'assistant',
+        content: 'deepseek answer',
+      }),
+    );
   });
 
   it('does not show buffered partial answer text after generation timeout', async () => {
