@@ -15,7 +15,7 @@ jobs:
       SCCACHE_GHA_ENABLED: 'true'
       RUSTC_WRAPPER: sccache
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: 'true'
       - name: setup sccache
@@ -27,7 +27,7 @@ jobs:
           override: true
           components: rustfmt, clippy
       - name: Cache apt packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives
           key: apt-rust-lint-${{ runner.os }}
@@ -45,7 +45,7 @@ jobs:
   build_web_app:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: 'true'
 
@@ -59,7 +59,7 @@ jobs:
           cache: pnpm
 
       - name: cache Next.js build
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: apps/readest-app/.next/cache
           key: nextjs-web-${{ github.sha }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -100,7 +100,7 @@ jobs:
       SCCACHE_GHA_ENABLED: 'true'
       RUSTC_WRAPPER: sccache
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           submodules: 'true'
 
@@ -114,7 +114,7 @@ jobs:
           cache: pnpm
 
       - name: cache Next.js build
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: apps/readest-app/.next/cache
           key: nextjs-tauri-${{ github.sha }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -141,7 +141,7 @@ jobs:
           cache-all-crates: 'true'
 
       - name: Cache apt packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives
           key: apt-tauri-${{ runner.os }}
